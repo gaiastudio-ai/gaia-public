@@ -1,6 +1,18 @@
 {
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "gaiastudio-ai-gaia-public",
+  "description": "GAIA public marketplace — GAIA Framework agents, skills, hooks, and scripts for Claude Code.",
+  "owner": {
+    "name": "gaiastudio.ai",
+    "email": "louagejulien@gmail.com"
+  },
   "plugins": [
-    { "name": "gaia", "source": "./plugins/gaia/" }
+    {
+      "name": "gaia",
+      "description": "GAIA Framework plugin — placeholder stub, finalized in E28-S5.",
+      "source": "./plugins/gaia",
+      "category": "development",
+      "homepage": "https://github.com/gaiastudio-ai/gaia-public"
+    }
   ]
 }

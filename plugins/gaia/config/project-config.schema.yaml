@@ -1,0 +1,86 @@
+# project-config.schema.yaml — GAIA Native per-project config schema
+#
+# Realizes ADR-044 (config split) — the single per-project config surface.
+# Referenced by feature brief P2-S10 in:
+#   docs/creative-artifacts/gaia-native-conversion-feature-brief-2026-04-14.md
+#
+# Contract with resolve-config.sh (E28-S9):
+#   - This file is the authoritative declaration of permitted top-level keys.
+#   - resolve-config.sh rejects any field in project-config.yaml that is not
+#     declared here with exit code 2 and a clear stderr message.
+#   - Schema is additive and exhaustive: no implicit keys, no fallback to
+#     legacy _gaia/_config/global.yaml inheritance.
+#
+# Format: a plain YAML document where each top-level key maps to a field
+# descriptor with four attributes:
+#   type        — string | path | bool | map
+#   required    — true | false
+#   default     — literal default value (or null when unset)
+#   description — human-readable one-liner
+#
+# This is NOT JSON Schema. A minimal validator walks top-level keys and checks
+# each field descriptor against the loaded project-config.yaml.
+
+schema_version: "1.0.0"
+
+fields:
+
+  project_root:
+    type: path
+    required: true
+    default: null
+    description: "Absolute path to the framework root (where _gaia/ lives)."
+
+  project_path:
+    type: path
+    required: true
+    default: null
+    description: "Absolute path to the application source tree. Non-'.' value makes the framework/project split visible. See ADR-044."
+
+  memory_path:
+    type: path
+    required: true
+    default: null
+    description: "Absolute path to persistent agent memory directory."
+
+  checkpoint_path:
+    type: path
+    required: true
+    default: null
+    description: "Absolute path to workflow checkpoint directory."
+
+  installed_path:
+    type: path
+    required: true
+    default: null
+    description: "Absolute path to the installed framework tree (_gaia/)."
+
+  framework_version:
+    type: string
+    required: true
+    default: null
+    description: "GAIA framework version this project targets. Pinned per project."
+
+  date:
+    type: string
+    required: true
+    default: null
+    description: "ISO-8601 date stamp for the config revision."
+
+  val_integration:
+    type: map
+    required: false
+    default: { template_output_review: true }
+    description: "Val agent integration knobs. See ADR-042."
+
+  ci_cd:
+    type: map
+    required: false
+    default: null
+    description: "CI/CD promotion chain — list of environments with branch, provider, and checks. Written by /gaia-ci-setup. See ADR-048."
+
+  testing:
+    type: map
+    required: false
+    default: null
+    description: "Testing integration config — bridge enablement, framework selection, coverage thresholds."

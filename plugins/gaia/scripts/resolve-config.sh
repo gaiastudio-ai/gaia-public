@@ -88,9 +88,48 @@ validate_yaml_basic() {
   return 0
 }
 
+# validate_schema — E28-S18 / ADR-044 enforcement.
+# Reads project-config.schema.yaml (sibling of the config file by default,
+# or overridden via --schema) and rejects any top-level key in the config
+# file that is not declared under `fields:` in the schema. Unknown keys
+# exit with code 2 and a clear stderr message per AC5.
+validate_schema() {
+  local config="$1" schema="$2"
+  [ -f "$schema" ] || return 0  # schema optional — silent no-op if absent
+  # Extract declared field names from schema: lines matching "  <name>:"
+  # exactly two-space-indented inside the fields: block.
+  local allowed
+  allowed=$(awk '
+    /^fields:[[:space:]]*$/ { in_fields=1; next }
+    in_fields && /^[^[:space:]]/ { in_fields=0 }
+    in_fields && /^  [a-zA-Z_][a-zA-Z0-9_]*:[[:space:]]*$/ {
+      gsub(/^  /,""); gsub(/:.*/,""); print
+    }
+  ' "$schema")
+  # Extract top-level keys from config: zero-indent "<name>:" lines,
+  # skipping comments and blanks.
+  local config_keys
+  config_keys=$(awk '
+    /^[[:space:]]*#/ { next }
+    /^[[:space:]]*$/ { next }
+    /^[a-zA-Z_][a-zA-Z0-9_]*:/ {
+      k=$0; sub(/:.*/,"",k); print k
+    }
+  ' "$config")
+  local key
+  for key in $config_keys; do
+    if ! printf '%s\n' "$allowed" | grep -qx "$key"; then
+      printf 'resolve-config: unknown field in %s: %s (not declared in %s)\n' \
+        "$config" "$key" "$schema" >&2
+      exit 2
+    fi
+  done
+}
+
 # ---------- Argument parsing ----------
 
 CONFIG_PATH=""
+SCHEMA_PATH=""
 FORMAT="shell"
 
 while [ $# -gt 0 ]; do
@@ -100,6 +139,11 @@ while [ $# -gt 0 ]; do
       CONFIG_PATH="$2"; shift 2 ;;
     --config=*)
       CONFIG_PATH="${1#--config=}"; shift ;;
+    --schema)
+      [ $# -ge 2 ] || die "flag --schema requires a path argument"
+      SCHEMA_PATH="$2"; shift 2 ;;
+    --schema=*)
+      SCHEMA_PATH="${1#--schema=}"; shift ;;
     --format)
       [ $# -ge 2 ] || die "flag --format requires shell|json"
       FORMAT="$2"; shift 2 ;;
@@ -134,6 +178,13 @@ fi
 if ! validate_yaml_basic "$CONFIG_PATH"; then
   die "malformed YAML in $CONFIG_PATH"
 fi
+
+# Schema enforcement (E28-S18 / ADR-044).
+# Default schema lives next to the config file as project-config.schema.yaml.
+if [ -z "$SCHEMA_PATH" ]; then
+  SCHEMA_PATH="$(dirname "$CONFIG_PATH")/project-config.schema.yaml"
+fi
+validate_schema "$CONFIG_PATH" "$SCHEMA_PATH"
 
 # ---------- Extract required fields ----------
 # Required keys, alphabetically sorted (determinism for emit order).

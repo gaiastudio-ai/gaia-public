@@ -1,0 +1,68 @@
+# project-config.yaml.example — annotated example for GAIA Native per-project config
+#
+# Realizes ADR-044 (config split). This file is the canonical smoke-test input
+# for resolve-config.sh (E28-S9) — CI (E28-S7) resolves this example on every
+# PR and fails if it drifts out of schema declared in project-config.schema.yaml.
+#
+# Every field in project-config.schema.yaml appears below with a representative
+# value, inline comment, and ADR cross-reference where relevant.
+#
+# To use: copy this file to project-config.yaml at your plugin's config/ root
+# and adjust values for your project.
+
+# Absolute path to the framework root (where _gaia/ lives).
+# Required. No default.
+project_root: /Users/you/Dev/my-project
+
+# Absolute path to the application source tree. Pinning this to a non-"."
+# subpath makes the framework/project split visible (ADR-044). Required.
+project_path: /Users/you/Dev/my-project/my-app
+
+# Absolute path to persistent agent memory directory.
+# Required. Typically <project_root>/_memory.
+memory_path: /Users/you/Dev/my-project/_memory
+
+# Absolute path to workflow checkpoint directory.
+# Required. Typically <memory_path>/checkpoints.
+checkpoint_path: /Users/you/Dev/my-project/_memory/checkpoints
+
+# Absolute path to the installed framework tree (_gaia/). Required.
+installed_path: /Users/you/Dev/my-project/_gaia
+
+# GAIA framework version this project targets — pinned per project so
+# upgrades are deliberate. Required.
+framework_version: 1.127.2-rc.1
+
+# ISO-8601 date stamp for this config revision. Required.
+date: 2026-04-15
+
+# Val integration — template-output review gates. See ADR-042.
+# Optional. Default: { template_output_review: true }
+val_integration:
+  template_output_review: true
+
+# CI/CD promotion chain — ordered list of environments. See ADR-048.
+# Optional. Written by /gaia-ci-setup.
+ci_cd:
+  promotion_chain:
+    - id: staging
+      name: Staging
+      branch: staging
+      ci_provider: github_actions
+      merge_strategy: merge
+      ci_checks:
+        - lint
+        - unit
+        - test
+    - id: main
+      name: main
+      branch: main
+      ci_provider: github_actions
+      merge_strategy: squash
+
+# Testing integration — framework, bridge, and coverage thresholds.
+# Optional.
+testing:
+  framework: bats
+  bridge_enabled: false
+  coverage_threshold: 80

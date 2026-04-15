@@ -1,0 +1,6 @@
+{
+  "name": "gaiastudio-ai-gaia-public",
+  "plugins": [
+    { "name": "gaia", "source": "./plugins/gaia/" }
+  ]
+}

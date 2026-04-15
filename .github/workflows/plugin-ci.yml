@@ -20,18 +20,25 @@ jobs:
   bats-tests:
     name: bats-tests
     runs-on: ubuntu-latest
+    timeout-minutes: 2  # E28-S17 AC4 — enforce the 2-minute CI budget at job level
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.2.2
       - uses: mig4/setup-bats@af9a00deb21b5d795cabfeaa8d9060410377686d  # v1.2.0
         with:
           bats-version: 1.10.0
-      - name: Run bats tests
+      - name: Install jq and kcov
         run: |
-          if [ ! -d tests ] || [ -z "$(ls -A tests 2>/dev/null | grep -v '^\.gitkeep$' || true)" ]; then
-            echo "0 tests, 0 failures"
-            exit 0
-          fi
-          bats tests/
+          sudo apt-get update
+          sudo apt-get install -y jq kcov
+      - name: Run bats suite with coverage wrapper
+        run: bash plugins/gaia/tests/run-with-coverage.sh
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bats-coverage
+          path: coverage/
+          if-no-files-found: ignore
 
   structure-validate:
     name: structure-validate

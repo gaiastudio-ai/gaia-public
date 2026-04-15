@@ -1,0 +1,16 @@
+# project-config.yaml — GAIA-native plugin project configuration
+#
+# NOTE: This is a FIXTURE authored by E28-S9 so resolve-config.sh has a stable
+# input to parse during local smoke testing. E28-S18 (config split per ADR-044)
+# will replace this file with the canonical schema and real values.
+#
+# Schema: flat top-level keys (no nesting) so POSIX shell parsers can read it.
+# Fields are documented in plugins/gaia/scripts/resolve-config.sh header.
+
+project_root: /Users/jlouage/Dev/GAIA-Framework
+project_path: /Users/jlouage/Dev/GAIA-Framework/gaia-public
+memory_path: /Users/jlouage/Dev/GAIA-Framework/_memory
+checkpoint_path: /Users/jlouage/Dev/GAIA-Framework/_memory/checkpoints
+installed_path: /Users/jlouage/Dev/GAIA-Framework/_gaia
+framework_version: 1.127.2-rc.1
+date: 2026-04-15

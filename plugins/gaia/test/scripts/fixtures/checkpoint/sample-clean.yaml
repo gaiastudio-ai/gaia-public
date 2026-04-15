@@ -1,0 +1,10 @@
+workflow: sample
+step: 1
+timestamp: 2026-04-15T00:00:00Z
+variables:
+  story_key: E28-S10
+  epic_key: E28
+files_touched:
+  - path: plugins/gaia/scripts/checkpoint.sh
+    sha256: "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    last_modified: 2026-04-15T00:00:00Z

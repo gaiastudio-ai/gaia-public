@@ -9,10 +9,11 @@
   "plugins": [
     {
       "name": "gaia",
-      "description": "GAIA Framework plugin — placeholder stub, finalized in E28-S5.",
+      "description": "GAIA Framework — Generative Agile Intelligence Architecture. 25 specialized agents, 62 workflows, 8 shared skills for Claude Code.",
       "source": "./plugins/gaia",
       "category": "development",
-      "homepage": "https://github.com/gaiastudio-ai/gaia-public"
+      "homepage": "https://github.com/gaiastudio-ai/gaia-public",
+      "license": "AGPL-3.0"
     }
   ]
 }

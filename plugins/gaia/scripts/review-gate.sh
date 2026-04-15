@@ -1,0 +1,630 @@
+#!/usr/bin/env bash
+# review-gate.sh — GAIA foundation script (E28-S14)
+#
+# Parses and atomically updates the `## Review Gate` table in a story markdown
+# file. Consumed by the six review workflows (code-review, qa-tests,
+# security-review, test-automate, test-review, review-perf) and their
+# aggregator (run-all-reviews), which previously rewrote the table via LLM
+# edits — one engine token-burn path per ADR-042 / NFR-048.
+#
+# Refs: FR-325, FR-328, NFR-048, ADR-042, ADR-048
+# Brief: P2-S6 (docs/creative-artifacts/gaia-native-conversion-feature-brief-2026-04-14.md)
+#
+# Invocation contract (stable for E28-S17 bats-core authors):
+#
+#   review-gate.sh check  --story <key>
+#   review-gate.sh update --story <key> --gate <name> --verdict <PASSED|FAILED|UNVERIFIED>
+#   review-gate.sh status --story <key>
+#   review-gate.sh --help
+#
+# Canonical gate names (case-sensitive, exact):
+#   "Code Review" | "QA Tests" | "Security Review"
+#   "Test Automation" | "Test Review" | "Performance Review"
+#
+# Canonical verdict vocabulary (case-sensitive, exact — per CLAUDE.md):
+#   UNVERIFIED | PASSED | FAILED
+#
+# Any deviation (case, typo, shell metacharacters, extra whitespace in the
+# --verdict value) exits 1 with a clear stderr message. The script never maps
+# keywords — callers (e.g. code-review mapping APPROVE→PASSED) are responsible
+# for the translation.
+#
+# Config:
+#   PROJECT_PATH — optional. Defaults to "." when unset. If resolve-config.sh
+#     becomes available on PATH later, callers may pre-export PROJECT_PATH from
+#     it; review-gate.sh does NOT source resolve-config.sh directly so the two
+#     foundation scripts can land in any order (soft dependency per story
+#     notes / Task 1 Subtask 1.3).
+#
+# Story file location (new plugin-native layout):
+#   ${PROJECT_PATH}/docs/implementation-artifacts/stories/<key>-*.md
+#
+# Exit codes:
+#   0 — success (check: all PASSED; update: row rewritten; status: JSON emitted;
+#       --help)
+#   1 — usage error, unknown subcommand, invalid verdict or gate name, story
+#       glob zero-match / multi-match, missing `## Review Gate` section, fewer
+#       than six canonical rows, concurrency timeout, rewrite failure, or
+#       (check) any row not PASSED
+#
+# Atomicity & concurrency:
+#   Writes go to a tempfile next to the story file (same filesystem so `mv`
+#   is atomic POSIX rename), then `mv` over the original inside a `flock -x`
+#   on a sibling `.lock`. On systems without util-linux `flock(1)` (macOS
+#   /bin/bash 3.2 without Homebrew util-linux), the script degrades to a
+#   bounded spin-loop mv-based advisory lockfile — same fallback as
+#   checkpoint.sh §E28-S10 and lifecycle-event.sh §E28-S12.
+#
+# POSIX discipline: the only non-POSIX constructs are [[ ]] and bash indexed
+# arrays. macOS /bin/bash 3.2 compatible. Uses `awk` (POSIX), `jq` (required
+# for `status`), and `flock` (optional — graceful fallback).
+#
+# Sprint-Status Write Safety (CRITICAL, per CLAUDE.md):
+#   This script NEVER writes to sprint-status.yaml. The Review Gate table
+#   lives only in the story file. sprint-status.yaml is a derived view and
+#   is reconciled by /gaia-sprint-status — never by review workflows.
+
+set -euo pipefail
+LC_ALL=C
+export LC_ALL
+
+SCRIPT_NAME="review-gate.sh"
+
+# ---------- Canonical vocabulary ----------
+
+# Six canonical gate names (exact case, exact spelling).
+CANONICAL_GATES=(
+  "Code Review"
+  "QA Tests"
+  "Security Review"
+  "Test Automation"
+  "Test Review"
+  "Performance Review"
+)
+
+# Three canonical verdict values (exact case).
+CANONICAL_VERDICTS=("UNVERIFIED" "PASSED" "FAILED")
+
+# ---------- Helpers ----------
+
+die() {
+  # message…  (always exit 1)
+  printf '%s: %s\n' "$SCRIPT_NAME" "$*" >&2
+  exit 1
+}
+
+usage() {
+  cat <<'USAGE'
+Usage:
+  review-gate.sh check  --story <key>
+  review-gate.sh update --story <key> --gate <name> --verdict <PASSED|FAILED|UNVERIFIED>
+  review-gate.sh status --story <key>
+  review-gate.sh --help
+
+Subcommands:
+  check   Exit 0 iff all six Review Gate rows are PASSED. Otherwise exit 1 and
+          list the non-PASSED gate names on stderr (one per line).
+  update  Atomically rewrite exactly one row of the Review Gate table. Only the
+          Status and Report cells of the matched gate are changed — all other
+          bytes of the story file are preserved (headers, blank lines, other
+          rows, trailing content). Writes are serialized via flock.
+  status  Print a single JSON object `{"story":"<key>","gates":{...}}` to stdout
+          via jq -nc. Suitable for piping into jq.
+
+Canonical gate names (case-sensitive):
+  "Code Review" | "QA Tests" | "Security Review"
+  "Test Automation" | "Test Review" | "Performance Review"
+
+Canonical verdicts (case-sensitive, per CLAUDE.md):
+  UNVERIFIED | PASSED | FAILED
+
+Story file is located via the glob
+  ${PROJECT_PATH}/docs/implementation-artifacts/stories/<key>-*.md
+PROJECT_PATH defaults to "." when unset.
+
+Exit codes:
+  0 — success
+  1 — usage error, invalid input, missing file/section, or (check) any non-PASSED row
+USAGE
+}
+
+# Validate a candidate gate name against the canonical six.
+is_canonical_gate() {
+  local candidate="$1"
+  local g
+  for g in "${CANONICAL_GATES[@]}"; do
+    if [ "$g" = "$candidate" ]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+# Validate a candidate verdict against the canonical three.
+is_canonical_verdict() {
+  local candidate="$1"
+  local v
+  for v in "${CANONICAL_VERDICTS[@]}"; do
+    if [ "$v" = "$candidate" ]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+# Join an array with a separator — used for error messages listing the
+# canonical vocabulary.
+join_by() {
+  local sep="$1"; shift
+  local out="" first=1
+  local item
+  for item in "$@"; do
+    if [ $first -eq 1 ]; then
+      out="$item"
+      first=0
+    else
+      out="$out$sep$item"
+    fi
+  done
+  printf '%s' "$out"
+}
+
+# Locate the story file via glob. Exits 1 on zero-match or multi-match.
+# Result is returned via STORY_FILE global.
+STORY_FILE=""
+locate_story_file() {
+  local key="$1"
+  local project_path="${PROJECT_PATH:-.}"
+  local glob_dir="${project_path}/docs/implementation-artifacts/stories"
+  local pattern="${glob_dir}/${key}-*.md"
+
+  # shopt -s nullglob so zero-match produces an empty array rather than the
+  # literal pattern string.
+  local matches=()
+  # The glob expansion happens in an isolated context so nullglob doesn't
+  # leak to the rest of the script.
+  shopt -s nullglob
+  # shellcheck disable=SC2206
+  matches=( $pattern )
+  shopt -u nullglob
+
+  if [ "${#matches[@]}" -eq 0 ]; then
+    die "no story file found for key '$key' (glob: $pattern)"
+  fi
+  if [ "${#matches[@]}" -gt 1 ]; then
+    local listed
+    listed=$(printf '  %s\n' "${matches[@]}")
+    printf '%s: multiple story files matched key %s (glob: %s)\n%s\n' \
+      "$SCRIPT_NAME" "$key" "$pattern" "$listed" >&2
+    exit 1
+  fi
+
+  STORY_FILE="${matches[0]}"
+}
+
+# ---------- Review Gate table parser ----------
+#
+# The parser is a single awk pass that:
+#   1. Locates the `## Review Gate` header line.
+#   2. Finds the first pipe table after the header (header row `| Review | …`
+#      followed by a separator row `|---|---|---|`).
+#   3. Emits `GATE<TAB>STATUS<TAB>REPORT` for each data row until the table
+#      ends (blank line, new header, or EOF).
+#
+# The awk output is then filtered in bash to enforce the canonical six gates.
+# Unknown gate names are preserved in the file (AC-EC3: spurious rows are
+# left untouched on update) but ignored for check/status vocabulary checks.
+
+# Stream parsed rows to stdout as TSV `GATE\tSTATUS\tREPORT`.
+# Exits 1 (via die) if the `## Review Gate` header is absent.
+parse_gate_rows() {
+  local file="$1"
+
+  # First: confirm the `## Review Gate` header exists. awk-only detection is
+  # cheaper and gives a precise error message per AC8.
+  if ! grep -q '^## Review Gate[[:space:]]*$' "$file"; then
+    die "story file '$file' is missing the '## Review Gate' section"
+  fi
+
+  awk '
+    BEGIN { in_section = 0; in_table = 0; saw_sep = 0 }
+    /^## Review Gate[[:space:]]*$/ { in_section = 1; in_table = 0; saw_sep = 0; next }
+    in_section && /^## / {
+      # A new h2 header terminates the section.
+      in_section = 0; in_table = 0; next
+    }
+    !in_section { next }
+
+    # Inside the section. Look for the first pipe-table.
+    {
+      # Strip trailing \r so CRLF files parse correctly (AC-EC7).
+      sub(/\r$/, "", $0)
+    }
+
+    in_section && !in_table {
+      # Header row starts the table (first line beginning with |).
+      if ($0 ~ /^[[:space:]]*\|/) {
+        in_table = 1
+        saw_sep = 0
+        next
+      }
+      next
+    }
+
+    in_table {
+      # End of table: blank line or non-pipe line.
+      if ($0 !~ /^[[:space:]]*\|/) {
+        in_table = 0
+        in_section = 0
+        next
+      }
+
+      # Separator row (| --- | --- | --- |) — skip exactly one.
+      if (!saw_sep && $0 ~ /^[[:space:]]*\|[[:space:]]*-+/) {
+        saw_sep = 1
+        next
+      }
+
+      # Data row. Strip leading/trailing pipe and whitespace, split on |.
+      line = $0
+      sub(/^[[:space:]]*\|/, "", line)
+      sub(/\|[[:space:]]*$/, "", line)
+      n = split(line, cells, /\|/)
+      if (n < 3) next
+
+      # Trim each cell.
+      for (i = 1; i <= n; i++) {
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", cells[i])
+      }
+
+      # Emit TSV: GATE \t STATUS \t REPORT
+      printf "%s\t%s\t%s\n", cells[1], cells[2], cells[3]
+    }
+  ' "$file"
+}
+
+# Populate two parallel global arrays ROW_GATES / ROW_STATUSES from the parsed
+# table, keeping only the canonical six gates (in canonical order). Exits 1
+# if any canonical gate is missing from the table (per AC3 / Task 3.4).
+ROW_GATES=()
+ROW_STATUSES=()
+load_canonical_rows() {
+  local file="$1"
+
+  # Reset globals.
+  ROW_GATES=()
+  ROW_STATUSES=()
+
+  # Collect parsed rows into two temp arrays keyed by gate name.
+  local -a parsed_gates=()
+  local -a parsed_statuses=()
+
+  local gate status _report
+  while IFS=$'\t' read -r gate status _report; do
+    [ -z "$gate" ] && continue
+    parsed_gates+=("$gate")
+    parsed_statuses+=("$status")
+  done < <(parse_gate_rows "$file")
+
+  # For each canonical gate (in order), find its row.
+  local cg i found
+  for cg in "${CANONICAL_GATES[@]}"; do
+    found=0
+    i=0
+    while [ $i -lt "${#parsed_gates[@]}" ]; do
+      if [ "${parsed_gates[$i]}" = "$cg" ]; then
+        ROW_GATES+=("$cg")
+        ROW_STATUSES+=("${parsed_statuses[$i]}")
+        found=1
+        break
+      fi
+      i=$((i + 1))
+    done
+    if [ $found -eq 0 ]; then
+      die "story file '$file' is missing canonical gate row '$cg' in '## Review Gate'"
+    fi
+  done
+}
+
+# ---------- Subcommand: status ----------
+
+cmd_status() {
+  local file="$1"
+  local story_key="$2"
+
+  load_canonical_rows "$file"
+
+  # Build jq arg list: --arg story <key> --arg cr <v> --arg qa <v> ...
+  # Positional mapping matches CANONICAL_GATES order.
+  jq -nc \
+    --arg story "$story_key" \
+    --arg cr  "${ROW_STATUSES[0]}" \
+    --arg qa  "${ROW_STATUSES[1]}" \
+    --arg sec "${ROW_STATUSES[2]}" \
+    --arg ta  "${ROW_STATUSES[3]}" \
+    --arg tr  "${ROW_STATUSES[4]}" \
+    --arg pr  "${ROW_STATUSES[5]}" \
+    '{
+      story: $story,
+      gates: {
+        "Code Review":        $cr,
+        "QA Tests":           $qa,
+        "Security Review":    $sec,
+        "Test Automation":    $ta,
+        "Test Review":        $tr,
+        "Performance Review": $pr
+      }
+    }'
+}
+
+# ---------- Subcommand: check ----------
+
+cmd_check() {
+  local file="$1"
+
+  load_canonical_rows "$file"
+
+  local i ok=1
+  local -a bad=()
+  i=0
+  while [ $i -lt "${#ROW_GATES[@]}" ]; do
+    if [ "${ROW_STATUSES[$i]}" != "PASSED" ]; then
+      bad+=("${ROW_GATES[$i]}")
+      ok=0
+    fi
+    i=$((i + 1))
+  done
+
+  if [ $ok -eq 1 ]; then
+    return 0
+  fi
+
+  local g
+  for g in "${bad[@]}"; do
+    printf '%s\n' "$g" >&2
+  done
+  exit 1
+}
+
+# ---------- Subcommand: update ----------
+
+# Rewrite exactly one row of the Review Gate table in $file, replacing the
+# Status cell of the matched gate with $new_verdict and the Report cell with
+# "—" (the canonical empty-report placeholder used by all six review
+# workflows). All other bytes are preserved. Runs under flock and uses
+# tempfile + atomic mv.
+cmd_update() {
+  local file="$1"
+  local gate_name="$2"
+  local new_verdict="$3"
+
+  # Validate the section exists (produces a precise error per AC8).
+  # We also validate by loading canonical rows — this enforces Task 3.4.
+  load_canonical_rows "$file"
+
+  local lockfile="${file}.lock"
+  local tmpfile="${file}.tmp.$$"
+
+  local flock_bin
+  flock_bin=$(command -v flock || true)
+
+  rewrite_body() {
+    # Stream $file through awk, rewriting only the first data row of the
+    # first pipe-table under `## Review Gate` whose first cell matches
+    # $gate_name. Preserve CRLF (AC-EC7) and all surrounding bytes.
+    awk -v target="$gate_name" -v new_status="$new_verdict" -v new_report="—" '
+      BEGIN { in_section = 0; in_table = 0; saw_sep = 0; rewritten = 0 }
+
+      # Detect `## Review Gate` header. We preserve the line verbatim
+      # (including any trailing \r) and track state off a stripped copy.
+      {
+        raw = $0
+        line = $0
+        sub(/\r$/, "", line)
+      }
+
+      line ~ /^## Review Gate[[:space:]]*$/ {
+        in_section = 1; in_table = 0; saw_sep = 0
+        print raw
+        next
+      }
+
+      in_section && line ~ /^## / {
+        # New h2 terminates the section.
+        in_section = 0; in_table = 0
+        print raw
+        next
+      }
+
+      !in_section {
+        print raw
+        next
+      }
+
+      in_section && !in_table {
+        if (line ~ /^[[:space:]]*\|/) {
+          in_table = 1
+          saw_sep = 0
+        }
+        print raw
+        next
+      }
+
+      in_table {
+        if (line !~ /^[[:space:]]*\|/) {
+          in_table = 0
+          in_section = 0
+          print raw
+          next
+        }
+
+        if (!saw_sep && line ~ /^[[:space:]]*\|[[:space:]]*-+/) {
+          saw_sep = 1
+          print raw
+          next
+        }
+
+        if (rewritten) {
+          print raw
+          next
+        }
+
+        # Parse the stripped line into cells for comparison.
+        tmp = line
+        sub(/^[[:space:]]*\|/, "", tmp)
+        sub(/\|[[:space:]]*$/, "", tmp)
+        n = split(tmp, cells, /\|/)
+        if (n < 3) {
+          print raw
+          next
+        }
+        gate = cells[1]
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", gate)
+
+        if (gate != target) {
+          print raw
+          next
+        }
+
+        # Rewrite this row. Preserve CRLF if the original had one.
+        crlf = ""
+        if (raw ~ /\r$/) { crlf = "\r" }
+        printf "| %s | %s | %s |%s\n", target, new_status, new_report, crlf
+        rewritten = 1
+        next
+      }
+
+      { print raw }
+
+      END {
+        if (!rewritten) {
+          # Signal failure to the caller via exit code 2.
+          exit 2
+        }
+      }
+    ' "$file" > "$tmpfile"
+  }
+
+  do_update() {
+    local awk_rc=0
+    rewrite_body || awk_rc=$?
+    if [ "$awk_rc" -ne 0 ]; then
+      rm -f "$tmpfile"
+      die "failed to rewrite row for gate '$gate_name' in '$file' (no matching row found)"
+    fi
+    # Atomic rename — same filesystem so mv is a rename(2).
+    if ! mv -f "$tmpfile" "$file"; then
+      rm -f "$tmpfile"
+      die "failed to mv tempfile over '$file'"
+    fi
+  }
+
+  if [ -n "$flock_bin" ]; then
+    (
+      exec 9>"$lockfile"
+      if ! "$flock_bin" -w 5 9; then
+        die "flock timeout acquiring $lockfile"
+      fi
+      do_update
+    )
+  else
+    # Fallback: bounded spin-loop with O_EXCL lockfile create. Same pattern
+    # used in checkpoint.sh / lifecycle-event.sh for macOS /bin/bash 3.2
+    # without Homebrew util-linux flock.
+    local tries=0
+    while ! ( set -C; : > "$lockfile" ) 2>/dev/null; do
+      tries=$((tries + 1))
+      if [ $tries -ge 50 ]; then
+        die "lock timeout acquiring $lockfile"
+      fi
+      sleep 0.1
+    done
+    # shellcheck disable=SC2064
+    trap "rm -f '$lockfile'" EXIT
+    do_update
+    rm -f "$lockfile"
+    trap - EXIT
+  fi
+}
+
+# ---------- Argument parsing ----------
+
+main() {
+  local subcmd="${1:-}"
+  if [ -z "$subcmd" ]; then
+    usage >&2
+    exit 1
+  fi
+  shift || true
+
+  case "$subcmd" in
+    --help|-h)
+      usage
+      exit 0
+      ;;
+    check|update|status)
+      ;;
+    *)
+      printf '%s: unknown subcommand: %s\n' "$SCRIPT_NAME" "$subcmd" >&2
+      usage >&2
+      exit 1
+      ;;
+  esac
+
+  local story_key="" gate_name="" verdict=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --story)
+        [ $# -ge 2 ] || die "--story requires a value"
+        story_key="$2"; shift 2
+        ;;
+      --gate)
+        [ $# -ge 2 ] || die "--gate requires a value"
+        gate_name="$2"; shift 2
+        ;;
+      --verdict)
+        [ $# -ge 2 ] || die "--verdict requires a value"
+        verdict="$2"; shift 2
+        ;;
+      --help|-h)
+        usage
+        exit 0
+        ;;
+      *)
+        die "unknown flag: $1"
+        ;;
+    esac
+  done
+
+  [ -n "$story_key" ] || die "$subcmd requires --story <key>"
+
+  locate_story_file "$story_key"
+
+  case "$subcmd" in
+    check)
+      cmd_check "$STORY_FILE"
+      ;;
+    status)
+      cmd_status "$STORY_FILE" "$story_key"
+      ;;
+    update)
+      [ -n "$gate_name" ] || die "update requires --gate <name>"
+      [ -n "$verdict" ]   || die "update requires --verdict <PASSED|FAILED|UNVERIFIED>"
+
+      if ! is_canonical_gate "$gate_name"; then
+        local allowed_gates
+        allowed_gates=$(join_by ', ' "${CANONICAL_GATES[@]}")
+        die "invalid gate name '$gate_name' — allowed: $allowed_gates"
+      fi
+      if ! is_canonical_verdict "$verdict"; then
+        local allowed_verdicts
+        allowed_verdicts=$(join_by ', ' "${CANONICAL_VERDICTS[@]}")
+        die "invalid verdict '$verdict' — allowed: $allowed_verdicts"
+      fi
+
+      cmd_update "$STORY_FILE" "$gate_name" "$verdict"
+      ;;
+  esac
+}
+
+main "$@"

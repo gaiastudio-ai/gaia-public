@@ -13,6 +13,13 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) for t
 
 #### Documentation
 
+- **E28-S32** Flipped orchestrator `project_path` from `Gaia-framework` to `gaia-public`,
+  closing the final deferred step of E28-S4 (AC4 / Task 8). The flip was verified against
+  the running `_gaia/_config/global.yaml`, stale resolved-config entries were regenerated,
+  and a sample workflow resolution confirmed `{project-path}` now maps to
+  `{project-root}/gaia-public`. Sprint 19 is now fully anchored on the `gaia-public` repo
+  as the canonical GAIA product source.
+
 - **E28-S28** Fix architecture version drift. Realigned downstream E28 story copy in
   `E28-S3-refresh-gaia-ground-truth.md` to reference `Architecture v1.20.0`, matching the
   authoritative on-disk frontmatter in `docs/planning-artifacts/architecture.md`. Resolution

@@ -23,6 +23,10 @@ rm -rf ~/.claude/plugins/marketplaces/gaiastudio-ai-gaia-public/
 
 The same pattern applies to the enterprise marketplace — replace `gaia-public` with `gaia-enterprise` in both the directory path and the `marketplace add` command.
 
+### Private marketplace authentication
+
+The enterprise marketplace lives in a private GitHub repo (`gaiastudio-ai/gaia-enterprise`). It works out of the box with your existing `gh auth` credentials — there is **no Claude Code-specific authentication layer** for private marketplaces and none is planned. If `gh auth status` shows you are logged in as a user with read access to `gaiastudio-ai/gaia-enterprise`, then `/plugin marketplace add gaiastudio-ai/gaia-enterprise` will succeed; if not, run `gh auth login` first. Distribution access is governed by GitHub repo ACLs. The only license enforcement that runs server-side is the CI `license-check` job in the enterprise repo's `plugin-ci.yml`, which gates publication on a valid `LICENSE` file, a populated `license` field in `plugin.json`, and SPDX headers on shipped markdown.
+
 If you prefer a guarded, scriptable alternative to the raw `rm -rf`, the plugin ships `plugins/gaia/scripts/plugin-cache-recovery.sh`. It validates the slug, classifies the cache entry as `absent` / `healthy` / `polluted`, and refuses to remove a healthy clone unless `--force` is passed:
 
 ```

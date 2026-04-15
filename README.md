@@ -23,6 +23,16 @@ rm -rf ~/.claude/plugins/marketplaces/gaiastudio-ai-gaia-public/
 
 The same pattern applies to the enterprise marketplace — replace `gaia-public` with `gaia-enterprise` in both the directory path and the `marketplace add` command.
 
+If you prefer a guarded, scriptable alternative to the raw `rm -rf`, the plugin ships `plugins/gaia/scripts/plugin-cache-recovery.sh`. It validates the slug, classifies the cache entry as `absent` / `healthy` / `polluted`, and refuses to remove a healthy clone unless `--force` is passed:
+
+```
+plugins/gaia/scripts/plugin-cache-recovery.sh --detect --slug gaiastudio-ai-gaia-public
+plugins/gaia/scripts/plugin-cache-recovery.sh --slug gaiastudio-ai-gaia-public --dry-run
+plugins/gaia/scripts/plugin-cache-recovery.sh --slug gaiastudio-ai-gaia-public
+```
+
+`--detect` exits `2` on a polluted entry so CI and workflow steps can branch on it without parsing text; `--dry-run` prints the intended target without touching the filesystem. See the script header for the full exit-code table and slug-validation rules.
+
 ## License
 
 AGPL-3.0 — see [LICENSE](./LICENSE).

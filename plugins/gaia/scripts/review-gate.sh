@@ -35,9 +35,12 @@
 #     it; review-gate.sh does NOT source resolve-config.sh directly so the two
 #     foundation scripts can land in any order (soft dependency per story
 #     notes / Task 1 Subtask 1.3).
+#   IMPLEMENTATION_ARTIFACTS — optional. Defaults to
+#     "${PROJECT_PATH}/docs/implementation-artifacts" when unset. Same env var
+#     convention as sprint-state.sh (E28-S11). Aligned by E28-S99.
 #
-# Story file location (new plugin-native layout):
-#   ${PROJECT_PATH}/docs/implementation-artifacts/stories/<key>-*.md
+# Story file location (flat layout — aligned with sprint-state.sh per E28-S99):
+#   ${IMPLEMENTATION_ARTIFACTS}/<key>-*.md
 #
 # Exit codes:
 #   0 — success (check: all PASSED; update: row rewritten; status: JSON emitted;
@@ -119,7 +122,8 @@ Canonical verdicts (case-sensitive, per CLAUDE.md):
   UNVERIFIED | PASSED | FAILED
 
 Story file is located via the glob
-  ${PROJECT_PATH}/docs/implementation-artifacts/stories/<key>-*.md
+  ${IMPLEMENTATION_ARTIFACTS}/<key>-*.md
+IMPLEMENTATION_ARTIFACTS defaults to "${PROJECT_PATH}/docs/implementation-artifacts".
 PROJECT_PATH defaults to "." when unset.
 
 Exit codes:
@@ -169,14 +173,33 @@ join_by() {
   printf '%s' "$out"
 }
 
-# Locate the story file via glob. Exits 1 on zero-match or multi-match.
-# Result is returned via STORY_FILE global.
+# Check whether a file's YAML frontmatter contains `template: 'story'`.
+# Reads only the frontmatter block (between the first two `---` lines).
+# Returns 0 if the file is a canonical story file, 1 otherwise.
+# Portable: bash 3.2+ compatible, uses awk only.
+# Adopted from sprint-state.sh (E28-S11) per E28-S99.
+_is_story_file() {
+  local f="$1"
+  awk '
+    /^---[[:space:]]*$/ { n++; if (n == 2) exit }
+    n == 1 && /^template:[[:space:]]*["\x27]?story["\x27]?[[:space:]]*$/ { found = 1; exit }
+    END { exit (found ? 0 : 1) }
+  ' "$f"
+}
+
+# Locate the story file via glob `{key}-*.md` under IMPLEMENTATION_ARTIFACTS,
+# then filter candidates by frontmatter `template: 'story'` to exclude review
+# sibling files (-review.md, -qa-tests.md, -security-review.md, etc.).
+# Result is returned via STORY_FILE global. Exits 1 on zero or multiple
+# canonical matches.
+# Aligned with sprint-state.sh (E28-S11) per E28-S99: uses flat
+# IMPLEMENTATION_ARTIFACTS directory, not a stories/ subdirectory.
 STORY_FILE=""
 locate_story_file() {
   local key="$1"
   local project_path="${PROJECT_PATH:-.}"
-  local glob_dir="${project_path}/docs/implementation-artifacts/stories"
-  local pattern="${glob_dir}/${key}-*.md"
+  local impl_artifacts="${IMPLEMENTATION_ARTIFACTS:-${project_path}/docs/implementation-artifacts}"
+  local pattern="${impl_artifacts}/${key}-*.md"
 
   # shopt -s nullglob so zero-match produces an empty array rather than the
   # literal pattern string.
@@ -191,15 +214,28 @@ locate_story_file() {
   if [ "${#matches[@]}" -eq 0 ]; then
     die "no story file found for key '$key' (glob: $pattern)"
   fi
-  if [ "${#matches[@]}" -gt 1 ]; then
+
+  # Filter glob matches: keep only files whose frontmatter declares template: 'story'
+  local canonical=()
+  local m
+  for m in "${matches[@]}"; do
+    if _is_story_file "$m"; then
+      canonical+=( "$m" )
+    fi
+  done
+
+  if [ "${#canonical[@]}" -eq 0 ]; then
+    die "no story file found for key '$key' (checked ${#matches[@]} candidates, none have template: 'story' frontmatter)"
+  fi
+  if [ "${#canonical[@]}" -gt 1 ]; then
     local listed
-    listed=$(printf '  %s\n' "${matches[@]}")
+    listed=$(printf '  %s\n' "${canonical[@]}")
     printf '%s: multiple story files matched key %s (glob: %s)\n%s\n' \
       "$SCRIPT_NAME" "$key" "$pattern" "$listed" >&2
     exit 1
   fi
 
-  STORY_FILE="${matches[0]}"
+  STORY_FILE="${canonical[0]}"
 }
 
 # ---------- Review Gate table parser ----------

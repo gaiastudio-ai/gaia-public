@@ -47,7 +47,7 @@ done <<<"$config_output"
 
 # ---------- 2. Validate gate (story file required) ----------
 if [ -x "$VALIDATE_GATE" ]; then
-  if ! "$VALIDATE_GATE" story_file_exists 2>&1; then
+  if ! "$VALIDATE_GATE" file_exists 2>&1; then
     die "HALT: Story file not found — run /gaia-create-story first"
   fi
 else

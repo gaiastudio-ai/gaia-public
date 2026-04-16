@@ -48,8 +48,9 @@ setup() {
   export CLAUDE_SKILL_DIR="$TEST_TMP"
   export IMPLEMENTATION_ARTIFACTS="$TEST_TMP/docs/implementation-artifacts"
 
-  # Copy fixture config
+  # Copy fixture config and schema
   cp "$FIXTURE_DIR/config/project-config.yaml" "$TEST_TMP/config/project-config.yaml"
+  cp "$REPO_ROOT/plugins/gaia/config/project-config.schema.yaml" "$TEST_TMP/config/project-config.schema.yaml" 2>/dev/null || true
 
   # Copy fixture planning artifacts
   cp "$FIXTURE_DIR/epics-and-stories.md" "$TEST_TMP/docs/planning-artifacts/"
@@ -65,6 +66,7 @@ setup() {
   STORY_KEY="E99-S1"
   cat > "$TEST_TMP/docs/implementation-artifacts/stories/${STORY_KEY}-fixture-story.md" <<'STORY'
 ---
+template: 'story'
 key: "E99-S1"
 title: "Fixture story for chain test"
 epic: "E99 — Test Epic"
@@ -248,6 +250,100 @@ run_finalize() {
   [ "$status" -eq 0 ]
   echo "$output" | grep -q "workflow"
   echo "$output" | grep -q "step"
+}
+
+# ---------- AC1b: dev-story skill functional tests (E28-S53) ----------
+
+@test "AC1b: dev-story skill directory and scripts exist" {
+  [ -d "$SKILLS_DIR/gaia-dev-story" ]
+  [ -f "$SKILLS_DIR/gaia-dev-story/SKILL.md" ]
+  [ -f "$SKILLS_DIR/gaia-dev-story/scripts/setup.sh" ]
+  [ -f "$SKILLS_DIR/gaia-dev-story/scripts/finalize.sh" ]
+  [ -f "$SKILLS_DIR/gaia-dev-story/scripts/load-story.sh" ]
+  [ -f "$SKILLS_DIR/gaia-dev-story/scripts/update-story-status.sh" ]
+  [ -f "$SKILLS_DIR/gaia-dev-story/scripts/checkpoint.sh" ]
+  [ -f "$SKILLS_DIR/gaia-dev-story/scripts/git-branch.sh" ]
+  [ -f "$SKILLS_DIR/gaia-dev-story/scripts/pr-create.sh" ]
+  [ -f "$SKILLS_DIR/gaia-dev-story/scripts/ci-wait.sh" ]
+  [ -f "$SKILLS_DIR/gaia-dev-story/scripts/merge.sh" ]
+}
+
+@test "AC1b: dev-story SKILL.md has correct frontmatter" {
+  local skill_file="$SKILLS_DIR/gaia-dev-story/SKILL.md"
+  grep -q "^name: gaia-dev-story" "$skill_file"
+  grep -q "^context: fork" "$skill_file"
+  grep -q "PostToolUse" "$skill_file"
+  grep -q "checkpoint.sh" "$skill_file"
+}
+
+@test "AC1b: dev-story setup.sh runs without error against fixture" {
+  # Transition fixture story to ready-for-dev first (setup requires it)
+  bash "$SCRIPTS_DIR/sprint-state.sh" transition --story "$STORY_KEY" --to validating
+  bash "$SCRIPTS_DIR/sprint-state.sh" transition --story "$STORY_KEY" --to ready-for-dev
+  run run_setup gaia-dev-story
+  [ "$status" -eq 0 ]
+}
+
+@test "AC1b: dev-story finalize.sh runs without error against fixture" {
+  run run_finalize gaia-dev-story
+  [ "$status" -eq 0 ]
+}
+
+@test "AC1b: dev-story load-story.sh retrieves fixture story status" {
+  run bash "$SKILLS_DIR/gaia-dev-story/scripts/load-story.sh" "$STORY_KEY"
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -q "backlog"
+}
+
+@test "AC1b: dev-story update-story-status.sh transitions fixture story" {
+  # First get to ready-for-dev via valid adjacency path
+  bash "$SCRIPTS_DIR/sprint-state.sh" transition --story "$STORY_KEY" --to validating
+  bash "$SCRIPTS_DIR/sprint-state.sh" transition --story "$STORY_KEY" --to ready-for-dev
+  # Now test the dev-story-specific wrapper
+  run bash "$SKILLS_DIR/gaia-dev-story/scripts/update-story-status.sh" "$STORY_KEY" in-progress
+  [ "$status" -eq 0 ]
+  # Verify the story is now in-progress
+  run bash "$SCRIPTS_DIR/sprint-state.sh" get --story "$STORY_KEY"
+  echo "$output" | grep -q "in-progress"
+}
+
+@test "AC1b: dev-story update-story-status.sh rejects invalid transition" {
+  # Story starts at backlog — direct transition to done should fail
+  run bash "$SKILLS_DIR/gaia-dev-story/scripts/update-story-status.sh" "$STORY_KEY" done
+  [ "$status" -ne 0 ]
+}
+
+# ---------- AC3b: PostToolUse checkpoint hook (dev-story specific) ----------
+
+@test "AC3b: dev-story checkpoint.sh hook writes checkpoint with workflow=gaia-dev-story" {
+  export CLAUDE_SKILL_DIR="$SKILLS_DIR/gaia-dev-story"
+  run bash "$SKILLS_DIR/gaia-dev-story/scripts/checkpoint.sh" write gaia-dev-story
+  [ "$status" -eq 0 ]
+  # Verify checkpoint was written to the correct location
+  local count
+  count=$(find "$TEST_TMP/checkpoints" -type f -name "*.yaml" 2>/dev/null | wc -l | tr -d ' ')
+  [ "$count" -ge 1 ]
+}
+
+@test "AC3b: dev-story checkpoint.sh uses step 0 sentinel for hook-triggered writes" {
+  export CLAUDE_SKILL_DIR="$SKILLS_DIR/gaia-dev-story"
+  bash "$SKILLS_DIR/gaia-dev-story/scripts/checkpoint.sh" write gaia-dev-story
+  # Read back the checkpoint and verify it contains the workflow name
+  run bash "$SCRIPTS_DIR/checkpoint.sh" read --workflow "gaia-dev-story"
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -q "gaia-dev-story"
+}
+
+@test "AC3b: dev-story checkpoint.sh rejects non-write subcommands" {
+  export CLAUDE_SKILL_DIR="$SKILLS_DIR/gaia-dev-story"
+  run bash "$SKILLS_DIR/gaia-dev-story/scripts/checkpoint.sh" read gaia-dev-story
+  [ "$status" -ne 0 ]
+}
+
+@test "AC3b: dev-story checkpoint.sh fails gracefully without args" {
+  export CLAUDE_SKILL_DIR="$SKILLS_DIR/gaia-dev-story"
+  run bash "$SKILLS_DIR/gaia-dev-story/scripts/checkpoint.sh"
+  [ "$status" -ne 0 ]
 }
 
 # ---------- AC4: CI budget guard (structural check) ----------

@@ -103,3 +103,28 @@ teardown() { common_teardown; }
   abs="$(cd "$TEST_ARTIFACTS" && pwd)"
   [[ "$output" == *"$abs/readiness-report.md"* ]]
 }
+
+# --- E28-S97: epics_and_stories_exists gate type ---
+
+@test "validate-gate.sh: epics_and_stories_exists happy path returns 0" {
+  export PLANNING_ARTIFACTS="$TEST_TMP/planning-artifacts"
+  mkdir -p "$PLANNING_ARTIFACTS"
+  printf '# Epics\n' > "$PLANNING_ARTIFACTS/epics-and-stories.md"
+  run "$SCRIPT" epics_and_stories_exists
+  [ "$status" -eq 0 ]
+}
+
+@test "validate-gate.sh: epics_and_stories_exists fails when file missing" {
+  export PLANNING_ARTIFACTS="$TEST_TMP/planning-artifacts"
+  mkdir -p "$PLANNING_ARTIFACTS"
+  run "$SCRIPT" epics_and_stories_exists
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"epics_and_stories_exists failed"* ]]
+  [[ "$output" == *"expected:"* ]]
+}
+
+@test "validate-gate.sh: --list includes epics_and_stories_exists" {
+  run "$SCRIPT" --list
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"epics_and_stories_exists"* ]]
+}

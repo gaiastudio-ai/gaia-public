@@ -30,6 +30,7 @@
 #   ci_setup_exists        — ${TEST_ARTIFACTS}/ci-setup.md
 #   atdd_exists            — ${TEST_ARTIFACTS}/atdd-<story>.md (requires --story)
 #   readiness_report_exists — ${TEST_ARTIFACTS}/readiness-report.md
+#   epics_and_stories_exists — ${PLANNING_ARTIFACTS}/epics-and-stories.md
 #
 # Error format (stable for log parsers / tailing sync agent):
 #   validate-gate: <gate_type> failed — expected: <abs_path>
@@ -61,7 +62,7 @@ PROJECT_ROOT="${PROJECT_ROOT:-$PWD}"
 
 # ---------- Constants ----------
 # Supported gate list — keep in sync with gate_path() case block below.
-SUPPORTED_GATES="file_exists test_plan_exists traceability_exists ci_setup_exists atdd_exists readiness_report_exists"
+SUPPORTED_GATES="file_exists test_plan_exists traceability_exists ci_setup_exists atdd_exists readiness_report_exists epics_and_stories_exists"
 
 # ---------- Helpers ----------
 
@@ -97,6 +98,7 @@ Supported gate types:
   ci_setup_exists         ${TEST_ARTIFACTS}/ci-setup.md
   atdd_exists             ${TEST_ARTIFACTS}/atdd-<story>.md  (requires --story)
   readiness_report_exists ${TEST_ARTIFACTS}/readiness-report.md
+  epics_and_stories_exists ${PLANNING_ARTIFACTS}/epics-and-stories.md
 
 Exit codes:
   0  gate(s) passed, or --list / --help completed
@@ -128,6 +130,7 @@ gate_path() {
     ci_setup_exists)         printf '%s/ci-setup.md' "$TEST_ARTIFACTS" ;;
     atdd_exists)             printf '%s/atdd-{story}.md' "$TEST_ARTIFACTS" ;;
     readiness_report_exists) printf '%s/readiness-report.md' "$TEST_ARTIFACTS" ;;
+    epics_and_stories_exists) printf '%s/epics-and-stories.md' "$PLANNING_ARTIFACTS" ;;
     *) return 2 ;;
   esac
 }

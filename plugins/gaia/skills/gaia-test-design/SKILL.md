@@ -21,6 +21,7 @@ This skill is the native Claude Code conversion of the legacy `_gaia/testing/wor
 
 ## Critical Rules
 
+- Knowledge fragments are bundled in this skill's `knowledge/` directory -- load them JIT when referenced by a step.
 - Start with risk assessment -- not all areas need equal coverage.
 - Define quality gates for the CI pipeline.
 - The test plan template MUST exist at `${CLAUDE_PLUGIN_ROOT}/skills/gaia-test-design/test-plan-template.md` and be non-empty. If the template file is empty (0 bytes) or missing, halt with: "Test plan template not found or empty -- cannot produce test plan without template."
@@ -46,6 +47,7 @@ This skill is the native Claude Code conversion of the legacy `_gaia/testing/wor
 
 Delegate to the **test-architect** subagent (Sable) via `agents/test-architect` for risk assessment.
 
+- Load knowledge fragment: `knowledge/risk-governance.md` for probability-impact matrix methodology
 - Identify high-risk areas: revenue-critical paths, security-sensitive components, complex business logic, data integrity boundaries.
 - Rate each area using probability x impact scoring.
 - Produce a risk assessment matrix with columns: Area, Risk Level (H/M/L), Probability, Impact, Coverage Strategy.
@@ -57,6 +59,7 @@ This step is **optional** -- activate only when brownfield indicators are presen
 
 - If PRD contains "Mode: Brownfield" or project has `docs/planning-artifacts/brownfield-assessment.md`: activate this step.
 - Identify integration boundaries: where new code calls legacy code and vice versa.
+- Load knowledge fragment: `knowledge/contract-testing.md` for consumer-driven contract patterns
 - For each boundary: define contract test (input/output schema validation between old and new).
 - For each legacy API wrapper or adapter: define adapter test (legacy behavior preserved).
 - If data migration exists: define migration validation tests (row counts, data integrity, rollback verification).
@@ -68,6 +71,8 @@ This step is **optional** -- activate only when brownfield indicators are presen
 
 Delegate to the **test-architect** subagent (Sable) via `agents/test-architect` for test strategy design.
 
+- Load knowledge fragment: `knowledge/test-pyramid.md` for test level methodology
+- Load knowledge fragment: `knowledge/api-testing-patterns.md` for API and contract test patterns
 - Define test levels per component: unit, integration, E2E, contract.
 - Apply test pyramid -- most tests at the lowest effective level.
 - Map each component to its appropriate test level based on risk assessment.

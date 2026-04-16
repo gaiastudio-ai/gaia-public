@@ -21,6 +21,7 @@ This skill is the native Claude Code conversion of the legacy `_gaia/testing/wor
 
 ## Critical Rules
 
+- Knowledge fragments are bundled in this skill's `knowledge/` directory -- load them JIT when referenced by a step.
 - Before scaffolding, check for existing CI config files (`.github/workflows/`, `.gitlab-ci.yml`, `Jenkinsfile`, `.circleci/config.yml`). If found, warn the user and offer to merge or overwrite rather than silently replacing (AC-EC1).
 - The `validate-gate.sh` foundation script (E28-S15) MUST be present and executable at `plugins/gaia/scripts/validate-gate.sh`. If missing or not executable, HALT with: "validate-gate.sh not found or not executable -- dependency E28-S15 must be installed first" (AC-EC3, AC-EC5).
 - The `resolve-config.sh` foundation script (E28-S19) MUST be present and executable. If missing, HALT with dependency error.
@@ -53,6 +54,7 @@ This skill is the native Claude Code conversion of the legacy `_gaia/testing/wor
 
 ### Step 4 -- Quality Gates
 
+- Load knowledge fragment: `knowledge/contract-testing.md` for consumer-driven contract patterns in CI pipelines
 - Define pass/fail thresholds: coverage percentage, test pass rate.
 - Configure gate enforcement (blocking vs advisory).
 

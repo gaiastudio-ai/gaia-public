@@ -17,6 +17,7 @@ This skill is the native Claude Code conversion of the legacy `_gaia/testing/wor
 
 ## Critical Rules
 
+- Knowledge fragments are bundled in this skill's `knowledge/` directory -- load them JIT when referenced by a step.
 - The `story-key` argument is **required**. If missing or malformed (empty string, missing epic prefix like "S83" without "E{n}-" prefix), exit with a clear validation error message naming the invalid argument. Valid format: `E{number}-S{number}` (e.g., `E1-S1`, `E28-S83`).
 - A story file MUST exist at `docs/implementation-artifacts/{story_key}-*.md` before proceeding. If the story file is not found for the given key, exit with error: "Story file not found for {story_key}".
 - The story file MUST contain an `## Acceptance Criteria` section with at least one AC entry. If no acceptance criteria are found or the section is empty, exit gracefully with the message: "No acceptance criteria found for {story_key}" and write no ATDD artifact.
@@ -47,6 +48,7 @@ This skill is the native Claude Code conversion of the legacy `_gaia/testing/wor
 
 ### Step 3 -- Generate AC-to-Test Mapping
 
+- Load knowledge fragment: `knowledge/api-testing-patterns.md` for schema validation and contract test patterns relevant to AC-to-test transformation
 - For each acceptance criterion (AC1, AC2, AC-EC1, etc.):
   - Extract the AC identifier and description
   - Transform the AC into a Given/When/Then test skeleton

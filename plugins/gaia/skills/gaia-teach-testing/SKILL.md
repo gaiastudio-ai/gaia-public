@@ -17,6 +17,7 @@ This skill is the native Claude Code conversion of the legacy `_gaia/testing/wor
 
 ## Critical Rules
 
+- Knowledge fragments are bundled in this skill's `knowledge/` directory -- load them JIT when referenced by a step.
 - Assess the user's experience level BEFORE teaching — never assume a level.
 - Load knowledge progressively — do not overwhelm with advanced topics for beginners.
 - Use the user's project stack for code examples when possible (detect from project files).
@@ -40,7 +41,7 @@ Determine the skill level based on their response. If the user does not specify,
 Present a learning path based on the assessed skill level:
 
 **Beginner topics:**
-- Test pyramid — unit, integration, E2E layers and when to use each
+- Test pyramid — unit, integration, E2E layers and when to use each (load knowledge fragment: `knowledge/test-pyramid.md`)
 - Unit testing basics — what is a unit test, isolation, deterministic results
 - Test structure — the AAA pattern (Arrange, Act, Assert)
 - Assertions — common assertion patterns and matchers

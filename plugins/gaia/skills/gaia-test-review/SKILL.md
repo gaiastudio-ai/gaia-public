@@ -22,6 +22,7 @@ This skill is the native Claude Code conversion of the legacy `_gaia/lifecycle/w
 
 ## Critical Rules
 
+- Knowledge fragments are bundled in this skill's `knowledge/` directory -- load them JIT when referenced by a step.
 - A story key argument MUST be provided. If missing, fail fast with "usage: /gaia-test-review [story-key]".
 - The story file MUST exist at `docs/implementation-artifacts/{story_key}-*.md`. Use the canonical glob to resolve regardless of title slug. If zero matches, fail with "story file not found for key {story_key}".
 - The story MUST be in `review` status. If not, fail with "story must be in review status before test review".
@@ -52,6 +53,9 @@ This skill is the native Claude Code conversion of the legacy `_gaia/lifecycle/w
 ### Step 3 -- Test Quality Assessment
 
 - Dispatch test quality assessment to the Vera QA subagent (E28-S21).
+- Load knowledge fragment: `knowledge/test-isolation.md` for test doubles and isolation patterns
+- Load knowledge fragment: `knowledge/deterministic-testing.md` for flakiness avoidance patterns
+- Load knowledge fragment: `knowledge/selector-resilience.md` for UI selector resilience assessment
 - Vera analyzes the story's test files for:
   - **Completeness:** Every acceptance criterion has corresponding test coverage
   - **Assertion quality:** Tests use meaningful assertions, not just existence checks
@@ -63,6 +67,8 @@ This skill is the native Claude Code conversion of the legacy `_gaia/lifecycle/w
 ### Step 4 -- Flakiness Analysis
 
 - Dispatch flakiness detection to the Sable Test Architect subagent (E28-S21).
+- Load knowledge fragment: `knowledge/visual-testing.md` for visual regression assessment patterns
+- Load knowledge fragment: `knowledge/test-healing.md` for self-healing test and selector fallback patterns
 - Sable analyzes the story's test files for:
   - **Non-determinism:** Tests depending on timing, random values, or system state
   - **Shared mutable state:** Global variables, singletons, or shared fixtures that leak between tests

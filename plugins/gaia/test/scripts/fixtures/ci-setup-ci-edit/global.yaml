@@ -1,0 +1,30 @@
+# Test fixture — valid global.yaml with a 2-environment promotion chain
+framework_name: "GAIA"
+framework_version: "1.127.2-rc.1"
+project_path: "."
+project_root: "/tmp/gaia-test"
+
+output_folder: "/tmp/gaia-test/docs"
+planning_artifacts: "/tmp/gaia-test/docs/planning-artifacts"
+implementation_artifacts: "/tmp/gaia-test/docs/implementation-artifacts"
+test_artifacts: "/tmp/gaia-test/docs/test-artifacts"
+
+memory_path: "/tmp/gaia-test/_memory"
+checkpoint_path: "/tmp/gaia-test/_memory/checkpoints"
+
+ci_cd:
+  promotion_chain:
+    - id: staging
+      name: Staging
+      branch: staging
+      ci_provider: github_actions
+      merge_strategy: merge
+      ci_checks:
+        - lint
+        - unit
+        - test
+    - id: main
+      name: main
+      branch: main
+      ci_provider: github_actions
+      merge_strategy: squash

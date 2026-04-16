@@ -110,6 +110,7 @@ STORY
   # Chain skills in order
   CHAIN_SKILLS=(
     gaia-create-story
+    gaia-dev-story
     gaia-validate-story
     gaia-check-dod
   )

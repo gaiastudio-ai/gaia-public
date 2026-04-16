@@ -1,0 +1,9 @@
+# project-config.yaml — deterministic fixture config for Cluster 7 chain integration test.
+# All paths resolve via GAIA_* env overrides; this file provides defaults.
+project_root: "${GAIA_PROJECT_ROOT}"
+project_path: "${GAIA_PROJECT_PATH}"
+memory_path: "${GAIA_MEMORY_PATH}"
+checkpoint_path: "${GAIA_CHECKPOINT_PATH}"
+installed_path: "${GAIA_INSTALLED_PATH}"
+framework_version: "1.127.2-rc.1"
+date: "2026-04-15"

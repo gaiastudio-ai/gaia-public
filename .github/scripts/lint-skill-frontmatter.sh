@@ -11,6 +11,19 @@ set -euo pipefail
 
 REQUIRED_FIELDS=("name" "description")
 
+# Canonical tool set — the single source of truth for allowed-tools validation (E28-S96 AC5).
+# To add a new tool, update this array only — no other code changes required.
+CANONICAL_TOOLS=("Read" "Write" "Edit" "Bash" "Grep" "Glob" "WebFetch" "WebSearch" "Task" "Agent" "Skill")
+
+# is_canonical_tool — returns 0 if the tool name is in CANONICAL_TOOLS, 1 otherwise.
+is_canonical_tool() {
+  local tool="$1"
+  for canonical in "${CANONICAL_TOOLS[@]}"; do
+    [ "$tool" = "$canonical" ] && return 0
+  done
+  return 1
+}
+
 count=0
 errors=0
 
@@ -50,6 +63,25 @@ while IFS= read -r -d '' file; do
       errors=$((errors + 1))
     fi
   done
+
+  # Validate allowed-tools field if present (E28-S96).
+  # Extract the allowed-tools line from frontmatter.
+  allowed_tools_line=$(echo "$frontmatter" | awk '/^allowed-tools[[:space:]]*:/ { sub(/^allowed-tools[[:space:]]*:[[:space:]]*/, ""); print; found=1 } END { if (!found) exit 1 }') || true
+
+  if [ -n "$allowed_tools_line" ]; then
+    # Normalize: strip brackets, commas, and extra whitespace.
+    normalized=$(echo "$allowed_tools_line" | sed 's/\[//g; s/\]//g; s/,/ /g' | xargs)
+
+    if [ -n "$normalized" ]; then
+      for tool in $normalized; do
+        if ! is_canonical_tool "$tool"; then
+          echo "ERROR: $file invalid allowed-tool: $tool"
+          errors=$((errors + 1))
+        fi
+      done
+    fi
+  fi
+
 done < <(find plugins/gaia/skills -type f -name 'SKILL.md' -print0 2>/dev/null)
 
 if [ "$count" -eq 0 ]; then

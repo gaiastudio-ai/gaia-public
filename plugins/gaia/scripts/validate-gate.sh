@@ -149,12 +149,29 @@ list_gates() {
   done
 }
 
+# Check that a file exists and is non-empty. Returns 0 on pass, 1 on fail.
+# Args: gate_name file_path
+check_file_nonempty() {
+  local gate="$1" filepath="$2" abs
+  if [ ! -f "$filepath" ]; then
+    abs=$(abs_path "$filepath")
+    warn "$gate failed — expected: $abs"
+    return 1
+  fi
+  if [ ! -s "$filepath" ]; then
+    abs=$(abs_path "$filepath")
+    warn "$gate failed — file is empty (0 bytes): $abs"
+    return 1
+  fi
+  return 0
+}
+
 # Evaluate a single gate. Returns 0 on pass, 1 on fail.
 # Args: gate_type
 # Uses FILE_ARGS array and STORY_KEY from outer scope.
 evaluate_gate() {
   local gate="$1"
-  local pattern rc path abs
+  local pattern rc path
 
   case "$gate" in
     file_exists)
@@ -165,11 +182,7 @@ evaluate_gate() {
       fi
       local f
       for f in "${FILE_ARGS[@]}"; do
-        if [ ! -f "$f" ]; then
-          abs=$(abs_path "$f")
-          warn "$gate failed — expected: $abs"
-          return 1
-        fi
+        check_file_nonempty "$gate" "$f" || return 1
       done
       return 0
       ;;
@@ -187,12 +200,8 @@ evaluate_gate() {
         return 1
       fi
       path="${pattern/\{story\}/$STORY_KEY}"
-      if [ ! -f "$path" ]; then
-        abs=$(abs_path "$path")
-        warn "$gate failed — expected: $abs"
-        return 1
-      fi
-      return 0
+      check_file_nonempty "$gate" "$path"
+      return $?
       ;;
     *)
       set +e
@@ -208,12 +217,8 @@ evaluate_gate() {
         warn "internal error resolving gate pattern for $gate"
         return 1
       fi
-      if [ ! -f "$pattern" ]; then
-        abs=$(abs_path "$pattern")
-        warn "$gate failed — expected: $abs"
-        return 1
-      fi
-      return 0
+      check_file_nonempty "$gate" "$pattern"
+      return $?
       ;;
   esac
 }

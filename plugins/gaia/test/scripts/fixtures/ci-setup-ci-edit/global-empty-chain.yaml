@@ -1,0 +1,7 @@
+# Test fixture — global.yaml with empty promotion_chain array
+framework_name: "GAIA"
+framework_version: "1.127.2-rc.1"
+project_path: "."
+
+ci_cd:
+  promotion_chain: []

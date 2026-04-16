@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+# setup.sh — Cluster 7 change-request redirect skill setup (E28-S58)
+#
+# Mechanical extension of the Cluster 7 reference implementation. This is a
+# thin redirect skill — no prereq gates beyond config resolution.
+#
+# Responsibilities:
+#   1. Resolve config via the shared resolve-config.sh foundation script
+#   2. Load the checkpoint state for this workflow
+#
+# Exit codes:
+#   0 — setup succeeded, skill body can run
+#   1 — config resolution or checkpoint load failed
+
+set -euo pipefail
+LC_ALL=C
+export LC_ALL
+
+SCRIPT_NAME="gaia-change-request/setup.sh"
+WORKFLOW_NAME="change-request"
+
+# Resolve the GAIA plugin scripts directory from this script's location:
+#   skills/gaia-change-request/scripts/setup.sh → ../../../scripts
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SKILL_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+PLUGIN_SCRIPTS_DIR="$(cd "$SCRIPT_DIR/../../../scripts" && pwd)"
+
+RESOLVE_CONFIG="$PLUGIN_SCRIPTS_DIR/resolve-config.sh"
+CHECKPOINT="$PLUGIN_SCRIPTS_DIR/checkpoint.sh"
+
+log() { printf '%s: %s\n' "$SCRIPT_NAME" "$*" >&2; }
+die() { log "$*"; exit 1; }
+
+# ---------- 1. Resolve config ----------
+[ -x "$RESOLVE_CONFIG" ] || die "resolve-config.sh not found or not executable at $RESOLVE_CONFIG"
+if ! config_output=$("$RESOLVE_CONFIG" 2>&1); then
+  log "resolve-config.sh failed:"
+  printf '%s\n' "$config_output" >&2
+  exit 1
+fi
+# Export every KEY='VALUE' line the resolver emits so downstream tools
+# (checkpoint.sh) pick them up from the environment.
+while IFS= read -r line; do
+  case "$line" in
+    [A-Z_]*=*) eval "export $line" ;;
+  esac
+done <<<"$config_output"
+
+# ---------- 2. Load checkpoint state ----------
+if [ -x "$CHECKPOINT" ]; then
+  if "$CHECKPOINT" read --workflow "$WORKFLOW_NAME" >/dev/null 2>&1; then
+    log "checkpoint loaded for $WORKFLOW_NAME"
+  else
+    rc=$?
+    if [ "$rc" -eq 2 ]; then
+      log "no prior checkpoint for $WORKFLOW_NAME — fresh run"
+    else
+      die "checkpoint.sh read failed with exit $rc"
+    fi
+  fi
+else
+  log "checkpoint.sh not found at $CHECKPOINT — skipping checkpoint load (non-fatal)"
+fi
+
+log "setup complete for $WORKFLOW_NAME"
+exit 0

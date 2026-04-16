@@ -20,6 +20,7 @@ This skill is the native Claude Code conversion of the legacy `_gaia/testing/wor
 
 ## Critical Rules
 
+- Knowledge fragments are bundled in this skill's `knowledge/` directory -- load them JIT when referenced by a step.
 - A story key or project context MUST be available. If no story key is provided as an argument and no project context can be loaded, prompt: "Provide a story key or confirm project-level assessment."
 - Assess all dimensions: performance, security, reliability, and scalability.
 - Rate risks: high, medium, low with justification for each rating.
@@ -30,6 +31,7 @@ This skill is the native Claude Code conversion of the legacy `_gaia/testing/wor
 
 ### Step 1 -- Load NFRs
 
+- Load knowledge fragment: `knowledge/risk-governance.md` for risk-based assessment methodology
 - Read NFRs from PRD at `docs/planning-artifacts/prd.md` if available.
 - Read NFRs from architecture document at `docs/planning-artifacts/architecture.md` if available.
 - If neither document exists, proceed with generic NFR assessment based on common patterns.

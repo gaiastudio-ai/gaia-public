@@ -22,6 +22,7 @@ This skill is the native Claude Code conversion of the legacy `_gaia/lifecycle/w
 
 ## Critical Rules
 
+- Knowledge fragments are bundled in this skill's `knowledge/` directory -- load them JIT when referenced by a step.
 - A story key argument MUST be provided. If missing, fail fast with "usage: /gaia-test-automate [story-key]".
 - The story file MUST exist at `docs/implementation-artifacts/{story_key}-*.md`. Use the canonical glob to resolve regardless of title slug. If zero matches, fail with "story file not found for key {story_key}".
 - The story MUST be in `review` status. If not, fail with "story must be in review status before test automation".
@@ -50,6 +51,17 @@ This skill is the native Claude Code conversion of the legacy `_gaia/lifecycle/w
 
 ### Step 3 -- Test Coverage Analysis
 
+- Load knowledge fragments as needed for analysis context:
+  - Load knowledge fragment: `knowledge/fixture-architecture.md` for fixture and factory patterns
+  - Load knowledge fragment: `knowledge/deterministic-testing.md` for flakiness avoidance patterns
+  - Load knowledge fragment: `knowledge/api-testing-patterns.md` for API test coverage patterns
+  - Load knowledge fragment: `knowledge/data-factories.md` for test data generation patterns
+  - Load knowledge fragment: `knowledge/selector-resilience.md` for UI selector resilience patterns
+  - Load knowledge fragment: `knowledge/visual-testing.md` for visual regression patterns
+- Load stack-specific unit testing patterns as needed:
+  - Load knowledge fragment: `knowledge/jest-vitest-patterns.md` for JS/TS projects
+  - Load knowledge fragment: `knowledge/pytest-patterns.md` for Python projects
+  - Load knowledge fragment: `knowledge/junit5-patterns.md` for Java projects
 - Analyze the existing test suite to identify coverage gaps for this story's acceptance criteria.
 - For each acceptance criterion, determine whether automated tests exist that verify the criterion.
 - Identify untested edge cases, boundary conditions, and error paths.

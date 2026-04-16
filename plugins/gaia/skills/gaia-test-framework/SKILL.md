@@ -17,6 +17,7 @@ This skill is the native Claude Code conversion of the legacy `_gaia/testing/wor
 
 ## Critical Rules
 
+- Knowledge fragments are bundled in this skill's `knowledge/` directory -- load them JIT when referenced by a step.
 - Detect the project stack before recommending any framework — never assume.
 - Scaffold complete setup: config files, folder structure, and test runner scripts (npm scripts or equivalent).
 - Do NOT implement or run any tests — test implementation happens in Phase 4 workflows (/gaia-dev-story, /gaia-qa-tests, /gaia-atdd).
@@ -35,6 +36,11 @@ This skill is the native Claude Code conversion of the legacy `_gaia/testing/wor
 
 ### Step 2 — Select Framework
 
+- Load stack-specific knowledge fragments based on detected stack:
+  - Load knowledge fragment: `knowledge/jest-vitest-patterns.md` for JS/TS projects
+  - Load knowledge fragment: `knowledge/pytest-patterns.md` for Python projects
+  - Load knowledge fragment: `knowledge/junit5-patterns.md` for Java projects
+- Load knowledge fragment: `knowledge/test-isolation.md` for test doubles and dependency injection patterns
 - Recommend test framework based on detected stack:
   - TypeScript/JavaScript: Vitest (preferred) or Jest for unit/integration, Playwright or Cypress for E2E
   - Python: pytest for unit/integration, Playwright for E2E
@@ -53,6 +59,8 @@ This skill is the native Claude Code conversion of the legacy `_gaia/testing/wor
 
 ### Step 4 — Fixture Architecture
 
+- Load knowledge fragment: `knowledge/fixture-architecture.md` for fixture patterns and pure function wrappers
+- Load knowledge fragment: `knowledge/data-factories.md` for builder pattern and factory function patterns
 - Design fixture/factory patterns appropriate for the stack.
 - Pure functions first — framework fixtures as wrappers around pure factory functions.
 - Define a consistent pattern for test data creation (factory functions, builder pattern, or fixture files).

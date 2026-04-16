@@ -1,0 +1,17 @@
+# sprint-status.yaml — expected state after retro hop
+# retro reads sprint data and produces a retrospective but does not alter sprint-status.yaml.
+# The fixture state is unchanged after this hop.
+sprint_id: "sprint-test-c8"
+stories:
+  - key: "E80-S1"
+    status: "in-progress"
+    title: "Login page redesign"
+  - key: "E80-S2"
+    status: "review"
+    title: "API rate limiting"
+  - key: "E81-S1"
+    status: "ready-for-dev"
+    title: "Dashboard metrics widget"
+  - key: "E81-S2"
+    status: "backlog"
+    title: "Export to CSV"

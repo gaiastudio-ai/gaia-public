@@ -26,6 +26,13 @@ backlog -> validating -> ready-for-dev -> in-progress -> review -> done
 | `architecture.md` | Minimal architecture stub |
 | `sprint-status.yaml` | Initial sprint status with E99-S1 in backlog |
 
+## Chain Skills (in order)
+
+1. `gaia-create-story` — Creates the story file from epics-and-stories.md
+2. `gaia-dev-story` — Implements the story (TDD red/green/refactor, PR, CI, merge). Primary skill for PostToolUse checkpoint hook testing.
+3. `gaia-validate-story` — Validates the completed story
+4. `gaia-check-dod` — Verifies Definition of Done
+
 ## Usage
 
 The fixture is consumed by `tests/e2e/cluster-7-chain.bats` and

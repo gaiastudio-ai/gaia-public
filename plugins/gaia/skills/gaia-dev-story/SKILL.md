@@ -1,0 +1,126 @@
+---
+name: gaia-dev-story
+description: Implement a user story end-to-end -- validate, dev, test, PR. Use when "dev this story" or /gaia-dev-story.
+argument-hint: [story-key]
+context: fork
+allowed-tools: Read Write Edit Grep Glob Bash
+hooks:
+  PostToolUse:
+    - matcher: "Edit|Write"
+      hooks:
+        - type: command
+          command: ${CLAUDE_SKILL_DIR}/scripts/checkpoint.sh write gaia-dev-story
+---
+
+## Setup
+
+!${CLAUDE_PLUGIN_ROOT}/skills/gaia-dev-story/scripts/setup.sh
+
+## Mission
+
+You are implementing a user story end-to-end: loading the story spec, planning the implementation, writing tests (TDD red), implementing code (TDD green), refactoring, verifying the Definition of Done, committing, pushing, creating a PR, waiting for CI, and merging. This is the most comprehensive dev workflow in GAIA.
+
+This skill is the native Claude Code conversion of the legacy dev-story workflow (brief Cluster 7, story E28-S53). The playbook contains all LLM reasoning guidance. The scripts directory contains all mechanical operations. The PostToolUse hook automatically writes a checkpoint after every Edit or Write tool invocation.
+
+## Critical Rules
+
+- A story file MUST exist at `docs/implementation-artifacts/{story_key}-*.md` before starting. If missing, fail fast with "Story file not found -- run /gaia-create-story first."
+- Story status MUST be `ready-for-dev` or `in-progress`. Any other status is a HALT condition.
+- Follow TDD cycle strictly: Red (failing tests) -> Green (minimal implementation) -> Refactor. Each phase is a separate step -- NEVER combine them.
+- Do NOT write implementation code during the Red phase.
+- Do NOT skip the Refactor phase even if Green code looks acceptable.
+- All tests MUST pass before marking complete.
+- Definition of Done checklist MUST be verified -- every item checked before moving to review.
+- When reading or running application source code, use the project path as the base directory.
+- All mechanical operations (git, checkpoint, sprint-state, sha256, PR, CI, merge) are handled by scripts -- do NOT inline shell commands in the conversation.
+- The PostToolUse hook fires `checkpoint.sh` automatically after every Edit/Write -- you do not need to manually checkpoint file mutations.
+
+## Steps
+
+### Step 1 -- Load Story
+
+- Parse the story key from the argument (e.g., `/gaia-dev-story E1-S2`).
+- Run `scripts/load-story.sh {story_key}` to locate and validate the story file.
+- Read the story file: extract key, status, acceptance criteria, subtasks, dependencies, risk level.
+- Detect execution mode:
+  - Status `ready-for-dev` -> FRESH (new implementation)
+  - Status `in-progress` with FAILED reviews -> REWORK (fix review issues)
+  - Status `in-progress` otherwise -> RESUME (continue from checkpoint)
+
+### Step 2 -- Update Status
+
+- For FRESH mode: run `scripts/update-story-status.sh {story_key} in-progress`.
+- For REWORK/RESUME: skip -- story is already in-progress.
+
+### Step 3 -- Create Feature Branch
+
+- Run `scripts/git-branch.sh {story_key} {slug}` to create a feature branch.
+- The script handles collision detection and offers resume if branch exists.
+
+### Step 4 -- Plan Implementation
+
+- Load the playbook: read `playbook.md` for reasoning guidance.
+- For FRESH mode: read architecture.md and ux-design.md for context. Generate a detailed implementation plan covering: context, implementation steps, files to modify, testing strategy, risks.
+- For REWORK mode: read failed review reports. Focus plan on fixing review issues.
+- For RESUME mode: continue from checkpoint state.
+- Present the plan and wait for user confirmation.
+
+### Step 5 -- TDD Red Phase (Write Failing Tests)
+
+- Follow the playbook's test strategy reasoning.
+- For each subtask: write failing test(s) that define expected behavior.
+- Run the test suite -- verify all new tests FAIL.
+- Tests MUST fail because implementation does not exist yet. If a test passes without implementation, it is vacuous and must be rewritten.
+
+### Step 6 -- TDD Green Phase (Implement to Pass)
+
+- Follow the playbook's design approach reasoning.
+- For each subtask: implement minimum code to make failing tests pass.
+- Run the test suite -- verify all tests PASS.
+- Mark each completed subtask in the story file.
+
+### Step 7 -- TDD Refactor Phase
+
+- Improve code quality while keeping all tests green.
+- Extract shared utilities, decompose large functions, improve naming, remove duplication.
+- Run the test suite -- verify all tests STILL PASS.
+
+### Step 8 -- Capture Findings
+
+- Review any out-of-scope issues discovered during implementation.
+- Add findings to the story file's Findings table.
+
+### Step 9 -- Definition of Done
+
+- Verify all DoD items: code compiles, tests pass, ACs met, no lint errors, conventions followed, no secrets, subtasks complete, docs updated.
+- Auto-fix failing items up to 3 iterations.
+
+### Step 10 -- Commit and Push
+
+- Run `scripts/git-branch.sh` to verify branch state.
+- Stage and commit with conventional commit format.
+- Run `scripts/update-story-status.sh {story_key} review` after all gates pass.
+
+### Step 11 -- Create PR
+
+- Run `scripts/pr-create.sh {story_key} {title}` to create a pull request.
+- The script targets the first promotion chain environment.
+
+### Step 12 -- Wait for CI
+
+- Run `scripts/ci-wait.sh {pr_number}` to poll CI status.
+- The script handles timeout, transient errors, and failure reporting.
+
+### Step 13 -- Merge PR
+
+- Run `scripts/merge.sh {pr_number} {story_key}` to merge the PR.
+- The script handles conflict detection, branch protection, and strategy selection.
+
+### Step 14 -- Update Review Gate
+
+- Initialize the Review Gate table in the story file: all 6 rows set to UNVERIFIED.
+- Update story status to `review`.
+
+## Finalize
+
+!${CLAUDE_PLUGIN_ROOT}/skills/gaia-dev-story/scripts/finalize.sh

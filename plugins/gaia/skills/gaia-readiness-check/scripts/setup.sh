@@ -79,6 +79,21 @@ else
   die "validate-gate.sh not found at $VALIDATE_GATE — cannot enforce mandatory gates"
 fi
 
+# ---------- 2b. Guard: traceability-matrix.md must be non-empty (E28-S98) ----------
+# The shared validate-gate.sh checks file existence only (-f). Per AC-EC1 and
+# ADR-042, a zero-byte file is treated as missing — existence alone is not
+# sufficient. This mirrors the create-epics pattern.
+TRACE_PATH="${TEST_ARTIFACTS}/traceability-matrix.md"
+if [ ! -s "$TRACE_PATH" ]; then
+  die "HALT: traceability-matrix.md exists but is empty (zero-byte) — run /gaia-trace to populate it (ADR-042 enforced gate)"
+fi
+
+# ---------- 2c. Guard: ci-setup.md must be non-empty (E28-S98) ----------
+CI_PATH="${TEST_ARTIFACTS}/ci-setup.md"
+if [ ! -s "$CI_PATH" ]; then
+  die "HALT: ci-setup.md exists but is empty (zero-byte) — run /gaia-ci-setup to populate it (ADR-042 enforced gate)"
+fi
+
 # ---------- 3. Load checkpoint state ----------
 if [ -x "$CHECKPOINT" ]; then
   # `checkpoint.sh read` exits 2 when no checkpoint exists (fresh run) —

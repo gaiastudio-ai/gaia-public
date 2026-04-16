@@ -115,8 +115,8 @@ teardown() { common_teardown; }
 }
 
 @test "setup.sh passes when both traceability-matrix.md and ci-setup.md exist" {
-  : > "$TEST_ARTIFACTS/traceability-matrix.md"
-  : > "$TEST_ARTIFACTS/ci-setup.md"
+  echo "# Traceability Matrix" > "$TEST_ARTIFACTS/traceability-matrix.md"
+  echo "# CI Setup" > "$TEST_ARTIFACTS/ci-setup.md"
   # Override PLUGIN_SCRIPTS_DIR to use our mocks
   PLUGIN_SCRIPTS_DIR="$MOCK_SCRIPTS" run "$SETUP_SCRIPT"
   [ "$status" -eq 0 ]
@@ -146,6 +146,26 @@ teardown() { common_teardown; }
   : > "$TEST_ARTIFACTS/ci-setup.md"
   PLUGIN_SCRIPTS_DIR="$MOCK_SCRIPTS" run "$SETUP_SCRIPT"
   [ "$status" -ne 0 ]
+}
+
+# ---------- E28-S98: -s (non-zero-byte) guard for traceability + ci-setup ----------
+
+@test "setup.sh HALTs when traceability-matrix.md is zero-byte" {
+  : > "$TEST_ARTIFACTS/traceability-matrix.md"
+  echo "real content" > "$TEST_ARTIFACTS/ci-setup.md"
+  PLUGIN_SCRIPTS_DIR="$MOCK_SCRIPTS" run "$SETUP_SCRIPT"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"empty (zero-byte)"* ]]
+  [[ "$output" == *"traceability-matrix.md"* ]]
+}
+
+@test "setup.sh HALTs when ci-setup.md is zero-byte" {
+  echo "real content" > "$TEST_ARTIFACTS/traceability-matrix.md"
+  : > "$TEST_ARTIFACTS/ci-setup.md"
+  PLUGIN_SCRIPTS_DIR="$MOCK_SCRIPTS" run "$SETUP_SCRIPT"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"empty (zero-byte)"* ]]
+  [[ "$output" == *"ci-setup.md"* ]]
 }
 
 # ---------- AC3: finalize.sh pattern ----------

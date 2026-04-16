@@ -159,8 +159,9 @@ evaluate_gate() {
   case "$gate" in
     file_exists)
       if [ "${#FILE_ARGS[@]}" -eq 0 ]; then
-        warn "file_exists requires at least one --file <path>"
-        return 1
+        # Zero --file args is a passing no-op (Cluster 4 setup.sh convention:
+        # brainstorm-project has no prereq artifacts and passes an empty set).
+        return 0
       fi
       local f
       for f in "${FILE_ARGS[@]}"; do

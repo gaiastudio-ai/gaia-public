@@ -168,9 +168,23 @@ resolve_paths() {
   SPRINT_STATUS_LOCK="${SPRINT_STATUS_YAML}.lock"
 }
 
-# Locate the story file via glob `{story_key}-*.md` under IMPLEMENTATION_ARTIFACTS.
-# Returns via the STORY_FILE global. Exits 1 on zero or multiple matches
-# (AC-EC5).
+# Check whether a file's YAML frontmatter contains `template: 'story'`.
+# Reads only the frontmatter block (between the first two `---` lines).
+# Returns 0 if the file is a canonical story file, 1 otherwise.
+# Portable: bash 3.2+ compatible, uses awk only.
+_is_story_file() {
+  local f="$1"
+  awk '
+    /^---[[:space:]]*$/ { n++; if (n == 2) exit }
+    n == 1 && /^template:[[:space:]]*["\x27]?story["\x27]?[[:space:]]*$/ { found = 1; exit }
+    END { exit (found ? 0 : 1) }
+  ' "$f"
+}
+
+# Locate the story file via glob `{story_key}-*.md` under IMPLEMENTATION_ARTIFACTS,
+# then filter candidates by frontmatter `template: 'story'` to exclude review
+# sibling files (-review.md, -qa-tests.md, -security-review.md, etc.).
+# Returns via the STORY_FILE global. Exits 1 on zero or multiple canonical matches.
 STORY_FILE=""
 locate_story_file() {
   local key="$1"
@@ -185,16 +199,29 @@ locate_story_file() {
   if [ "${#matches[@]}" -eq 0 ]; then
     die "no story file found for key '$key' (glob: $pattern)"
   fi
-  if [ "${#matches[@]}" -gt 1 ]; then
+
+  # Filter glob matches: keep only files whose frontmatter declares template: 'story'
+  local canonical=()
+  local m
+  for m in "${matches[@]}"; do
+    if _is_story_file "$m"; then
+      canonical+=( "$m" )
+    fi
+  done
+
+  if [ "${#canonical[@]}" -eq 0 ]; then
+    die "no story file found for key '$key' (checked ${#matches[@]} candidates, none have template: 'story' frontmatter)"
+  fi
+  if [ "${#canonical[@]}" -gt 1 ]; then
     {
-      printf '%s: error: multiple story files matched key %s (glob: %s)\n' \
-        "$SCRIPT_NAME" "$key" "$pattern"
-      printf '  %s\n' "${matches[@]}"
+      printf '%s: error: ambiguous canonical story files for key %s:\n' \
+        "$SCRIPT_NAME" "$key"
+      printf '  %s\n' "${canonical[@]}"
     } >&2
     exit 1
   fi
 
-  STORY_FILE="${matches[0]}"
+  STORY_FILE="${canonical[0]}"
 }
 
 # Extract the current status from a story file's frontmatter. The story

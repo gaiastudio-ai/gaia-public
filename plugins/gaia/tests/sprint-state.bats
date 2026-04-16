@@ -24,6 +24,7 @@ seed_story() {
   local key="$1" status="$2" verdict="${3:-PASSED}"
   cat > "$ART/${key}-fake.md" <<EOF
 ---
+template: 'story'
 key: "$key"
 title: "Fake"
 status: $status
@@ -170,4 +171,74 @@ EOF
   run "$SCRIPT" get --story NOPE-S999
   [ "$status" -ne 0 ]
   [[ "$output" == *"no story file found"* ]]
+}
+
+# --- glob collision tests (E28-S76) ------------------------------------------
+
+# Helper: create review sibling files (no template: 'story' frontmatter)
+seed_review_siblings() {
+  local key="$1"
+  for suffix in review qa-tests security-review performance-review review-summary; do
+    cat > "$ART/${key}-${suffix}.md" <<SIBLING
+---
+key: "$key"
+title: "Review report"
+---
+
+# Review: $suffix for $key
+SIBLING
+  done
+}
+
+@test "sprint-state.sh: locate_story_file ignores review sibling files (E28-S76 AC1)" {
+  seed_story C1 in-progress
+  seed_review_siblings C1
+  seed_yaml C1 in-progress
+  run "$SCRIPT" get --story C1
+  [ "$status" -eq 0 ]
+  [ "$output" = "in-progress" ]
+}
+
+@test "sprint-state.sh: transition --to done succeeds with review siblings present (E28-S76 AC2)" {
+  seed_story C2 review PASSED
+  seed_review_siblings C2
+  seed_yaml C2 review
+  run "$SCRIPT" transition --story C2 --to done
+  [ "$status" -eq 0 ]
+  grep -q '^status: done' "$ART/C2-fake.md"
+}
+
+@test "sprint-state.sh: locate_story_file errors when only review siblings exist (E28-S76 AC3)" {
+  seed_review_siblings C3
+  run "$SCRIPT" get --story C3
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"no story file found"* ]]
+}
+
+@test "sprint-state.sh: locate_story_file errors on genuine duplicate canonical files (E28-S76 AC4)" {
+  # Create two files that both have template: 'story' frontmatter
+  cat > "$ART/C4-first.md" <<EOF
+---
+template: 'story'
+key: "C4"
+title: "First"
+status: in-progress
+---
+# Story: First
+> **Status:** in-progress
+EOF
+  cat > "$ART/C4-second.md" <<EOF
+---
+template: 'story'
+key: "C4"
+title: "Second"
+status: in-progress
+---
+# Story: Second
+> **Status:** in-progress
+EOF
+  seed_yaml C4 in-progress
+  run "$SCRIPT" get --story C4
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"ambiguous"* ]] || [[ "$output" == *"multiple"* ]]
 }

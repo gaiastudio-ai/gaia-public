@@ -1,0 +1,24 @@
+# diff-allowlist.txt — Cluster 5 parity test
+#
+# Lines listed here are regex patterns for content that should be scrubbed
+# before comparing captured output against golden files. This prevents
+# false diffs from timestamps, run IDs, and absolute paths.
+#
+# Format: one regex per line. Lines starting with # are comments.
+
+# Timestamps in various formats
+^date: ".*"$
+\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}
+Generated on .*$
+Last updated: .*$
+
+# Absolute paths containing project-root
+/Users/[^/]+/[^ ]*/_gaia/
+/Users/[^/]+/[^ ]*/gaia-public/
+
+# Framework version (may differ between legacy and native runs)
+framework_version: ".*"
+
+# Run IDs or session identifiers
+session_id: .*$
+run_id: .*$

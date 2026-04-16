@@ -56,21 +56,21 @@ TA="$TMP/test-artifacts"
 mkdir -p "$TA"
 
 # Scenario 1 — happy: test_plan_exists
-: > "$TA/test-plan.md"
+echo "# Test Plan" > "$TA/test-plan.md"
 TEST_ARTIFACTS="$TA" run 0 - - "AC1/AC3 #1: test_plan_exists happy" -- "$VG" test_plan_exists
 
 # Scenario 2 — happy: traceability_exists
-: > "$TA/traceability-matrix.md"
+echo "# Traceability" > "$TA/traceability-matrix.md"
 TEST_ARTIFACTS="$TA" run 0 - - "AC1/AC3 #2: traceability_exists happy" -- "$VG" traceability_exists
 
 # Scenario 3 — missing file fails with stable error format
 rm -f "$TA/test-plan.md"
 TEST_ARTIFACTS="$TA" run 1 - "validate-gate: test_plan_exists failed — expected:" \
   "#3: test_plan_exists missing fails with stable error" -- "$VG" test_plan_exists
-: > "$TA/test-plan.md"
+echo "# Test Plan" > "$TA/test-plan.md"
 
 # Scenario 4 — atdd_exists resolves story key
-: > "$TA/atdd-E1-S1.md"
+echo "# ATDD" > "$TA/atdd-E1-S1.md"
 TEST_ARTIFACTS="$TA" run 0 - - "AC3 #4: atdd_exists --story resolves" -- "$VG" atdd_exists --story E1-S1
 
 # Scenario 5 — atdd_exists missing --story
@@ -78,14 +78,14 @@ TEST_ARTIFACTS="$TA" run 1 - "atdd_exists requires --story" \
   "AC3 #5: atdd_exists without --story" -- "$VG" atdd_exists
 
 # Scenario 6 — file_exists multi-file happy
-: > "$TMP/a.md"; : > "$TMP/b.md"
+echo "a" > "$TMP/a.md"; echo "b" > "$TMP/b.md"
 run 0 - - "AC6 #6: file_exists happy multi" -- "$VG" file_exists --file "$TMP/a.md" --file "$TMP/b.md"
 
 # Scenario 7 — file_exists first missing
 run 1 - "missing.md" "AC6 #7: file_exists first missing" -- "$VG" file_exists --file "$TMP/a.md" --file "$TMP/missing.md"
 
 # Scenario 8 — --multi happy
-: > "$TA/ci-setup.md"
+echo "# CI" > "$TA/ci-setup.md"
 TEST_ARTIFACTS="$TA" run 0 - "all 3 gates passed" "AC4 #8: --multi happy" -- \
   "$VG" --multi "test_plan_exists,traceability_exists,ci_setup_exists"
 
@@ -93,7 +93,7 @@ TEST_ARTIFACTS="$TA" run 0 - "all 3 gates passed" "AC4 #8: --multi happy" -- \
 rm -f "$TA/traceability-matrix.md"
 TEST_ARTIFACTS="$TA" run 1 - "traceability_exists" "AC4 #9: --multi fail-fast" -- \
   "$VG" --multi "test_plan_exists,traceability_exists"
-: > "$TA/traceability-matrix.md"
+echo "# Traceability" > "$TA/traceability-matrix.md"
 
 # Scenario 10 — --list enumerates gates
 run 0 "test_plan_exists" - "AC5 #10: --list enumerates" -- "$VG" --list

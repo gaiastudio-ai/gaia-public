@@ -67,6 +67,33 @@ jobs:
           path: /tmp/cluster-4-report.md
           if-no-files-found: ignore
 
+  cluster-5-parity:
+    name: cluster-5-parity
+    runs-on: ubuntu-latest
+    timeout-minutes: 5  # E28-S44 AC3 — enforce 5-minute wall-clock budget
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.2.2
+      - uses: mig4/setup-bats@af9a00deb21b5d795cabfeaa8d9060410377686d  # v1.2.0
+        with:
+          bats-version: 1.10.0
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+      - name: Run Cluster 5 parity tests
+        run: bats tests/cluster-5-parity/parity.bats
+      - name: Generate pass/fail report
+        if: always()
+        run: |
+          chmod +x tests/cluster-5-parity/generate-report.sh
+          bash tests/cluster-5-parity/generate-report.sh /tmp/cluster-5-report.md "$PWD"
+          cat /tmp/cluster-5-report.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload parity report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cluster-5-parity-report
+          path: /tmp/cluster-5-report.md
+          if-no-files-found: ignore
+
   structure-validate:
     name: structure-validate
     runs-on: ubuntu-latest

@@ -1,0 +1,7 @@
+# Fixture 2 — local-only global.yaml (E28-S143 / Task 6)
+# Contains only machine-local keys. After migration the shared output must be
+# minimal — only the generated header comment, no team-shared values.
+
+installed_path: "/srv/ci/gaia-framework/_gaia"
+memory_path: "/srv/ci/gaia-framework/_memory"
+checkpoint_path: "/srv/ci/gaia-framework/_memory/checkpoints"

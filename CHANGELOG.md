@@ -13,6 +13,20 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) for t
 
 #### Added
 
+- **E28-S135** Cluster 19 sprint-state-machine parity test. Added
+  `tests/cluster-19-e2e/sprint-state-machine.bats` (9 bats cases covering all 7
+  canonical states, every documented valid transition including the blocked
+  branch and the `review → in-progress` rollback, and 5 canonical invalid
+  transitions that must be rejected). Added the canonical exercise fixture
+  under `plugins/gaia/test/fixtures/cluster-19/sprint-state-machine/seed/`
+  (story + seed `sprint-status.yaml` + seed `story-index.yaml`, all registered
+  with sha256 in `fixture-manifest.yaml`) and the parity oracle at
+  `plugins/gaia/test/fixtures/parity-baseline/traces/sprint-state-machine.jsonl`.
+  First clean run recorded in
+  `docs/test-artifacts/cluster-19/sprint-state-machine-results.md` with
+  all 14 per-transition verdicts PASS and timestamp-projected parity diff = 0.
+  `cluster-19-e2e-test-plan.md` matrix row 3 now points at the results artifact.
+
 - **E28-S133** Cluster 19 full-lifecycle test runner. Added
   `plugins/gaia/test/runners/full-lifecycle.sh` — a script-driven (ADR-042)
   runner that drives the 10 canonical lifecycle stages (brainstorm →

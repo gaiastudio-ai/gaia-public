@@ -1,0 +1,9 @@
+# Seed story-index.yaml for sprint-state-machine fixture (E28-S135).
+# Derived-view index; kept in sync with sprint-status.yaml by the state machine.
+generated: "2026-04-17T00:00:00Z"
+stories:
+  SSM-E2E-01:
+    title: "Sprint state machine E2E fixture — exercises all 7 states"
+    status: "backlog"
+    epic: "SSM"
+    sprint: "fixture-sprint-ssm"

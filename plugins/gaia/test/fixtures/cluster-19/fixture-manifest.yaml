@@ -68,8 +68,29 @@ fixtures:
     immutable: true
     authored_by: E28-S134
 
-  # Sprint state machine — consumed by E28-S135 (reuses dev-story-seed.md)
-  # Oracle lives under test/fixtures/parity-baseline/sprint-status/ (§11.37.1)
+  # Sprint state machine — consumed by E28-S135
+  # Oracle: test/fixtures/parity-baseline/traces/sprint-state-machine.jsonl
+  - path: sprint-state-machine/seed/state-machine-fixture-story.md
+    sha256: 49a9bb190234a88befe40fd52d161c99e13eab6db8f9d57f26c599406fe6645d
+    origin: synthesized
+    immutable: true
+    authored_by: E28-S135
+    note: "Canonical exercise story. Copied to per-test tmpdir before each bats run; seed itself never mutates."
+  - path: sprint-state-machine/seed/sprint-status.yaml
+    sha256: db1d6fb7ef1bc47c20d9e815afbeaaffd50f511885beab257adde44782387d02
+    origin: synthesized
+    immutable: true
+    authored_by: E28-S135
+  - path: sprint-state-machine/seed/story-index.yaml
+    sha256: cf8ec879fe0faf9d301dfbc894cdb2a0b3e02b944853c12c1ead29892b760b6d
+    origin: synthesized
+    immutable: true
+    authored_by: E28-S135
+  - path: ../parity-baseline/traces/sprint-state-machine.jsonl
+    sha256: fcfdeaa079f90b437f55c856db3a3f838b890ba038c3fdc6a7106081e430379c
+    origin: v-parity-baseline
+    immutable: true
+    authored_by: E28-S135
 
   # Checkpoint resume — consumed by E28-S136
   - path: resume/pre-interrupt-checkpoint.yaml

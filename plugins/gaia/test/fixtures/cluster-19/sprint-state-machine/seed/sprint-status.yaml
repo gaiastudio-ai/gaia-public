@@ -1,0 +1,10 @@
+# Seed sprint-status.yaml for sprint-state-machine fixture (E28-S135).
+# The driver copies this to work/sprint-status.yaml before each exercise
+# so the canonical seed remains immutable (sha256 anchored in fixture-manifest.yaml).
+sprint_id: fixture-sprint-ssm
+generated: "2026-04-17T00:00:00Z"
+stories:
+  - key: "SSM-E2E-01"
+    title: "Sprint state machine E2E fixture — exercises all 7 states"
+    status: "backlog"
+    points: 1

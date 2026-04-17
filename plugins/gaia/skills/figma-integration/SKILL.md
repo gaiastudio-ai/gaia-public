@@ -10,6 +10,8 @@ allowed-tools: [Read]
 # Figma Integration — OSS Stub
 
 > **This is the OSS stub.** The full `figma-integration` skill — design-tool MCP detection, design-token extraction, component spec generation, frame authoring, asset export, Figma import mode, and the design-to-implementation fidelity gate — is a premium capability and ships in the enterprise plugin (Cluster 17 / E28-S122). No premium extraction logic lives in this file by design — it is held in the enterprise plugin source tree and is activated only when the matching license and feature flag are present.
+>
+> **Premium upgrade available.** Install `gaia-enterprise` alongside this plugin and ensure the `figma-premium` feature flag is enabled on your license to activate the full capability set: `/plugin marketplace add gaiastudio-ai/gaia-enterprise && /plugin install gaia-enterprise`.
 
 **Traces to:** FR-332 (enterprise license gate), FR-323 (native skill conversion), NFR-048 (OSS/enterprise separation), NFR-053 (feature parity), ADR-041 (native execution model), ADR-043 (OSS/enterprise split).
 

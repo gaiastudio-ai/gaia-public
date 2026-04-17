@@ -15,7 +15,7 @@ This skill is the native Claude Code conversion of the legacy validate-framework
 
 - **Report ALL issues found — do not stop at first error.** Every step collects findings into an aggregated list. The skill emits the full report even when critical findings are present.
 - **Check every path reference in every file.** Every `{installed_path}/...`, `{project-root}/...`, and `{project-path}/...` reference must resolve to an actual file. Dangling references are CRITICAL findings.
-- **Verify config resolution chain works end-to-end.** Load `global.yaml`, each module `config.yaml`, and at least one pre-resolved config under `.resolved/`. If the chain is broken, flag CRITICAL.
+- **Verify config resolution works end-to-end.** Load `global.yaml` via `scripts/resolve-config.sh` (ADR-044) and confirm it parses. Under the native model there is no `.resolved/` pre-compilation step — config is resolved at skill-invocation time. Flag `global.yaml` parse failure as CRITICAL.
 - **Report format preserves the legacy output shape.** Severity column, section column, finding column, suggested-fix column. Downstream tooling (CI checks, triage workflows) consume this shape — do NOT invent a new one.
 - **Fail fast when manifest.yaml is missing (AC-EC3).** If `_gaia/_config/manifest.yaml` is absent, emit a CRITICAL finding `manifest.yaml missing — cannot validate framework` and exit non-zero. No partial report.
 - **Use inline `!` bash for deterministic ops (ADR-042).** Manifest reads, directory listings, and `shasum` go through inline `!` bash. Do NOT re-implement manifest parsing in LLM prose.
@@ -32,8 +32,8 @@ The skill runs nine steps in strict order, mirroring the legacy `validate-framew
 2. **Workflow Integrity** — verify every `workflow.yaml` has its companion files
 3. **Agent Integrity** — verify every agent `.md` has well-formed XML and real menu links
 4. **Command Integrity** — verify every `.claude/commands/gaia-*.md` references real framework files
-5. **Manifest Integrity** — verify every manifest row matches an on-disk file and vice versa
-6. **Config Resolution** — verify `global.yaml`, module `config.yaml`, and `.resolved/` configs parse end-to-end
+5. **Manifest Integrity** — verify surviving `agent-manifest.csv` rows match on-disk agent files and vice versa (legacy workflow/task/skill manifests retired by ADR-048)
+6. **Config Resolution** — verify `global.yaml` parses cleanly under the native resolution path (module `config.yaml` and `.resolved/` retired by ADR-044/ADR-048)
 7. **Skill Index Integrity** — verify every entry in `_skill-index.yaml` has a real file and valid line ranges
 8. **Knowledge Index Integrity** — verify every entry in knowledge `_index.csv` has a real fragment under 200 lines
 9. **Report** — emit PASS/FAIL overall + itemized findings grouped by severity
@@ -73,17 +73,14 @@ The skill runs nine steps in strict order, mirroring the legacy `validate-framew
 ## Step 5 — Manifest Integrity
 
 - Verify `agent-manifest.csv` has a row for every agent `.md` file found on disk, and vice versa.
-- Verify `workflow-manifest.csv` has a row for every `workflow.yaml` file found, and vice versa.
-- Verify `task-manifest.csv` has a row for every task file found, and vice versa.
-- Verify `skill-manifest.csv` has a row for every skill file found, and vice versa.
 - Flag any drift (manifest row without a file, or file without a manifest row) as WARNING.
+- Note: `workflow-manifest.csv`, `task-manifest.csv`, and `skill-manifest.csv` were retired under ADR-048 (program-closing engine deletion). The native model discovers skills/subagents via Claude Code's auto-discovery, so these manifests are no longer authoritative and MUST NOT be checked here.
 
 ## Step 6 — Config Resolution
 
-- Load `_gaia/_config/global.yaml` and each module `config.yaml` — verify each parses as valid YAML.
-- Resolve at least one `workflow.yaml` end-to-end to verify the resolution chain works.
-- Verify `.resolved/` configs match expected values (spot-check one pre-resolved workflow per module).
-- Flag parse errors as CRITICAL; drift between `.resolved/` and source configs as WARNING (user should run `/gaia-build-configs`).
+- Load `_gaia/_config/global.yaml` via the native resolution path (`scripts/resolve-config.sh`, per ADR-044) — verify it parses as valid YAML and the key project-root / project-path / memory-path fields resolve cleanly.
+- Flag YAML parse errors as CRITICAL.
+- Note: module `config.yaml` files and the `.resolved/` pre-compilation chain were retired under ADR-044 + ADR-048. The native model resolves config at skill-invocation time — there is no pre-compiled output to verify.
 
 ## Step 7 — Skill Index Integrity
 
@@ -134,7 +131,7 @@ Grouping: CRITICAL first, then WARNING, then INFO. Within each severity, sort by
 
 - **AC-EC3 — manifest.yaml missing:** exit with a single CRITICAL finding `manifest.yaml missing — cannot validate framework`. No partial report. Non-zero exit.
 - **Empty `_gaia/` tree:** report each expected directory as WARNING; Overall Status FAIL.
-- **Stale `.resolved/` configs:** WARNING with suggested fix `run /gaia-build-configs to regenerate`.
+- **Legacy `.resolved/` remnants present:** INFO — `.resolved/` was retired under ADR-044/ADR-048; surviving directories are stale artifacts from pre-native installs. Suggest running `plugins/gaia/scripts/gaia-cleanup-legacy-engine.sh`.
 
 ## References
 

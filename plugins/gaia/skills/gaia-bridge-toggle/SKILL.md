@@ -1,6 +1,6 @@
 ---
 name: gaia-bridge-toggle
-description: Toggle the Test Execution Bridge on or off by flipping test_execution_bridge.bridge_enabled in _gaia/_config/global.yaml, preserving comments and YAML formatting. Idempotent — no write when already in target state. Re-runs /gaia-build-configs after a successful edit so downstream workflows see the new setting. Use via /gaia-bridge-enable or /gaia-bridge-disable. Native Claude Code conversion of the legacy bridge-toggle workflow (E28-S111, Cluster 14).
+description: Toggle the Test Execution Bridge on or off by flipping test_execution_bridge.bridge_enabled in _gaia/_config/global.yaml, preserving comments and YAML formatting. Idempotent — no write when already in target state. Under the native plugin, the flip takes effect immediately — no config rebuild step is required. Use via /gaia-bridge-enable or /gaia-bridge-disable. Native Claude Code conversion of the legacy bridge-toggle workflow (E28-S111, Cluster 14).
 argument-hint: "enable|disable"
 allowed-tools: [Read, Edit, Bash]
 ---
@@ -21,8 +21,7 @@ This skill is the native Claude Code conversion of the legacy bridge-toggle work
 - **Use regex-based in-place edit targeting ONLY the `bridge_enabled:` line — never regenerate the full file.** Pattern: `/^(\s+bridge_enabled:\s*)(true|false)/m`. Replace capture group 2 with the target value.
 - **Idempotent: if the flag is already in the target state, do NOT write the file.** A byte-level diff must show zero changes. Report `Bridge already {enabled|disabled}` and exit with status ok.
 - **Fail fast when the test_execution_bridge block is missing (AC-EC2).** Emit `test_execution_bridge block missing — run /gaia-ci-setup first` and exit non-zero. Do NOT create a new block silently.
-- **Re-run `/gaia-build-configs` after every successful edit.** Without this, downstream workflows will still see the stale flag in `.resolved/` configs. This post-edit step is non-optional.
-- **Serialize against concurrent /gaia-build-configs (AC-EC9).** Detect a lock / last-write wins guard; the toggle completes its edit before re-running build-configs. Log a warning if concurrent access is detected; final state must be deterministic.
+- **The flag flip takes effect immediately.** Under the native plugin there is no pre-compiled config cache to refresh (ADR-044/ADR-048 retired the `.resolved/` chain). Downstream workflows read `global.yaml` directly via `resolve-config.sh` on their next invocation.
 
 ## Inputs
 
@@ -36,7 +35,7 @@ The skill runs five steps in strict order, mirroring the legacy `bridge-toggle/i
 2. **Idempotency Check** — no write if current == target
 3. **Write Updated State** — regex-based in-place edit
 4. **Post-Flip Checks (Enable Only)** — detect test-environment.yaml and validate
-5. **Post-Toggle Summary** — confirm new state, remind to run /gaia-build-configs
+5. **Post-Toggle Summary** — confirm new state (no rebuild step — native plugin reads global.yaml directly)
 
 ## Step 1 — Read Current Bridge State
 
@@ -65,7 +64,7 @@ The skill runs five steps in strict order, mirroring the legacy `bridge-toggle/i
 - **enable mode, no state change (idempotent path):** skip (Step 2 already exited). Set `post_flip_result = {kind: "skipped", reason: "idempotent"}` and proceed to Step 5.
 - **enable mode, state changed:** stat `docs/test-artifacts/test-environment.yaml` (resolved relative to `{project-root}`):
   - **present + valid:** collect detected runners (name + tier) for inclusion in Step 5's summary. Proceed.
-  - **present + invalid:** collect schema errors as warnings. Per AC5, do NOT roll back the flag flip — the user can repair the manifest and re-run `/gaia-build-configs`. Proceed.
+  - **present + invalid:** collect schema errors as warnings. Per AC5, do NOT roll back the flag flip — the user can repair the manifest and re-run `/gaia-bridge-enable` if desired. Proceed.
   - **absent (non-YOLO):** render the 3-option prompt — none of the options auto-invoke any sub-workflow. Ask the user to select:
     - `[a]` Run `/gaia-brownfield` to auto-generate test-environment.yaml (next-step suggestion — NOT auto-invoked)
     - `[b]` Copy `docs/test-artifacts/test-environment.yaml.example` to `docs/test-artifacts/test-environment.yaml` and customize
@@ -73,19 +72,21 @@ The skill runs five steps in strict order, mirroring the legacy `bridge-toggle/i
   - **absent (YOLO):** auto-select option `[c]` Skip and log `Bridge is enabled but docs/test-artifacts/test-environment.yaml is missing — Layer 1 will fail-fast until the manifest is created.`
 - Pass `post_flip_result` to Step 5.
 
+(Removed AC-EC9 "serialization against concurrent /gaia-build-configs" — under the native plugin there is no concurrent build-configs process to race against; ADR-044/ADR-048 retired the pre-compilation step.)
+
 ## Step 5 — Post-Toggle Summary
 
 - Display a summary containing: previous state, new state, mode, whether a write occurred.
 - If `mode == enable` and `post_flip_result.kind == 'present_valid'`: include the detected runners table (name + tier).
 - If `mode == enable` and `post_flip_result.kind == 'present_invalid'`: include the schema validation errors as warnings. The `bridge_enabled` flag is NOT rolled back (AC5).
 - If `mode == enable` and `post_flip_result.kind == 'absent'`: include the user's selected option (a/b/c) or the YOLO auto-skip warning.
-- **AC6 — always emit the next-step suggestion at the end:** `Run /gaia-build-configs to regenerate the resolved configs so the bridge_enabled change takes effect.` This line is present regardless of which Step 4 branch ran (present_valid, present_invalid, absent with any choice, skipped, or idempotent).
-- If `mode == disable`: the summary only confirms the new state and reminds about `/gaia-build-configs`. No post-flip check output (AC7 — Step 4 was skipped).
+- **AC6 — the summary confirms the flag change is effective immediately.** Under the native plugin (ADR-044/ADR-048) there is no pre-compiled config cache to refresh — downstream workflows read `global.yaml` directly via `scripts/resolve-config.sh` on their next invocation.
+- If `mode == disable`: the summary only confirms the new state. No post-flip check output (AC7 — Step 4 was skipped).
 
 ## Edge Cases
 
 - **AC-EC2 — test_execution_bridge block missing:** fail fast with `test_execution_bridge block missing — run /gaia-ci-setup first`. Do NOT create the block silently.
-- **AC-EC9 — concurrent /gaia-build-configs invocation:** detect lock / last-write wins guard; log a warning; final state is deterministic (the toggle completes its edit before re-running build-configs).
+- **AC-EC9 (retired under ADR-048):** the legacy concurrent-/gaia-build-configs race no longer applies — native-plugin resolution is per-invocation, not pre-compiled.
 - **Idempotent path:** zero bytes written; zero side effects.
 - **YAML parse errors on read:** surface the parser error; do NOT attempt a regex edit on malformed YAML.
 

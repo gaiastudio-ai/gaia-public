@@ -247,7 +247,7 @@ Before a story transitions from `review` to `done`, all 6 individual review repo
 
 ### Enforcement Mechanism (Live)
 
-The hard gate is enforced by `_gaia/core/protocols/review-gate-check.xml` — step 2 "Evaluate Gate and Transition". Before invoking `status-sync` to move a story from `review` to `done`, the protocol:
+The hard gate is enforced by `plugins/gaia/scripts/review-gate.sh` (foundation script, ADR-042/ADR-048). Before invoking `status-sync` to move a story from `review` to `done`, the script:
 
 1. Builds the summary file path `{implementation_artifacts}/{story_key}-review-summary.md`
 2. Checks whether the file exists

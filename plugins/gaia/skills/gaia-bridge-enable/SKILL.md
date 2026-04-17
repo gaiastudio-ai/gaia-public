@@ -1,6 +1,6 @@
 ---
 name: gaia-bridge-enable
-description: Enable the Test Execution Bridge by delegating to gaia-bridge-toggle with mode=enable. Thin wrapper that preserves the user-visible /gaia-bridge-enable slash command (AC11, FR-323). Edits test_execution_bridge.bridge_enabled = true in _gaia/_config/global.yaml and re-runs /gaia-build-configs. Idempotent — no write when already enabled.
+description: Enable the Test Execution Bridge by delegating to gaia-bridge-toggle with mode=enable. Thin wrapper that preserves the user-visible /gaia-bridge-enable slash command (AC11, FR-323). Edits test_execution_bridge.bridge_enabled = true in _gaia/_config/global.yaml. Flag takes effect immediately under the native plugin. Idempotent — no write when already enabled.
 allowed-tools: [Read, Edit, Bash]
 ---
 
@@ -25,7 +25,7 @@ Follow the full `gaia-bridge-toggle` skill body with `mode = enable`:
 3. If already `true`, report `Bridge already enabled` and exit without writing.
 4. Otherwise, perform the regex-based in-place edit to flip `bridge_enabled: false` → `bridge_enabled: true`, preserving all comments and formatting.
 5. Run the Post-Flip Checks (enable-only — stat `docs/test-artifacts/test-environment.yaml`; for absent in YOLO, auto-skip with a warning).
-6. Emit the summary, ending with the mandatory next-step suggestion: `Run /gaia-build-configs to regenerate the resolved configs so the bridge_enabled change takes effect.`
+6. Emit the summary. Under the native plugin (ADR-044/ADR-048) the flag change takes effect immediately — no config rebuild is required.
 
 The full step-by-step procedure is documented in `plugins/gaia/skills/gaia-bridge-toggle/SKILL.md`. This wrapper inherits all behavior from that skill.
 

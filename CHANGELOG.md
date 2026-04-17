@@ -9,6 +9,78 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) for t
 
 ## [Unreleased]
 
+### Sprint 23 (E28 — GAIA Native Conversion Program, Cluster 18 close)
+
+#### Added
+
+- **E28-S126** Program-closing tooling for the ADR-048 engine deletion. Ships
+  three new foundation scripts under `plugins/gaia/scripts/`:
+  - `verify-cluster-gates.sh` — pre-start verifier that reads all 12 cluster-gate
+    story files (E28-S76, S81, S95, S99, S118, S133–S139) and confirms each is
+    `status: done` with all 6 Review Gate rows `PASSED`. Exit 0 when the gate is
+    open, 1 on any block, 2 on parse error. Used by both the migration CLI and
+    the new CI guard.
+  - `dead-reference-scan.sh` — grep-based active-code scanner that fails the
+    build when any `plugins/gaia/**` skill, script, agent, or CI workflow
+    references retired legacy-engine paths (workflow.xml, core/protocols/,
+    .resolved/, workflow-manifest.csv, task-manifest.csv, skill-manifest.csv,
+    lifecycle-sequence.yaml). Allowlist preserves documentation, CHANGELOG,
+    migration guide, parity-guard bats, negated mandates, and the E28-S126
+    tooling itself.
+  - `gaia-cleanup-legacy-engine.sh` — idempotent migration CLI that removes
+    the retired engine, protocols, four `_config/` manifests, five module
+    configs, and every nested `.resolved/` from the local `_gaia/` runtime.
+    Pre-flight guards cover clean-working-tree (AC-EC8), in-flight legacy
+    checkpoints (AC-EC2), and cluster-gate status (AC-EC4). Flags `--dry-run`,
+    `--force-dirty`, `--project-root`. **NOT invoked by this PR — shipped for
+    end-user cutover after installing the native plugin.**
+- **E28-S126** New CI guard at `.github/workflows/adr-048-guard.yml`. Rejects
+  PRs to `staging` or `main` that introduce active-code references to retired
+  engine paths unless the `program-closing` label is set AND all 12 cluster
+  gates are `done`+`PASSED`. Flag alone is insufficient — the guard re-verifies
+  the cluster-gate checklist before allowing the merge (AC-EC6).
+- **E28-S126** bats-core test suite (5 files, 38 tests, 50 fixture files)
+  covering every AC and edge case: happy path, idempotency, dirty tree,
+  locked path, in-flight checkpoint, nested `.resolved/` at depth 5, dead-ref
+  scan active vs allowlisted, `next-step.sh` fallback, `gaia-help` fallback
+  contract.
+- **E28-S126** Migration guide stub at `docs/migration-guide-v2.md` with only
+  the "Legacy engine cleanup (manual cutover)" section populated under
+  §Verify. E28-S130 fills the remaining sections around this anchor.
+
+#### Changed
+
+- **E28-S126** `plugins/gaia/scripts/next-step.sh` — added graceful-missing-file
+  fallback: when `lifecycle-sequence.yaml` or `workflow-manifest.csv` are
+  absent (expected state post-cutover), prints "legacy manifests not available
+  under native plugin — nothing to suggest" and exits 0 instead of the legacy
+  exit-2 hard-fail. Strict-mode preserved via `GAIA_NEXT_STEP_STRICT=1` for
+  backward compatibility.
+- **E28-S126** `plugins/gaia/skills/gaia-validate-framework/SKILL.md` — rewrote
+  Step 5 (Manifest Integrity) and Step 6 (Config Resolution) to only verify
+  survivors (`agent-manifest.csv`, `global.yaml`). The three retired manifests
+  and the `.resolved/` pre-compile chain are explicitly noted as removed under
+  ADR-044/ADR-048.
+- **E28-S126** `plugins/gaia/skills/gaia-code-review-standards/SKILL.md` —
+  rewrote §Enforcement Mechanism (Live) at line 250 to reference the native
+  replacement `plugins/gaia/scripts/review-gate.sh` instead of the retired
+  `_gaia/core/protocols/review-gate-check.xml`.
+- **E28-S126** `plugins/gaia/skills/gaia-bridge-{toggle,enable,disable}/SKILL.md`
+  — removed all references to the retired `/gaia-build-configs` command and
+  the `.resolved/` pre-compile step. Updated descriptions (visible in Claude's
+  skill-discovery UI) and bodies to reflect that the flag flip takes effect
+  immediately under the native plugin.
+
+#### Removed
+
+- Nothing was deleted from the repository by this PR. The deletion script
+  targets are the local `_gaia/` runtime instance, which is not git-tracked.
+  Actual deletion happens at end-user cutover after installing the native
+  plugin — see the "Legacy engine cleanup" section in
+  `docs/migration-guide-v2.md`.
+
+---
+
 ### Sprint 19 (E28 — GAIA Native Conversion Program)
 
 #### Added

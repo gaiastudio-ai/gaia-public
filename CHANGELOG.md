@@ -13,6 +13,25 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) for t
 
 #### Added
 
+- **E28-S137** Cluster 19 quality-gate-enforcement parity test. Added
+  `tests/cluster-19-e2e/quality-gate-enforcement.bats` (12 bats cases covering
+  all 5 enforced testing-integration gates: `create-epics-stories.test-plan`,
+  `implementation-readiness.traceability-matrix` + `.ci-setup` across 3
+  variants, `dev-story.atdd` for high-risk stories plus a low-risk negative
+  control that proves the gate is scoped correctly, `deployment-checklist`
+  across 4 variants, and `brownfield-onboarding.nfr-assessment` +
+  `.performance-test-plan` post-complete). Added 11 synthesized fixture
+  files under
+  `plugins/gaia/test/fixtures/cluster-19/quality-gate-enforcement/`
+  (6 sub-variant trees, all registered with sha256 in
+  `fixture-manifest.yaml`) and the parity oracle at
+  `plugins/gaia/test/fixtures/parity-baseline/traces/quality-gates.jsonl`.
+  First clean run recorded in
+  `docs/test-artifacts/cluster-19/quality-gate-enforcement-results.md` with
+  all 12 per-variant verdicts PASS and a timestamp- + error_message-projected
+  parity diff = 0. `cluster-19-e2e-test-plan.md` matrix row 5 now points at
+  the results artifact.
+
 - **E28-S135** Cluster 19 sprint-state-machine parity test. Added
   `tests/cluster-19-e2e/sprint-state-machine.bats` (9 bats cases covering all 7
   canonical states, every documented valid transition including the blocked

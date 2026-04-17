@@ -13,6 +13,23 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) for t
 
 #### Added
 
+- **E28-S140** Cluster 19 bug-fix buffer (zero-work close). Added
+  `docs/test-artifacts/cluster-19/bug-fix-triage.md`,
+  `docs/test-artifacts/cluster-19/bug-fix-revalidation.md`, and
+  `docs/test-artifacts/cluster-19/bug-fix-rollup.md` documenting the buffer
+  outcome: the triage pass scanned every defect surface from E28-S133..S139
+  (Findings tables, `failure.log` files, FAIL rows in §11.37.1–§11.37.3
+  verdict tables, and the regression-defect channel declared by E28-S139
+  AC-EC6) and logged **0 bug-type defects**. The two non-bug findings
+  surfaced by E28-S136 (documentation drift in `architecture.md §10.26.3`
+  and a forward-looking `/gaia-resume` skill gap) are explicitly deferred
+  to backlog per AC2 with rationale. The full NCP-01..NCP-20 harness
+  (§11.37.1 + §11.37.2 + §11.37.3) reads 20/20 PASS across every owned row.
+  `v-parity-baseline` tag is unchanged (AC-EC7 asserted). **Cluster 19
+  bug-fix buffer: 0 defects processed, 0 fixed, 2 non-bug findings deferred;
+  Cluster 19 verdict: PASS.** E28-S126 (Cluster 18 cleanup / Cluster 19
+  sign-off entry gate) is unblocked.
+
 - **E28-S139** Cluster 19 token-reduction coverage (NFR-048). Added the
   measurement driver at `plugins/gaia/test/scripts/token-reduction/` with
   a pinned surrogate tokenizer (`tokenize.mjs`, `tokenizer.version`

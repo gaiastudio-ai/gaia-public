@@ -75,16 +75,42 @@ include a `## Memory` section that invokes the memory loader as inline bash:
 ```markdown
 ## Memory
 
-!${PLUGIN_DIR}/scripts/memory-loader.sh <agent-name> all
+!${PLUGIN_DIR}/scripts/memory-loader.sh <agent-name> ground-truth
 ```
 
 - `${PLUGIN_DIR}` is resolved by Claude Code at subagent spawn time to the
   plugin's installed directory.
 - The first argument is the agent name (matching the `name:` field).
-- The second argument is the memory scope: `all` | `recent` | `ground-truth`.
+- The second argument is the memory scope. Per ADR-046 (Hybrid Memory
+  Loading) and FR-331, every subagent MUST call with `ground-truth` — this is
+  Path 1 of the hybrid model (invocation-time ground-truth injection). The
+  `decision-log` tier is reserved for Path 2 (skill-execution-time inline
+  calls, not agent-load-time). The `all` tier is retained by `memory-loader.sh`
+  for ad-hoc debugging but MUST NOT be used in agent files.
 - `memory-loader.sh` is delivered by E28-S13 and lives at
   `plugins/gaia/scripts/memory-loader.sh`. Its CLI shape is considered stable
   once E28-S13 ships; this schema pins only the invocation pattern.
+- Tier 2 and Tier 3 agents (no `ground-truth.md` sidecar) still use the
+  `ground-truth` token for uniformity — the script returns empty stdout with
+  exit 0 when the file is missing (E28-S13 AC4), so the line is safe to inject
+  into every agent regardless of tier.
+
+### Section placement (ADR-046 / FR-331)
+
+The `## Memory` section MUST sit AFTER the agent's persona/identity block
+(the last of `## Identity`, `## Persona`, `## Expertise`, or the
+persona-paragraph body when no explicit heading is used) and BEFORE the first
+behavioural section (`## Rules`, `## Activation`, `## Scope`, or equivalent
+— whichever appears first). This post-persona / pre-behavioural ordering
+matches how Claude Code subagent prompts are assembled in the forked context
+(ADR-041) and keeps the persona declarative at the top of the file for
+humans reading it.
+
+The placement rule is enforced by the ATDD suite at
+`tests/atdd/e28-s147-subagent-memory-injection.bats`; the mechanical rewrite
+helper lives at `scripts/dev/rewrite-agent-memory-injection.sh`. New agents
+added beyond the current 28 MUST inherit this shape — run the rewrite helper
+or copy `_base-dev.md`'s `## Memory` block as the template.
 
 ## Validation
 

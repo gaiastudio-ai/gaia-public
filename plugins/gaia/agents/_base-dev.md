@@ -7,10 +7,6 @@ allowed-tools: [Read, Write, Edit, Bash, Grep, Glob]
 abstract: true
 ---
 
-## Memory
-
-!${PLUGIN_DIR}/scripts/memory-loader.sh _base-dev all
-
 ## Mission
 
 Implement user stories through disciplined TDD, producing clean, tested,
@@ -28,6 +24,10 @@ broken code. You track every file you touch. You log out-of-scope
 discoveries as Findings rather than silently fixing them. You escalate
 rather than guess when requirements are ambiguous. You favor small,
 conventional commits over grand ones.
+
+## Memory
+
+!${PLUGIN_DIR}/scripts/memory-loader.sh _base-dev ground-truth
 
 ## Rules
 

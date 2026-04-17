@@ -104,7 +104,68 @@ fixtures:
     immutable: false
     authored_by: E28-S136
 
-  # Quality gates — consumed by E28-S137 (reuses seeds + trigger fixtures inline)
+  # Quality gates — consumed by E28-S137
+  # Oracle: test/fixtures/parity-baseline/traces/quality-gates.jsonl
+  - path: quality-gate-enforcement/create-epics-stories/docs/planning-artifacts/architecture.md
+    sha256: ef335700cfebdc88d40f066b8f5152954b3e3f54ed4d5b66f4be7b99873eb3b1
+    origin: synthesized
+    immutable: true
+    authored_by: E28-S137
+  - path: quality-gate-enforcement/implementation-readiness/docs/planning-artifacts/architecture.md
+    sha256: a28bd802e382d1e42cf9c7dc836a215e7fe1ac4856bcce401b9003dc0e22d36c
+    origin: synthesized
+    immutable: true
+    authored_by: E28-S137
+  - path: quality-gate-enforcement/implementation-readiness/docs/planning-artifacts/epics-and-stories.md
+    sha256: 971c34559b3f299c57c5cab937b71344c4b73a5f8f4b510bdf78b1db99ba5477
+    origin: synthesized
+    immutable: true
+    authored_by: E28-S137
+  - path: quality-gate-enforcement/implementation-readiness/docs/test-artifacts/traceability-matrix.md
+    sha256: 247365fc30a631564cade0a17a8790f5a8bb0e905ca97cfda2c6e0d1cc4fe675
+    origin: synthesized
+    immutable: true
+    authored_by: E28-S137
+  - path: quality-gate-enforcement/implementation-readiness/docs/test-artifacts/ci-setup.md
+    sha256: e98ba105673003b843def9c87e194492419b4806a2b9eec8e4bf3d52b0383841
+    origin: synthesized
+    immutable: true
+    authored_by: E28-S137
+  - path: quality-gate-enforcement/dev-story-high-risk/docs/implementation-artifacts/E28-QGE-03-high.md
+    sha256: a98579eab0d0ca2d11d1c85626f50cd1a4525abf82d4e4eff0e97fd120d847d0
+    origin: synthesized
+    immutable: true
+    authored_by: E28-S137
+  - path: quality-gate-enforcement/dev-story-low-risk/docs/implementation-artifacts/E28-QGE-03-low.md
+    sha256: e7799423ba174a51f970055adf9b119a2dc736deb3c9331a8799ad52807aac3c
+    origin: synthesized
+    immutable: true
+    authored_by: E28-S137
+  - path: quality-gate-enforcement/deployment-checklist/docs/test-artifacts/traceability-matrix.md
+    sha256: 23e930f442f169d63e7ef319c0eaf4d1fac80ceab8d826fa8906243ccd1b4742
+    origin: synthesized
+    immutable: true
+    authored_by: E28-S137
+  - path: quality-gate-enforcement/deployment-checklist/docs/test-artifacts/ci-setup.md
+    sha256: a31617b1409228878863ab4ff7ec92266a96b33a449c8a1be3958c847249a2c3
+    origin: synthesized
+    immutable: true
+    authored_by: E28-S137
+  - path: quality-gate-enforcement/deployment-checklist/docs/planning-artifacts/readiness-report.md
+    sha256: 01cffffb0085a94958f4fc8052ae564ddd7462fd5f5c6d139cbe2f34328cc3c5
+    origin: synthesized
+    immutable: true
+    authored_by: E28-S137
+  - path: quality-gate-enforcement/brownfield-onboarding/docs/planning-artifacts/architecture.md
+    sha256: a7c7a48a21df08689c0558e2f62e072421cd9aa1d17231c1addaef83f9989b87
+    origin: synthesized
+    immutable: true
+    authored_by: E28-S137
+  - path: ../parity-baseline/traces/quality-gates.jsonl
+    sha256: be855894b1da14e4aaf3ea15a3a79f5b3f9d73744f356ba317e67f35175389ab
+    origin: v-parity-baseline
+    immutable: true
+    authored_by: E28-S137
 
   # Enterprise plugin — consumed by E28-S138
   - path: enterprise/license.json

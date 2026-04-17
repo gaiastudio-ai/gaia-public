@@ -1,0 +1,14 @@
+{"event":"quality_gate_failed","gate":"create-epics-stories.test-plan","phase":"pre-start","timestamp":"2026-04-17T00:00:00Z","error_message":"AC1"}
+{"event":"quality_gate_failed","gate":"implementation-readiness.traceability-matrix","phase":"pre-start","timestamp":"2026-04-17T00:00:00Z","error_message":"AC2a"}
+{"event":"quality_gate_failed","gate":"implementation-readiness.ci-setup","phase":"pre-start","timestamp":"2026-04-17T00:00:00Z","error_message":"AC2b"}
+{"event":"quality_gate_failed","gate":"implementation-readiness.traceability-matrix","phase":"pre-start","timestamp":"2026-04-17T00:00:00Z","error_message":"AC2c"}
+{"event":"quality_gate_failed","gate":"implementation-readiness.ci-setup","phase":"pre-start","timestamp":"2026-04-17T00:00:00Z","error_message":"AC2c"}
+{"event":"quality_gate_failed","gate":"dev-story.atdd","phase":"pre-start","story_key":"E28-QGE-03-high","timestamp":"2026-04-17T00:00:00Z","error_message":"AC3"}
+{"event":"quality_gate_failed","gate":"deployment-checklist.traceability-matrix","phase":"pre-start","timestamp":"2026-04-17T00:00:00Z","error_message":"AC4a"}
+{"event":"quality_gate_failed","gate":"deployment-checklist.ci-setup","phase":"pre-start","timestamp":"2026-04-17T00:00:00Z","error_message":"AC4b"}
+{"event":"quality_gate_failed","gate":"deployment-checklist.readiness-report","phase":"pre-start","timestamp":"2026-04-17T00:00:00Z","error_message":"AC4c"}
+{"event":"quality_gate_failed","gate":"deployment-checklist.traceability-matrix","phase":"pre-start","timestamp":"2026-04-17T00:00:00Z","error_message":"AC4d"}
+{"event":"quality_gate_failed","gate":"deployment-checklist.ci-setup","phase":"pre-start","timestamp":"2026-04-17T00:00:00Z","error_message":"AC4d"}
+{"event":"quality_gate_failed","gate":"deployment-checklist.readiness-report","phase":"pre-start","timestamp":"2026-04-17T00:00:00Z","error_message":"AC4d"}
+{"event":"quality_gate_failed","gate":"brownfield-onboarding.nfr-assessment","phase":"post-complete","timestamp":"2026-04-17T00:00:00Z","error_message":"AC5"}
+{"event":"quality_gate_failed","gate":"brownfield-onboarding.performance-test-plan","phase":"post-complete","timestamp":"2026-04-17T00:00:00Z","error_message":"AC5"}

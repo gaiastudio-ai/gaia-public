@@ -13,6 +13,28 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) for t
 
 #### Added
 
+- **E28-S133** Cluster 19 full-lifecycle test runner. Added
+  `plugins/gaia/test/runners/full-lifecycle.sh` — a script-driven (ADR-042)
+  runner that drives the 10 canonical lifecycle stages (brainstorm →
+  product-brief → PRD → UX → architecture → epics-stories → sprint-plan →
+  dev-story → all-reviews → deploy-checklist) against the Cluster 19
+  fixture at `plugins/gaia/test/fixtures/cluster-19/`. The runner produces
+  per-stage artifacts, parity diff metadata under `runs/{run-id}/parity/`,
+  and a dated evidence artifact at
+  `docs/test-artifacts/cluster-19-full-lifecycle-results-{YYYY-MM-DD}.md`
+  with the AC4 schema (run metadata + stages table with
+  `stage | skill | exit | artifact_path | sha256 | parity_verdict` +
+  summary + regressions). Non-tolerated parity deltas append to
+  `docs/implementation-artifacts/e28-s133-defects.yaml` and transition the
+  story back to `in-progress` (AC5) pending E28-S140. Memory isolation
+  (AC-EC7) is enforced via `GAIA_MEMORY_ROOT`; run-dir collision (AC-EC6)
+  is guarded; secret-leak guard runs pre-write against the results artifact
+  (AC-EC8). ATDD at
+  `plugins/gaia/test/e28-s133-full-lifecycle-atdd.bats` exercises all 5
+  acceptance criteria (AC1..AC5) including the `--seed-regression ordering`
+  path that drives the defect-logging branch. First clean full-lifecycle
+  run recorded 2026-04-17.
+
 - **E28-S132** Authored the Cluster 19 integrated end-to-end test plan at
   `docs/test-artifacts/cluster-19-e2e-test-plan.md`. Defines the greenfield
   TypeScript/pnpm test project specification, the 7-category test matrix

@@ -28,6 +28,9 @@ _memory/checkpoints/
 coverage/
 err
 
+# --- Cluster 19 full-lifecycle per-run isolation dirs (E28-S133) ------------
+plugins/gaia/test/runs/
+
 # --- OS / editor artifacts --------------------------------------------------
 .DS_Store
 *.swp

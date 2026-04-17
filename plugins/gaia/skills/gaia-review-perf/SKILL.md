@@ -6,6 +6,8 @@ context: fork
 allowed-tools: Read Grep Glob Bash
 ---
 
+> **Premium upgrade available.** The `gaia-enterprise` marketplace ships a `performance-review-advanced` SKILL.md (E28-S124) that layers real profiling-tool integration (py-spy, `node --prof`, jfr, pprof) and hot-path summaries on top of this OSS heuristic skill, gated behind the `perf-advanced` feature flag. Install via `/plugin marketplace add gaiastudio-ai/gaia-enterprise` and `/plugin install gaia-enterprise`. Without the enterprise plugin, this OSS skill serves unaffected.
+
 ## Setup
 
 !${CLAUDE_PLUGIN_ROOT}/skills/gaia-review-perf/scripts/setup.sh

@@ -44,13 +44,26 @@ fixtures:
     authored_by: E28-S133
 
   # Review gate — consumed by E28-S134
-  - path: review-gate/story-review-fixture.md
-    sha256: pending-e28-s134
+  - path: stories/clean/clean-fixture-story.md
+    sha256: a6183fd2f9ccf5739bb5e91fbd0300245657c040612ef91a2db5edbf163250b6
     origin: synthesized
     immutable: false
     authored_by: E28-S134
-  - path: review-gate/expected-traces.jsonl
-    sha256: pending-e28-s134
+    note: "checksum captured in review-state (post-reset); mutated in-place during gate runs"
+  - path: stories/code-review-defect/code-review-defect-fixture-story.md
+    sha256: fb6937f3ce98a8ca95c2b63a956ac857e97526a051c22497deb6ea94d0353692
+    origin: synthesized
+    immutable: false
+    authored_by: E28-S134
+    note: "checksum captured in review-state (post-reset); mutated in-place during gate runs"
+  - path: stories/security-finding/security-finding-fixture-story.md
+    sha256: a88374ebf0dd533b5331b90d7d6ec65b766235567b1825b9882c490104f08de3
+    origin: synthesized
+    immutable: false
+    authored_by: E28-S134
+    note: "checksum captured in review-state (post-reset); mutated in-place during gate runs"
+  - path: ../parity-baseline/traces/run-all-reviews.jsonl
+    sha256: 52c7b1ea41bf204531a6591090097599f6c0ec6abdf15ae392e1b5503e72fed2
     origin: v-parity-baseline
     immutable: true
     authored_by: E28-S134

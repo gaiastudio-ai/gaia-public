@@ -11,6 +11,20 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) for t
 
 ### Sprint 19 (E28 — GAIA Native Conversion Program)
 
+#### Added
+
+- **E28-S143** Added `plugins/gaia/scripts/migrate-config-split.sh`, a one-shot
+  POSIX bash + `yq` helper that splits an existing `_gaia/_config/global.yaml`
+  into the two-file layout from ADR-044 (`config/project-config.yaml` for
+  team-shared fields + a rewritten machine-local `global.yaml`). Ships with
+  backup-before-write (`.bak.YYYYMMDD-HHMMSS`), refusal on pre-existing shared
+  file unless `--force`, `--dry-run` plan preview, and round-trip equivalence
+  verification via `resolve-config.sh`. Classification mirrors the E28-S141
+  disposition table. 14 bats tests across 6 fixtures (mixed / local-only /
+  shared-only inputs, missing-yq guard, overwrite refusal, round-trip). See
+  `docs/migration/config-split.md` for operator instructions and the rollback
+  procedure.
+
 #### Changed
 
 - **E28-S142** `resolve-config.sh` now implements the two-file config split from ADR-044.

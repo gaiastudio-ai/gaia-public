@@ -97,11 +97,35 @@ teardown() { common_teardown; }
 }
 
 @test "validate-gate.sh: missing file error names absolute path" {
+  # E28-S152: readiness_report_exists now resolves against PLANNING_ARTIFACTS
+  export PLANNING_ARTIFACTS="$TEST_TMP/planning-artifacts"
+  mkdir -p "$PLANNING_ARTIFACTS"
   run "$SCRIPT" readiness_report_exists
   [ "$status" -eq 1 ]
   local abs
-  abs="$(cd "$TEST_ARTIFACTS" && pwd)"
+  abs="$(cd "$PLANNING_ARTIFACTS" && pwd)"
   [[ "$output" == *"$abs/readiness-report.md"* ]]
+}
+
+# --- E28-S152: readiness_report_exists resolves against PLANNING_ARTIFACTS ---
+
+@test "validate-gate.sh: readiness_report_exists happy path uses PLANNING_ARTIFACTS" {
+  export PLANNING_ARTIFACTS="$TEST_TMP/planning-artifacts"
+  mkdir -p "$PLANNING_ARTIFACTS"
+  printf '# Readiness\n' > "$PLANNING_ARTIFACTS/readiness-report.md"
+  run "$SCRIPT" readiness_report_exists
+  [ "$status" -eq 0 ]
+}
+
+@test "validate-gate.sh: readiness_report_exists fails when PLANNING_ARTIFACTS file missing" {
+  export PLANNING_ARTIFACTS="$TEST_TMP/planning-artifacts"
+  mkdir -p "$PLANNING_ARTIFACTS"
+  # No readiness-report.md created under PLANNING_ARTIFACTS
+  # Also create one under TEST_ARTIFACTS to prove the old path is no longer used
+  printf '# Stale\n' > "$TEST_ARTIFACTS/readiness-report.md"
+  run "$SCRIPT" readiness_report_exists
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"readiness_report_exists failed"* ]]
 }
 
 # --- E28-S97: epics_and_stories_exists gate type ---

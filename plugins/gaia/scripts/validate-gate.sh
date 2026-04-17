@@ -29,7 +29,7 @@
 #   traceability_exists    — ${TEST_ARTIFACTS}/traceability-matrix.md
 #   ci_setup_exists        — ${TEST_ARTIFACTS}/ci-setup.md
 #   atdd_exists            — ${TEST_ARTIFACTS}/atdd-<story>.md (requires --story)
-#   readiness_report_exists — ${TEST_ARTIFACTS}/readiness-report.md
+#   readiness_report_exists — ${PLANNING_ARTIFACTS}/readiness-report.md
 #   epics_and_stories_exists — ${PLANNING_ARTIFACTS}/epics-and-stories.md
 #
 # Error format (stable for log parsers / tailing sync agent):
@@ -97,7 +97,7 @@ Supported gate types:
   traceability_exists     ${TEST_ARTIFACTS}/traceability-matrix.md
   ci_setup_exists         ${TEST_ARTIFACTS}/ci-setup.md
   atdd_exists             ${TEST_ARTIFACTS}/atdd-<story>.md  (requires --story)
-  readiness_report_exists ${TEST_ARTIFACTS}/readiness-report.md
+  readiness_report_exists ${PLANNING_ARTIFACTS}/readiness-report.md
   epics_and_stories_exists ${PLANNING_ARTIFACTS}/epics-and-stories.md
 
 Exit codes:
@@ -129,7 +129,7 @@ gate_path() {
     traceability_exists)     printf '%s/traceability-matrix.md' "$TEST_ARTIFACTS" ;;
     ci_setup_exists)         printf '%s/ci-setup.md' "$TEST_ARTIFACTS" ;;
     atdd_exists)             printf '%s/atdd-{story}.md' "$TEST_ARTIFACTS" ;;
-    readiness_report_exists) printf '%s/readiness-report.md' "$TEST_ARTIFACTS" ;;
+    readiness_report_exists) printf '%s/readiness-report.md' "$PLANNING_ARTIFACTS" ;;
     epics_and_stories_exists) printf '%s/epics-and-stories.md' "$PLANNING_ARTIFACTS" ;;
     *) return 2 ;;
   esac

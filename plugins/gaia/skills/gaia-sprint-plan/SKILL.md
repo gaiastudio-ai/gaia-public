@@ -20,7 +20,7 @@ This skill is the native Claude Code conversion of the legacy `_gaia/lifecycle/w
 - NEVER write to `sprint-status.yaml` directly. All writes MUST go through `sprint-state.sh` (E28-S11). This is the ADR-042 contract.
 - Only stories with status `ready-for-dev` and an existing individual story file are selectable for a sprint.
 - Dependency blocking: a story whose `depends_on` list contains any story NOT in `done` status CANNOT be included.
-- Sprint commitments respect the velocity estimate from the `sizing_map` in `global.yaml`.
+- Sprint commitments respect the velocity estimate from the `sizing_map` config key, resolved via `!scripts/resolve-config.sh sizing_map` (ADR-044 §10.26.3).
 - Use the sm subagent (Nate) persona for planning reasoning -- do not re-implement planning logic inline.
 
 ## Steps
@@ -42,7 +42,7 @@ This skill is the native Claude Code conversion of the legacy `_gaia/lifecycle/w
 - Ask: Sprint duration (1 week / 2 weeks / custom)?
 - Ask: Team velocity estimate (story points)?
 - Ask: Sprint number (for multi-sprint tracking)?
-- Read `sizing_map` from `_gaia/_config/global.yaml` (or `plugins/gaia/gaia.yaml` if available). Display the canonical point values (S/M/L/XL) before selection.
+- Resolve the `sizing_map` key via `!scripts/resolve-config.sh sizing_map` (ADR-044 §10.26.3 — the resolver transparently merges the team-shared and machine-local layers, applying the "local overrides shared" precedence). Display the canonical point values (S/M/L/XL) before selection. <!-- Shared layer: config/project-config.yaml. Local layer: global.yaml. -->
 
 ### Step 3 -- Story Selection
 

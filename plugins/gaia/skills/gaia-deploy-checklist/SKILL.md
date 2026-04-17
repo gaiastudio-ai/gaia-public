@@ -30,7 +30,7 @@ This skill is the native Claude Code conversion of the legacy `_gaia/lifecycle/w
 - The `resolve-config.sh` foundation script MUST be present and executable. If missing, HALT with dependency error (AC-EC5).
 - All three quality gates MUST pass before generating the checklist. If any gate fails, HALT with an actionable error message identifying which specific gate failed and why (AC2).
 - The traceability gate checks that `${TEST_ARTIFACTS}/traceability-matrix.md` exists and is non-empty. An empty (0-byte) file is treated as missing (AC-EC3).
-- The CI gate checks that `${TEST_ARTIFACTS}/ci-setup.md` exists OR `ci_cd.promotion_chain` is configured in global.yaml.
+- The CI gate checks that `${TEST_ARTIFACTS}/ci-setup.md` exists OR `ci_cd.promotion_chain` resolves to a non-empty array via `!scripts/resolve-config.sh ci_cd.promotion_chain` (ADR-044 §10.26.3).
 - The readiness gate checks that `${PLANNING_ARTIFACTS}/readiness-report.md` exists.
 - If `validate-gate.sh` returns a non-zero exit code but produces no structured error output, treat as: "Gate check failed with unknown error -- exit code {N}" and HALT (AC-EC2).
 - Sprint-status.yaml is NEVER written by this skill (Sprint-Status Write Safety rule).

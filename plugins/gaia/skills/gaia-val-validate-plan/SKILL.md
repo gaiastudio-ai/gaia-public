@@ -66,9 +66,9 @@ This skill is the native Claude Code conversion of the legacy val-validate-plan 
 ### Step 3 -- Version Bump Verification
 
 - For each version bump statement found in the plan:
-- Parse semver strings from both the plan text and the actual codebase files:
-  - global.yaml: framework_version field
-  - package.json: version field
+- Parse semver strings from the plan text and resolve actual current versions from the codebase:
+  - `framework_version` — resolved via `!scripts/resolve-config.sh framework_version` (ADR-044 §10.26.3)
+  - `package.json` — parse the `version` field directly (language-package metadata, out of scope for resolve-config.sh)
   - Any other version-bearing files referenced in the plan
 - Compare planned version against actual current value:
   - Sequential bump (patch +1, minor +1 with patch reset, major +1 with minor/patch reset): No finding -- valid

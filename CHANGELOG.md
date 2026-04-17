@@ -13,6 +13,23 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) for t
 
 #### Added
 
+- **E28-S144** Migrated every SKILL.md that previously read `global.yaml` or
+  `config/project-config.yaml` directly to use the canonical
+  `!scripts/resolve-config.sh {key}` invocation from ADR-044 §10.26.3. Migrated
+  skills: `gaia-sprint-plan` (sizing_map), `gaia-rollback-plan` (full config),
+  `gaia-deploy-checklist` (ci_cd.promotion_chain), `gaia-val-validate-plan`
+  (framework_version), `gaia-validation-patterns` (project_path doc reference).
+  Config-editor skills (`gaia-bridge-toggle`, `gaia-bridge-enable`,
+  `gaia-bridge-disable`, `gaia-ci-setup`, `gaia-ci-edit`) and the meta-validator
+  (`gaia-validate-framework`) are allowlisted because they act ON the file
+  rather than READ from it. Added two helper scripts:
+  `plugins/gaia/scripts/audit-skill-config-reads.sh` (rerunnable audit) and
+  `plugins/gaia/scripts/verify-no-direct-config-reads.sh` (CI invariant guard).
+  Audit artifact checked in at `docs/migration/config-split-skill-audit.md`;
+  skill migration section added to `docs/migration/config-split.md`. Zero
+  behavioral drift — the resolver returns the same values the direct reads
+  produced because the split preserves key names 1:1.
+
 - **E28-S143** Added `plugins/gaia/scripts/migrate-config-split.sh`, a one-shot
   POSIX bash + `yq` helper that splits an existing `_gaia/_config/global.yaml`
   into the two-file layout from ADR-044 (`config/project-config.yaml` for

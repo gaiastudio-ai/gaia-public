@@ -85,7 +85,7 @@ For each extracted claim, produce:
 
 Before verifying, resolve GAIA path variables:
 - `{project-root}` → absolute path to repo root (where `_gaia/` lives)
-- `{project-path}` → application source directory (from `global.yaml`)
+- `{project-path}` → application source directory (resolved via `!scripts/resolve-config.sh project_path`; see ADR-044 §10.26.3)
 - `{installed_path}` → workflow directory path
 
 ### Symlink Handling

@@ -13,6 +13,22 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) for t
 
 #### Added
 
+- **E28-S132** Authored the Cluster 19 integrated end-to-end test plan at
+  `docs/test-artifacts/cluster-19-e2e-test-plan.md`. Defines the greenfield
+  TypeScript/pnpm test project specification, the 7-category test matrix
+  (full lifecycle, review gate, sprint state machine, checkpoint resume,
+  quality gates, enterprise plugin, token measurement per NFR-048 40–55%
+  reduction), binary pass/fail criteria with evidence artifacts and
+  escalation rules per category, the full fixture inventory with
+  sha256 immutability guarantees, and the review/approval workflow for
+  AC5 gating. Scaffolded the fixture directory at
+  `gaia-public/plugins/gaia/test/fixtures/cluster-19/` with a
+  `fixture-manifest.yaml` stub listing every required fixture (placeholders
+  populated by E28-S133..E28-S139). Added a pointer from test-plan.md
+  §11.37 to the Cluster 19 plan (plan is the superset; §11.37 is the
+  unit-of-parity subset). Plan unblocks the seven execution stories once
+  Sable + Vera sign (AC5).
+
 - **E28-S145** Cluster 20 test gate. Added `scripts/test-config-split.sh`, a
   shellcheck-clean, idempotent wrapper that drives
   `plugins/gaia/scripts/resolve-config.sh` across four project-structure

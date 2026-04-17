@@ -112,6 +112,9 @@ is_allowlisted() {
   # create retired-surface paths in test scaffolds.
   [[ "$path" == */plugins/gaia/scripts/commands-guard.sh ]] && return 0
   [[ "$path" == */plugins/gaia/test/scripts/e28-s127-*.bats ]] && return 0
+  # E28-S129 bats file — asserts CLAUDE.md does NOT contain legacy paths, so its
+  # negative-match assertions include the retired tokens as literals.
+  [[ "$path" == */plugins/gaia/test/scripts/e28-s129-*.bats ]] && return 0
   # next-step.sh is the fallback mechanism itself — it ships with a
   # graceful-missing-file handler and all references are part of implementing
   # the fallback (see Val v1 Finding 2).

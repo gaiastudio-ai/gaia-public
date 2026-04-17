@@ -13,6 +13,27 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) for t
 
 #### Added
 
+- **E28-S129** NFR-049 / FR-327 CLAUDE.md slim rewrite. Shipped the slim
+  `gaia-public/CLAUDE.md` (30 lines) containing only environment configuration,
+  how-to-start pointers, and hard rules. The project-root `CLAUDE.md` (the
+  normative NFR-049 target, not git-tracked by any of this repo's scope)
+  is synced byte-identical from the `gaia-public/` copy.
+  - Dropped content (moved to SKILL.md per FR-327 / ADR-048): workflow-engine
+    narrative, step-execution rules, config-resolution chain, checkpoint
+    discipline, context budget, quality-gate procedures, sprint-status
+    write-safety, sprint state machine table, review-gate vocabulary,
+    naming conventions, developer-agent-system narrative, memory-hygiene
+    narrative, npm-publishing procedure, version-bumping procedure.
+  - Kept content: title/version heading (`# GAIA Framework v1.127.2-rc.1`),
+    environment section, hard rules (7 bullets covering secrets, feature
+    branches, no-AI-attribution, version-bump discipline, dev-story PR gate,
+    directory identity, FR-329 commands retirement, sprint-status write safety).
+  - New bats test at `plugins/gaia/test/scripts/e28-s129-claude-md-slim.bats`
+    (13 tests) asserts line count ∈ [30, 50], version-heading regex, section
+    presence (Environment / How to Start / Hard Rules), and content-exclusion
+    grep for every removed section header.
+  - `dead-reference-scan.sh` allowlist extended for the new bats file.
+
 - **E28-S128** FR-328 workflow-artifact retirement — verify + scanner coverage.
   Third iteration of the "verify + guard + scrub" pattern (after E28-S126 / E28-S127).
   The product-source `gaia-public/plugins/gaia/` tree was already clean at

@@ -51,7 +51,8 @@ jobs:
 
       - name: Pass — scan is clean
         if: steps.deadref.outputs.clean == 'true'
-        run: echo "dead-reference-scan: CLEAN — ADR-048 guard passes."
+        run: |
+          echo "dead-reference-scan: CLEAN — ADR-048 guard passes."
 
       - name: Reject — legacy refs without program-closing label
         if: steps.deadref.outputs.clean == 'false' && steps.label.outputs.has_label == 'false'

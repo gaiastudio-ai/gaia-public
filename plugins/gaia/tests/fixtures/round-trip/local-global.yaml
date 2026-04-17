@@ -1,0 +1,7 @@
+# local-global.yaml — E28-S141 round-trip fixture (machine-local side)
+#
+# Represents the machine-local _gaia/_config/global.yaml for an operator whose
+# local clone lives at a different path than the team-shared default. Per
+# ADR-044 / AC4, the local value wins when both files declare the same key.
+
+project_path: /Users/alex/Dev/gaia-enterprise

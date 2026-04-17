@@ -31,7 +31,7 @@ teardown() { common_teardown; }
 }
 
 @test "validate-gate.sh: test_plan_exists happy path returns 0" {
-  : > "$TEST_ARTIFACTS/test-plan.md"
+  printf 'x' > "$TEST_ARTIFACTS/test-plan.md"
   run "$SCRIPT" test_plan_exists
   [ "$status" -eq 0 ]
 }
@@ -44,7 +44,7 @@ teardown() { common_teardown; }
 }
 
 @test "validate-gate.sh: traceability_exists happy path" {
-  : > "$TEST_ARTIFACTS/traceability-matrix.md"
+  printf 'x' > "$TEST_ARTIFACTS/traceability-matrix.md"
   run "$SCRIPT" traceability_exists
   [ "$status" -eq 0 ]
 }
@@ -56,35 +56,35 @@ teardown() { common_teardown; }
 }
 
 @test "validate-gate.sh: atdd_exists resolves story key" {
-  : > "$TEST_ARTIFACTS/atdd-E1-S1.md"
+  printf 'x' > "$TEST_ARTIFACTS/atdd-E1-S1.md"
   run "$SCRIPT" atdd_exists --story E1-S1
   [ "$status" -eq 0 ]
 }
 
 @test "validate-gate.sh: file_exists multi-file happy path" {
-  : > "$TEST_TMP/a.md"; : > "$TEST_TMP/b.md"
+  printf 'x' > "$TEST_TMP/a.md"; printf 'x' > "$TEST_TMP/b.md"
   run "$SCRIPT" file_exists --file "$TEST_TMP/a.md" --file "$TEST_TMP/b.md"
   [ "$status" -eq 0 ]
 }
 
 @test "validate-gate.sh: file_exists first-missing fails with clear error" {
-  : > "$TEST_TMP/a.md"
+  printf 'x' > "$TEST_TMP/a.md"
   run "$SCRIPT" file_exists --file "$TEST_TMP/a.md" --file "$TEST_TMP/missing.md"
   [ "$status" -eq 1 ]
   [[ "$output" == *"missing.md"* ]]
 }
 
 @test "validate-gate.sh: --multi happy path reports aggregate pass" {
-  : > "$TEST_ARTIFACTS/test-plan.md"
-  : > "$TEST_ARTIFACTS/traceability-matrix.md"
-  : > "$TEST_ARTIFACTS/ci-setup.md"
+  printf 'x' > "$TEST_ARTIFACTS/test-plan.md"
+  printf 'x' > "$TEST_ARTIFACTS/traceability-matrix.md"
+  printf 'x' > "$TEST_ARTIFACTS/ci-setup.md"
   run "$SCRIPT" --multi "test_plan_exists,traceability_exists,ci_setup_exists"
   [ "$status" -eq 0 ]
   [[ "$output" == *"3 gates passed"* ]]
 }
 
 @test "validate-gate.sh: --multi fails fast on first missing gate" {
-  : > "$TEST_ARTIFACTS/test-plan.md"
+  printf 'x' > "$TEST_ARTIFACTS/test-plan.md"
   run "$SCRIPT" --multi "test_plan_exists,traceability_exists"
   [ "$status" -eq 1 ]
   [[ "$output" == *"traceability_exists"* ]]

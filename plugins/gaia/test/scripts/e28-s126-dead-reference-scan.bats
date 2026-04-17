@@ -140,3 +140,100 @@ EOF
   run "$SCRIPT" --project-root "$TMP"
   [ "$status" -eq 0 ]
 }
+
+# ============================================================================
+# E28-S128 — Extended PATTERN for retired workflow artifacts (FR-328).
+# Three filename types (workflow.yaml, instructions.xml, checklist.md) are
+# retired from active code. The scanner uses broad word-boundary matches
+# combined with a negative-filter pass that excludes shell-variable forms.
+# ============================================================================
+
+@test "E28-S128: backtick-prose workflow.yaml in SKILL.md triggers failure" {
+  cat > "$TMP/plugins/gaia/skills/fake-skill/SKILL.md" <<'EOF'
+# Fake skill
+Verify every `workflow.yaml` has its companion files.
+EOF
+  run "$SCRIPT" --project-root "$TMP"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"workflow.yaml"* ]]
+}
+
+@test "E28-S128: path-form instructions.xml reference triggers failure" {
+  cat > "$TMP/plugins/gaia/scripts/fake.sh" <<'EOF'
+#!/usr/bin/env bash
+cat _gaia/lifecycle/workflows/foo/instructions.xml
+EOF
+  run "$SCRIPT" --project-root "$TMP"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"instructions.xml"* ]]
+}
+
+@test "E28-S128: parenthesized checklist.md in SKILL prose triggers failure" {
+  cat > "$TMP/plugins/gaia/skills/fake-skill/SKILL.md" <<'EOF'
+# Fake skill
+See legacy source (workflow.yaml + instructions.xml + checklist.md).
+EOF
+  run "$SCRIPT" --project-root "$TMP"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"checklist.md"* ]]
+}
+
+@test "E28-S128: shell variable dollar-workflow.yaml does NOT trigger failure" {
+  # checkpoint.sh has "$workflow.yaml" which is a variable expansion producing
+  # runtime filenames like dev-story.yaml. MUST NOT be flagged.
+  cat > "$TMP/plugins/gaia/scripts/fake.sh" <<'EOF'
+#!/usr/bin/env bash
+local target="$CHECKPOINT_PATH/$workflow.yaml"
+EOF
+  run "$SCRIPT" --project-root "$TMP"
+  [ "$status" -eq 0 ]
+}
+
+@test "E28-S128: parameter expansion dollar-brace-name-dot-yaml does NOT trigger failure" {
+  cat > "$TMP/plugins/gaia/scripts/fake.sh" <<'EOF'
+#!/usr/bin/env bash
+out="${name}.yaml"
+EOF
+  run "$SCRIPT" --project-root "$TMP"
+  [ "$status" -eq 0 ]
+}
+
+@test "E28-S128: shell variable with suffix dollar-workflow.yaml.lock does NOT trigger failure" {
+  # The negative-filter must handle lines that contain $workflow.yaml embedded
+  # as a prefix of a longer token (e.g., the .lock suffix in checkpoint.sh).
+  cat > "$TMP/plugins/gaia/scripts/fake.sh" <<'EOF'
+#!/usr/bin/env bash
+local lockfile="$CHECKPOINT_PATH/$workflow.yaml.lock"
+EOF
+  run "$SCRIPT" --project-root "$TMP"
+  [ "$status" -eq 0 ]
+}
+
+@test "E28-S128: colon-prefixed workflow.yaml:output.primary in prose triggers failure" {
+  cat > "$TMP/plugins/gaia/skills/fake-skill/SKILL.md" <<'EOF'
+# Fake skill
+Output path inherits from the legacy workflow.yaml:output.primary field.
+EOF
+  run "$SCRIPT" --project-root "$TMP"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"workflow.yaml"* ]]
+}
+
+@test "E28-S128: bare instructions.xml word in SKILL body triggers failure" {
+  cat > "$TMP/plugins/gaia/skills/fake-skill/SKILL.md" <<'EOF'
+# Fake skill
+This skill replaces the legacy instructions.xml body with prose steps.
+EOF
+  run "$SCRIPT" --project-root "$TMP"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"instructions.xml"* ]]
+}
+
+@test "E28-S128: docs/ reference to workflow.yaml is allowlisted" {
+  mkdir -p "$TMP/docs"
+  cat > "$TMP/docs/migration-guide-v2.md" <<'EOF'
+Historical: the legacy workflow.yaml file has been retired under FR-328.
+EOF
+  run "$SCRIPT" --project-root "$TMP"
+  [ "$status" -eq 0 ]
+}

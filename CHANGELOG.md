@@ -13,6 +13,40 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) for t
 
 #### Added
 
+- **E28-S128** FR-328 workflow-artifact retirement — verify + scanner coverage.
+  Third iteration of the "verify + guard + scrub" pattern (after E28-S126 / E28-S127).
+  The product-source `gaia-public/plugins/gaia/` tree was already clean at
+  story-start (0 `workflow.yaml` / `instructions.xml` / `checklist.md` files).
+  Runtime `_gaia/*/workflows/` (423 files) is out of scope and cleaned up by
+  `gaia-cleanup-legacy-engine.sh` shipped in E28-S126.
+
+  The active work concentrated on Task 5 (reference cleanup):
+
+  - `plugins/gaia/scripts/dead-reference-scan.sh` — PATTERN extended with
+    3 new tightened-word-boundary regexes (`(^|[^-a-z])workflow\.yaml\b`,
+    `(^|[^-a-z])instructions\.xml\b`, `(^|[^-a-z])checklist\.md\b`). The
+    leading character class prevents false-positives inside compound filenames
+    like `deployment-checklist.md` and `my-workflow.yaml`.
+  - A new `is_shell_variable_context()` helper in the same scanner filters
+    shell-variable forms (`$workflow.yaml`, `${name}.yaml`,
+    `$workflow.yaml.lock`) so bash scripts like `checkpoint.sh` that use
+    variable interpolation producing runtime filenames are not falsely flagged.
+  - `is_allowlisted()` extended with an enumerated 41-entry block covering
+    every SKILL.md and skill-companion script that cites the retired filenames
+    as **parity references per NFR-053**. These citations are historical
+    documentation, not active loads — see the triage ledger at
+    `docs/implementation-artifacts/E28-S128-triage-ledger.md` for the full
+    per-file rationale.
+  - `plugins/gaia/test/scripts/e28-s126-dead-reference-scan.bats` — 9 new
+    tests covering the extended PATTERN + negative-filter: 5 positive
+    (backtick-prose, path-form, parenthesized, colon-prefixed, bare-word),
+    3 negative (shell-variable forms correctly filtered), 1 allowlist
+    (docs/ reference).
+
+  No new CI workflow; `adr-048-guard.yml` already runs `dead-reference-scan.sh`
+  unconditionally, so the PATTERN extension is picked up automatically on
+  every future PR.
+
 - **E28-S127** FR-329 slash-command retirement — verify + regression guard.
   The converted plugin's `plugins/gaia/commands/` directory was already empty
   at story-start (skill-based invocation via `plugins/gaia/skills/{name}/SKILL.md`

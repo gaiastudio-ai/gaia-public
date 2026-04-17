@@ -42,15 +42,38 @@ if [[ ! -d "$PROJECT_ROOT" ]]; then
   exit 64
 fi
 
-# Patterns that identify references to retired artifacts. Two families covered:
-#   (1) ADR-048 engine/protocols/manifests (original E28-S126 scope)
+# Patterns that identify references to retired artifacts. Three families covered:
+#   (1) ADR-048 engine/protocols/manifests (E28-S126 scope)
 #   (2) FR-329 slash-command file-path references — anchored on .md extension so
 #       the invocation form "/gaia-foo" (used freely in skill prose) does NOT match.
+#   (3) E28-S128 workflow-artifact filenames — word-boundary match catches backtick-
+#       prose, parenthesized, colon-prefixed, and path-form references. Shell-variable
+#       forms (e.g., "$workflow.yaml" in checkpoint.sh) are stripped by the
+#       is_shell_variable_context() negative-filter below.
 #
 # The slash-command patterns are deliberately written against file-path context:
 #   .claude/commands/gaia-{name}.md   — legacy runtime surface
 #   plugins/gaia/commands/gaia-{name}.md — retired product-source surface
-PATTERN='workflow\.xml|core/protocols|\.resolved/|lifecycle-sequence\.yaml|workflow-manifest\.csv|task-manifest\.csv|skill-manifest\.csv|\.claude/commands/gaia-[a-z0-9-]+\.md|plugins/gaia/commands/gaia-[a-z0-9-]+\.md'
+PATTERN='workflow\.xml|core/protocols|\.resolved/|lifecycle-sequence\.yaml|workflow-manifest\.csv|task-manifest\.csv|skill-manifest\.csv|\.claude/commands/gaia-[a-z0-9-]+\.md|plugins/gaia/commands/gaia-[a-z0-9-]+\.md|(^|[^-a-z])workflow\.yaml\b|(^|[^-a-z])instructions\.xml\b|(^|[^-a-z])checklist\.md\b'
+
+# E28-S128 negative filter — a matched line is treated as a false-positive (and dropped)
+# when the match is a shell-variable expansion rather than a literal reference.
+# Examples of false-positives:
+#   local target="$CHECKPOINT_PATH/$workflow.yaml"          (variable)
+#   local lockfile="$CHECKPOINT_PATH/$workflow.yaml.lock"   (variable + suffix)
+#   out="${name}.yaml"                                       (parameter expansion)
+# These patterns are bash runtime expansions, not stale references to the retired
+# workflow.yaml/instructions.xml/checklist.md filenames.
+is_shell_variable_context() {
+  local line="$1"
+  # $workflow.yaml or $workflow.xml (and any ".lock" etc. trailing suffix) — dollar-then-identifier-then-dot-extension
+  [[ "$line" =~ \$workflow\.yaml ]] && return 0
+  [[ "$line" =~ \$instructions\.xml ]] && return 0
+  [[ "$line" =~ \$checklist\.md ]] && return 0
+  # ${anything}.yaml / .xml / .md — parameter-expansion form
+  [[ "$line" =~ \$\{[a-zA-Z_][a-zA-Z_0-9]*\}\.(yaml|xml|md) ]] && return 0
+  return 1
+}
 
 # Scope: only scan active-code locations. Documentation and test parity-guards are out of scope.
 SCAN_PATHS=(
@@ -127,6 +150,57 @@ is_allowlisted() {
   [[ "$path" == */plugins/gaia/skills/gaia-validate-framework/SKILL.md ]] && return 0
   # gaia-bridge-toggle prose similarly documents the retired build-configs step.
   [[ "$path" == */plugins/gaia/skills/gaia-bridge-toggle/SKILL.md ]] && return 0
+  # E28-S128 — 41 SKILL.md and skill-companion-script files cite legacy filenames
+  # (workflow.yaml, instructions.xml, checklist.md) as parity references per NFR-053.
+  # These are historical documentation, not active loads. The commands-guard from
+  # E28-S127 and the PATTERN negative-filter catch real regressions; active loads
+  # would break at runtime and be caught by the Cluster 19 parity harness.
+  # See docs/implementation-artifacts/E28-S128-triage-ledger.md for the full triage.
+  case "$path" in
+    */plugins/gaia/scripts/tests/smoke-e28-s36.sh|\
+    */plugins/gaia/skills/edge-cases/SKILL.md|\
+    */plugins/gaia/skills/gaia-a11y-testing/SKILL.md|\
+    */plugins/gaia/skills/gaia-action-items/SKILL.md|\
+    */plugins/gaia/skills/gaia-advanced-elicitation/SKILL.md|\
+    */plugins/gaia/skills/gaia-bridge-disable/SKILL.md|\
+    */plugins/gaia/skills/gaia-bridge-enable/SKILL.md|\
+    */plugins/gaia/skills/gaia-brownfield/SKILL.md|\
+    */plugins/gaia/skills/gaia-code-review-standards/SKILL.md|\
+    */plugins/gaia/skills/gaia-create-arch/SKILL.md|\
+    */plugins/gaia/skills/gaia-create-epics/SKILL.md|\
+    */plugins/gaia/skills/gaia-create-prd/SKILL.md|\
+    */plugins/gaia/skills/gaia-create-stakeholder/SKILL.md|\
+    */plugins/gaia/skills/gaia-create-ux/SKILL.md|\
+    */plugins/gaia/skills/gaia-creative-sprint/SKILL.md|\
+    */plugins/gaia/skills/gaia-domain-research/SKILL.md|\
+    */plugins/gaia/skills/gaia-domain-research/scripts/setup.sh|\
+    */plugins/gaia/skills/gaia-edit-arch/SKILL.md|\
+    */plugins/gaia/skills/gaia-edit-prd/SKILL.md|\
+    */plugins/gaia/skills/gaia-edit-test-plan/SKILL.md|\
+    */plugins/gaia/skills/gaia-edit-ux/SKILL.md|\
+    */plugins/gaia/skills/gaia-infra-design/SKILL.md|\
+    */plugins/gaia/skills/gaia-market-research/SKILL.md|\
+    */plugins/gaia/skills/gaia-market-research/scripts/setup.sh|\
+    */plugins/gaia/skills/gaia-memory-hygiene/SKILL.md|\
+    */plugins/gaia/skills/gaia-mobile-testing/SKILL.md|\
+    */plugins/gaia/skills/gaia-nfr/SKILL.md|\
+    */plugins/gaia/skills/gaia-party/SKILL.md|\
+    */plugins/gaia/skills/gaia-perf-testing/SKILL.md|\
+    */plugins/gaia/skills/gaia-problem-solving/SKILL.md|\
+    */plugins/gaia/skills/gaia-product-brief/scripts/setup.sh|\
+    */plugins/gaia/skills/gaia-quick-dev/SKILL.md|\
+    */plugins/gaia/skills/gaia-quick-spec/SKILL.md|\
+    */plugins/gaia/skills/gaia-readiness-check/SKILL.md|\
+    */plugins/gaia/skills/gaia-teach-testing/SKILL.md|\
+    */plugins/gaia/skills/gaia-tech-debt-review/scripts/scan-findings.sh|\
+    */plugins/gaia/skills/gaia-tech-research/SKILL.md|\
+    */plugins/gaia/skills/gaia-test-design/SKILL.md|\
+    */plugins/gaia/skills/gaia-test-framework/SKILL.md|\
+    */plugins/gaia/skills/gaia-threat-model/SKILL.md|\
+    */plugins/gaia/skills/gaia-trace/SKILL.md)
+      return 0
+      ;;
+  esac
   return 1
 }
 
@@ -140,15 +214,20 @@ for root in "${SCAN_PATHS[@]}"; do
   matches+="${found}"$'\n'
 done
 
-# Filter out allowlisted paths.
+# Filter out allowlisted paths AND shell-variable false-positives.
 offending=""
 while IFS= read -r line; do
   [[ -z "$line" ]] && continue
   # Line format: path:linenum:match
   path="${line%%:*}"
-  if ! is_allowlisted "$path"; then
-    offending+="${line}"$'\n'
+  if is_allowlisted "$path"; then
+    continue
   fi
+  # E28-S128 — strip shell-variable false-positives (e.g., "$workflow.yaml" in checkpoint.sh)
+  if is_shell_variable_context "$line"; then
+    continue
+  fi
+  offending+="${line}"$'\n'
 done <<< "$matches"
 
 offending=$(printf '%s' "$offending" | sed '/^$/d')

@@ -201,10 +201,13 @@ setup() {
   local tmpdir
   tmpdir="$(mktemp -d)"
   mkdir -p "$tmpdir/docs/test-artifacts"
+  mkdir -p "$tmpdir/docs/planning-artifacts"
   # Create traceability and readiness but NOT ci-setup
+  # E28-S152: readiness-report.md lives under PLANNING_ARTIFACTS
   echo "# Trace" > "$tmpdir/docs/test-artifacts/traceability-matrix.md"
-  echo "# Ready" > "$tmpdir/docs/test-artifacts/readiness-report.md"
+  echo "# Ready" > "$tmpdir/docs/planning-artifacts/readiness-report.md"
   run env TEST_ARTIFACTS="$tmpdir/docs/test-artifacts" \
+      PLANNING_ARTIFACTS="$tmpdir/docs/planning-artifacts" \
       "$VALIDATE_GATE" ci_setup_exists
   [ "$status" -ne 0 ]
   [[ "$output" == *"ci_setup_exists failed"* ]]
@@ -229,10 +232,13 @@ setup() {
   local tmpdir
   tmpdir="$(mktemp -d)"
   mkdir -p "$tmpdir/docs/test-artifacts"
+  mkdir -p "$tmpdir/docs/planning-artifacts"
+  # E28-S152: readiness-report.md lives under PLANNING_ARTIFACTS
   echo "# Trace" > "$tmpdir/docs/test-artifacts/traceability-matrix.md"
   echo "# CI" > "$tmpdir/docs/test-artifacts/ci-setup.md"
-  echo "# Ready" > "$tmpdir/docs/test-artifacts/readiness-report.md"
+  echo "# Ready" > "$tmpdir/docs/planning-artifacts/readiness-report.md"
   run env TEST_ARTIFACTS="$tmpdir/docs/test-artifacts" \
+      PLANNING_ARTIFACTS="$tmpdir/docs/planning-artifacts" \
       "$VALIDATE_GATE" --multi traceability_exists,ci_setup_exists,readiness_report_exists
   [ "$status" -eq 0 ]
   rm -rf "$tmpdir"
@@ -242,9 +248,11 @@ setup() {
   local tmpdir
   tmpdir="$(mktemp -d)"
   mkdir -p "$tmpdir/docs/test-artifacts"
+  mkdir -p "$tmpdir/docs/planning-artifacts"
   echo "# Trace" > "$tmpdir/docs/test-artifacts/traceability-matrix.md"
   # Missing ci-setup.md and readiness-report.md
   run env TEST_ARTIFACTS="$tmpdir/docs/test-artifacts" \
+      PLANNING_ARTIFACTS="$tmpdir/docs/planning-artifacts" \
       "$VALIDATE_GATE" --multi traceability_exists,ci_setup_exists,readiness_report_exists
   [ "$status" -ne 0 ]
   [[ "$output" == *"ci_setup_exists failed"* ]]

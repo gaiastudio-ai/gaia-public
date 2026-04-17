@@ -106,9 +106,12 @@ run 1 - "unknown gate type: bogus_gate" "AC7 #11: unknown gate type" -- "$VG" bo
 run 0 "Usage:" - "AC7 #12: --help prints usage to stdout" -- "$VG" --help
 
 # AC2 — missing file error names absolute path
-rm -f "$TA/readiness-report.md"
-ABSTA=$(cd "$TA" && pwd)
-TEST_ARTIFACTS="$TA" run 1 - "$ABSTA/readiness-report.md" \
+# E28-S152: readiness_report_exists resolves against PLANNING_ARTIFACTS
+PA="$TMP/planning-artifacts"
+mkdir -p "$PA"
+rm -f "$PA/readiness-report.md"
+ABSPA=$(cd "$PA" && pwd)
+PLANNING_ARTIFACTS="$PA" run 1 - "$ABSPA/readiness-report.md" \
   "AC2: error message names absolute path" -- "$VG" readiness_report_exists
 
 printf "\n  %d passed, %d failed\n" "$PASS" "$FAIL"

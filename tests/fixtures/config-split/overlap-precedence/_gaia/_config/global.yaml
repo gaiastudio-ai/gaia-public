@@ -1,0 +1,10 @@
+# Overlap precedence fixture — local MUST win.
+# Every field below is also declared in config/project-config.yaml with
+# a sentinel value. The resolver must return the local values here.
+project_root: /fixture/local-wins
+project_path: /fixture/local-wins
+memory_path: /fixture/local-memory
+checkpoint_path: /fixture/local-checkpoints
+installed_path: /fixture/local-installed
+framework_version: 1.127.2-rc.1
+date: 2026-04-17

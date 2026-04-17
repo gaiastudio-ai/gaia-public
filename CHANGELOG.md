@@ -13,6 +13,21 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) for t
 
 #### Added
 
+- **E28-S145** Cluster 20 test gate. Added `scripts/test-config-split.sh`, a
+  shellcheck-clean, idempotent wrapper that drives
+  `plugins/gaia/scripts/resolve-config.sh` across four project-structure
+  fixtures (`root-project`, `subdir-project`, `no-shared-config`, live repo)
+  plus an overlap-precedence fixture and a missing-key behavior check, then
+  writes an authoritative test report to
+  `docs/migration/config-split-test-report.md`. Exercises every acceptance
+  criterion from the story: AC1 (project_path="."), AC2 (project_path="my-app"),
+  AC3 (live repo zero drift), AC4 (backward-compat fallback with stderr
+  silence), AC5 (report artifact cross-linked from
+  `docs/migration/config-split.md`). 37 / 37 assertions pass on the current
+  resolver. Non-zero exit on any fixture failure so CI can gate. Cluster 20
+  green signal — Clusters 19 and 21 now have the config split as a verified
+  foundation.
+
 - **E28-S144** Migrated every SKILL.md that previously read `global.yaml` or
   `config/project-config.yaml` directly to use the canonical
   `!scripts/resolve-config.sh {key}` invocation from ADR-044 §10.26.3. Migrated

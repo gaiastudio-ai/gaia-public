@@ -1,0 +1,9 @@
+# Fixture B — subdir-project (project_path: "my-app")
+# Shared team config. Paths point to app subtree under my-app/.
+project_root: /fixture/subdir-project
+project_path: /fixture/subdir-project/my-app
+memory_path: /fixture/subdir-project/_memory
+checkpoint_path: /fixture/subdir-project/_memory/checkpoints
+installed_path: /fixture/subdir-project/_gaia
+framework_version: 1.127.2-rc.1
+date: 2026-04-17

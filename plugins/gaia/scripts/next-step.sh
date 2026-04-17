@@ -121,13 +121,20 @@ resolve_paths() {
     if [ -f "$c" ]; then manifest_file="$c"; break; fi
   done
 
-  if [ -z "$sequence_file" ]; then
-    err "lifecycle-sequence.yaml not found (searched: ${candidates_seq[*]})"
-    return 2
-  fi
-  if [ -z "$manifest_file" ]; then
-    err "workflow-manifest.csv not found (searched: ${candidates_man[*]})"
-    return 2
+  # E28-S126: graceful-missing-file fallback (Val v1 Finding 2).
+  # Under the native plugin (post-ADR-048 cutover) lifecycle-sequence.yaml and
+  # workflow-manifest.csv are retired. Print a clear notice and exit 0 — do NOT
+  # treat absence as an error. Preserve the original exit-2 behavior only when
+  # the caller sets GAIA_NEXT_STEP_STRICT=1 (opt-in for legacy callers).
+  if [ -z "$sequence_file" ] || [ -z "$manifest_file" ]; then
+    if [ "${GAIA_NEXT_STEP_STRICT:-0}" = "1" ]; then
+      [ -z "$sequence_file" ] && err "lifecycle-sequence.yaml not found (searched: ${candidates_seq[*]})"
+      [ -z "$manifest_file" ] && err "workflow-manifest.csv not found (searched: ${candidates_man[*]})"
+      return 2
+    fi
+    # Print to stdout so callers that capture stdout see a predictable message.
+    echo "next-step: legacy manifests not available under native plugin — nothing to suggest"
+    return 10  # sentinel value: "no manifests" — callers treat as no-op, wrapper below exits 0
   fi
 
   printf "%s\n%s\n" "$sequence_file" "$manifest_file"
@@ -188,7 +195,15 @@ case "$status_arg" in
 esac
 
 # --- resolve files -----------------------------------------------------------
-paths_output="$(resolve_paths)"
+# E28-S126 graceful-missing-file fallback (Val v1 Finding 2):
+# resolve_paths returns 10 when manifests are absent under the native plugin.
+# In that case print the fallback notice (already printed inside resolve_paths)
+# and exit 0 — next-step is a no-op in the native model.
+paths_output="$(resolve_paths)" || rc=$?
+if [ "${rc:-0}" -eq 10 ]; then
+  printf "%s\n" "$paths_output"
+  exit 0
+fi
 sequence_file="$(printf "%s\n" "$paths_output" | sed -n 1p)"
 manifest_file="$(printf "%s\n" "$paths_output" | sed -n 2p)"
 

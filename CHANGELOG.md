@@ -11,6 +11,23 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) for t
 
 ### Sprint 19 (E28 — GAIA Native Conversion Program)
 
+#### Changed
+
+- **E28-S142** `resolve-config.sh` now implements the two-file config split from ADR-044.
+  The resolver reads the team-shared `config/project-config.yaml` first as a base layer,
+  then overlays the machine-local `global.yaml` (via `--local <path>`), and finally applies
+  `GAIA_*` environment overrides — final precedence is `env > local > shared`. Missing local
+  or shared files degrade gracefully: the pre-split single-file invocation pattern is
+  preserved via the `--config <path>` alias (equivalent to `--shared`) with an empty local
+  layer. Required-field validation and the `project_path` traversal guard now run on the
+  post-merge map, so security checks apply identically regardless of which layer contributed
+  the value. Flattened-key merge (e.g., `val_integration.template_output_review`) uses
+  last-writer-wins at the dotted-key level. Smoke harness extended with eight new TC cases
+  and two AC-EC cases covering disjoint-key merges, overlapping-key overrides, local-only
+  and shared-only fallbacks, env-wins precedence, malformed-YAML file naming, and
+  shared-sourced traversal rejection. `scripts/tests/smoke-resolve-config.sh` now runs 24
+  assertions, all green.
+
 #### Documentation
 
 - **E28-S32** Flipped orchestrator `project_path` from `Gaia-framework` to `gaia-public`,

@@ -1,13 +1,22 @@
 name: adr-048-guard
 
-# ADR-048 compensating control: rejects PRs that introduce active-code references
-# to legacy-engine paths (workflow.xml, core/protocols/, .resolved/, 4 retired
-# _config/ manifests) unless the `program-closing` label is applied AND all 12
-# cluster-gate stories are done + 6x PASSED.
+# ADR-048 + FR-329 compensating control. Two independent checks run on every PR
+# to staging or main:
 #
-# Story reference: E28-S126 Task 6 / AC-EC6.
+#   1. ADR-048 dead-reference scan (E28-S126 Task 6 / AC-EC6) — rejects PRs that
+#      introduce active-code references to legacy-engine paths (workflow.xml,
+#      core/protocols/, .resolved/, 4 retired _config/ manifests) AND the
+#      retired slash-command file-path forms (.claude/commands/gaia-*.md,
+#      plugins/gaia/commands/gaia-*.md) unless the `program-closing` label is
+#      applied AND all 12 cluster-gate stories are done + 6x PASSED.
+#
+#   2. FR-329 commands-guard (E28-S127 Task 6 / AC5) — unconditional, always runs.
+#      Rejects any PR that reintroduces a gaia-*.md file under the retired
+#      plugins/gaia/commands/ directory. FR-329 is permanent, not closing-only.
+#
 # Canonical scan: plugins/gaia/scripts/dead-reference-scan.sh
 # Canonical gate: plugins/gaia/scripts/verify-cluster-gates.sh
+# Commands guard: plugins/gaia/scripts/commands-guard.sh
 
 on:
   pull_request:
@@ -29,6 +38,14 @@ jobs:
         run: |
           chmod +x plugins/gaia/scripts/dead-reference-scan.sh
           chmod +x plugins/gaia/scripts/verify-cluster-gates.sh
+          chmod +x plugins/gaia/scripts/commands-guard.sh
+
+      - name: Run commands-guard (FR-329 — unconditional, E28-S127)
+        run: |
+          if ! plugins/gaia/scripts/commands-guard.sh --project-root . ; then
+            echo "::error::FR-329 regression: plugins/gaia/commands/ was retired under Cluster 18 and MUST NOT be repopulated. See error output above and ADR-048 / FR-329."
+            exit 1
+          fi
 
       - name: Run dead-reference-scan (AC6)
         id: deadref

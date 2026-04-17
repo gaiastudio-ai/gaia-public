@@ -42,8 +42,15 @@ if [[ ! -d "$PROJECT_ROOT" ]]; then
   exit 64
 fi
 
-# Patterns that identify references to legacy-engine artifacts retired by ADR-048.
-PATTERN='workflow\.xml|core/protocols|\.resolved/|lifecycle-sequence\.yaml|workflow-manifest\.csv|task-manifest\.csv|skill-manifest\.csv'
+# Patterns that identify references to retired artifacts. Two families covered:
+#   (1) ADR-048 engine/protocols/manifests (original E28-S126 scope)
+#   (2) FR-329 slash-command file-path references — anchored on .md extension so
+#       the invocation form "/gaia-foo" (used freely in skill prose) does NOT match.
+#
+# The slash-command patterns are deliberately written against file-path context:
+#   .claude/commands/gaia-{name}.md   — legacy runtime surface
+#   plugins/gaia/commands/gaia-{name}.md — retired product-source surface
+PATTERN='workflow\.xml|core/protocols|\.resolved/|lifecycle-sequence\.yaml|workflow-manifest\.csv|task-manifest\.csv|skill-manifest\.csv|\.claude/commands/gaia-[a-z0-9-]+\.md|plugins/gaia/commands/gaia-[a-z0-9-]+\.md'
 
 # Scope: only scan active-code locations. Documentation and test parity-guards are out of scope.
 SCAN_PATHS=(
@@ -78,6 +85,10 @@ is_allowlisted() {
   [[ "$path" == */plugins/gaia/scripts/dead-reference-scan.sh ]] && return 0
   [[ "$path" == */plugins/gaia/scripts/verify-cluster-gates.sh ]] && return 0
   [[ "$path" == */plugins/gaia/test/scripts/e28-s126-*.bats ]] && return 0
+  # E28-S127 tooling itself — commands-guard.sh and its bats fixtures intentionally
+  # create retired-surface paths in test scaffolds.
+  [[ "$path" == */plugins/gaia/scripts/commands-guard.sh ]] && return 0
+  [[ "$path" == */plugins/gaia/test/scripts/e28-s127-*.bats ]] && return 0
   # next-step.sh is the fallback mechanism itself — it ships with a
   # graceful-missing-file handler and all references are part of implementing
   # the fallback (see Val v1 Finding 2).

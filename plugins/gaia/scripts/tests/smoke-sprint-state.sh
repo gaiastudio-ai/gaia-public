@@ -32,6 +32,7 @@ seed_story() {
   local key="$1" status="$2" all_passed="${3:-PASSED}"
   cat > "$ART/${key}-fake.md" <<EOF
 ---
+template: 'story'
 key: "$key"
 title: "Fake"
 status: $status
@@ -182,7 +183,7 @@ else
 fi
 reset; seed_story E1-S1 backlog; cp "$ART/E1-S1-fake.md" "$ART/E1-S1-dup.md"; seed_yaml E1-S1 backlog
 if ! "$SS" get --story E1-S1 >/dev/null 2>err; then
-  grep -q "multiple story files" err && ok "AC-EC5 multi-match detected" \
+  grep -q "ambiguous canonical story files\|multiple story files" err && ok "AC-EC5 multi-match detected" \
     || fail "AC-EC5.multi" "$(cat err)"
 else
   fail "AC-EC5.multi" "get succeeded"

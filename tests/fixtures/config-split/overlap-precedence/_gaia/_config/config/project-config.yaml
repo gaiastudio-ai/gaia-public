@@ -1,0 +1,10 @@
+# Overlap precedence fixture — same field declared in both files.
+# The shared value below MUST be observably ignored by the resolver
+# because global.yaml (local) overlays it per ADR-044 §10.26.3.
+project_root: /fixture/shared-wins-if-bug
+project_path: /fixture/shared-wins-if-bug
+memory_path: /fixture/shared-memory
+checkpoint_path: /fixture/shared-checkpoints
+installed_path: /fixture/shared-installed
+framework_version: 1.0.0-SHARED
+date: 2020-01-01

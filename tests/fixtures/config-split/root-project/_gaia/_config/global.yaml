@@ -1,0 +1,6 @@
+# Fixture A — root-project (project_path: ".")
+# Machine-local config layer. For a root-level project the project_path is ".".
+# Other path fields stay unset here to prove "shared base, local overlay" shape
+# where the shared layer provides most defaults and local only overrides what
+# genuinely differs per machine.
+project_path: /fixture/root-project

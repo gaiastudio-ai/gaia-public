@@ -74,9 +74,33 @@ The E28-S144 migration is a pure indirection change — the resolver returns the
 
 The per-skill parity table lives in `docs/migration/config-split-skill-audit.md`.
 
+## Testing
+
+The Cluster 20 test gate lives at `scripts/test-config-split.sh` (E28-S145). It drives `plugins/gaia/scripts/resolve-config.sh` across four project-structure fixtures plus an overlap-precedence fixture and a missing-key behavior check:
+
+| Fixture | `project_path` | Exercises |
+|---------|----------------|-----------|
+| A — root-project | `/fixture/root-project` | Baseline split with `project_path: "."` semantics |
+| B — subdir-project | `/fixture/subdir-project/my-app` | Application tree under a subdirectory |
+| C — live repo | `$(pwd)/gaia-public` | Production path — zero drift against the pre-split oracle |
+| D — no-shared-config | `/fixture/no-shared-config` | Backward-compat fallback — resolver silent, exit 0, `global.yaml` wins unchanged |
+| Overlap | `/fixture/local-wins` | "Local overrides shared" per ADR-044 §10.26.3 — sentinel shared values are observably ignored |
+
+The wrapper writes the authoritative test report to `docs/migration/config-split-test-report.md` on every run. The wrapper is shellcheck-clean, idempotent (two back-to-back runs diff only on the `Generated` timestamp), and exits non-zero on any fixture failure so CI can gate on it.
+
+Run locally:
+
+```bash
+cd gaia-public
+./scripts/test-config-split.sh
+```
+
+- `docs/migration/config-split-test-report.md` — authoritative per-fixture results (regenerated on every wrapper run).
+
 ## See also
 
 - `docs/migration/config-split-skill-audit.md` — authoritative scope artifact for the skill migration.
 - `plugins/gaia/config/MIGRATION-from-global-yaml.md` — migration playbook for splitting an existing `global.yaml`.
 - `plugins/gaia/scripts/resolve-config.sh` — canonical resolver implementation.
+- `scripts/test-config-split.sh` — Cluster 20 test gate (E28-S145).
 - `architecture.md` §10.26.3, §10.26.6, ADR-044.

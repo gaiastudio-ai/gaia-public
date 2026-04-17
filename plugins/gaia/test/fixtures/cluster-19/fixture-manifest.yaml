@@ -1,0 +1,99 @@
+# Cluster 19 Fixture Manifest
+# Scaffolded by story E28-S132. Populated by execution stories E28-S133..E28-S139.
+#
+# Each fixture carries:
+#   path        — relative to this manifest's directory
+#   sha256      — hex-encoded sha256 of the fixture body (placeholder until authored)
+#   origin      — "v-parity-baseline" (captured from legacy run at the baseline tag)
+#                 or "synthesized" (built specifically for this test plan)
+#   immutable   — true for parity fixtures (never edited without bumping v-parity-baseline)
+#                 false for synthesized fixtures that may evolve alongside the plan
+#   authored_by — story key that introduces the fixture (E28-S132 scaffolds; S133+ populates)
+
+version: 1
+baseline_tag: v-parity-baseline
+cluster: 19
+story_ref: E28-S132
+
+fixtures:
+  # Seeds — consumed by full-lifecycle category (E28-S133)
+  - path: seeds/product-brief.md
+    sha256: pending-e28-s133
+    origin: v-parity-baseline
+    immutable: true
+    authored_by: E28-S133
+  - path: seeds/architecture-seed.md
+    sha256: pending-e28-s133
+    origin: v-parity-baseline
+    immutable: true
+    authored_by: E28-S133
+  - path: seeds/epics-seed.md
+    sha256: pending-e28-s133
+    origin: v-parity-baseline
+    immutable: true
+    authored_by: E28-S133
+  - path: seeds/sprint-plan-seed.md
+    sha256: pending-e28-s133
+    origin: v-parity-baseline
+    immutable: true
+    authored_by: E28-S133
+  - path: seeds/dev-story-seed.md
+    sha256: pending-e28-s133
+    origin: v-parity-baseline
+    immutable: true
+    authored_by: E28-S133
+
+  # Review gate — consumed by E28-S134
+  - path: review-gate/story-review-fixture.md
+    sha256: pending-e28-s134
+    origin: synthesized
+    immutable: false
+    authored_by: E28-S134
+  - path: review-gate/expected-traces.jsonl
+    sha256: pending-e28-s134
+    origin: v-parity-baseline
+    immutable: true
+    authored_by: E28-S134
+
+  # Sprint state machine — consumed by E28-S135 (reuses dev-story-seed.md)
+  # Oracle lives under test/fixtures/parity-baseline/sprint-status/ (§11.37.1)
+
+  # Checkpoint resume — consumed by E28-S136
+  - path: resume/pre-interrupt-checkpoint.yaml
+    sha256: pending-e28-s136
+    origin: synthesized
+    immutable: false
+    authored_by: E28-S136
+  - path: resume/expected-terminal-state.yaml
+    sha256: pending-e28-s136
+    origin: synthesized
+    immutable: false
+    authored_by: E28-S136
+
+  # Quality gates — consumed by E28-S137 (reuses seeds + trigger fixtures inline)
+
+  # Enterprise plugin — consumed by E28-S138
+  - path: enterprise/license.json
+    sha256: pending-e28-s138
+    origin: synthesized
+    immutable: true
+    authored_by: E28-S138
+  - path: enterprise/enterprise-manifest.yaml
+    sha256: pending-e28-s138
+    origin: v-parity-baseline
+    immutable: true
+    authored_by: E28-S138
+
+  # Token measurement — consumed by E28-S139
+  - path: tokens/baseline-tokens.jsonl
+    sha256: pending-e28-s139
+    origin: v-parity-baseline
+    immutable: true
+    authored_by: E28-S139
+
+# Fixture project scaffolding (E28-S133 generates with init-project.sh)
+project_scaffold:
+  path: project/
+  generator: init-project.sh
+  tech_stack: typescript+pnpm+node20
+  note: "Full project tree is emitted by init-project.sh at test runtime; no committed source except package.json/tsconfig.json skeleton."

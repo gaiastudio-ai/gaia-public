@@ -13,6 +13,37 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) for t
 
 #### Added
 
+- **E28-S127** FR-329 slash-command retirement — verify + regression guard.
+  The converted plugin's `plugins/gaia/commands/` directory was already empty
+  at story-start (skill-based invocation via `plugins/gaia/skills/{name}/SKILL.md`
+  is the sole user-facing surface). This PR ships the FR-329 regression
+  prevention:
+  - `plugins/gaia/scripts/commands-guard.sh` — narrow-scope directory guard;
+    exits 1 if any `gaia-*.md` file reappears under `plugins/gaia/commands/`,
+    exits 0 when the directory is absent or empty. Shellcheck-clean.
+  - `.github/workflows/adr-048-guard.yml` — extended with an **unconditional**
+    commands-guard step (FR-329 is permanent, not closing-only) that runs on
+    every PR to staging or main.
+  - `plugins/gaia/scripts/dead-reference-scan.sh` — PATTERN extended with two
+    file-path regexes (`.claude/commands/gaia-*.md` and
+    `plugins/gaia/commands/gaia-*.md`) so the canonical active-code scanner
+    also catches stale file-path references. The invocation form `/gaia-foo`
+    used in skill prose is deliberately excluded by anchoring on the `.md`
+    extension — slash-command mentions in documentation and skill bodies
+    continue to resolve correctly.
+  - `plugins/gaia/test/scripts/e28-s127-commands-guard.bats` — 9 tests covering
+    absent directory, empty directory, non-gaia file, single regression,
+    mixed tree, multiple regressions, missing arg, non-existent project-root.
+  - `plugins/gaia/test/scripts/e28-s126-dead-reference-scan.bats` — 4 new
+    tests for the extended PATTERN (file-path detection, invocation-form
+    negative, docs allowlist).
+
+  The story's original deletion work was vacuously satisfied (AC1 — the
+  target directory does not exist; delta documented per AC2's
+  "matches the documented current actual count" clause and Test Scenario #2).
+  AC4 (skill invocation still works) is covered by the Cluster 19 parity
+  harness (E28-S133/S139 PASSED) which proved end-to-end skill resolution.
+
 - **E28-S126** Program-closing tooling for the ADR-048 engine deletion. Ships
   three new foundation scripts under `plugins/gaia/scripts/`:
   - `verify-cluster-gates.sh` — pre-start verifier that reads all 12 cluster-gate

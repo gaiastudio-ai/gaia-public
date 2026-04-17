@@ -94,3 +94,49 @@ EOF
   [ "$status" -eq 1 ]
   [[ "$output" == *".resolved"* ]]
 }
+
+# ============================================================================
+# E28-S127 — Extended PATTERN for retired commands/ surface (FR-329).
+# The extended scanner now also flags file-path references to retired slash-command files.
+# ============================================================================
+
+@test "E28-S127: .claude/commands/gaia-*.md file-path reference triggers failure" {
+  cat > "$TMP/plugins/gaia/scripts/fake.sh" <<'EOF'
+#!/usr/bin/env bash
+# Loads the legacy slash-command file
+cat .claude/commands/gaia-dev-story.md
+EOF
+  run "$SCRIPT" --project-root "$TMP"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"gaia-dev-story.md"* ]]
+}
+
+@test "E28-S127: plugins/gaia/commands/gaia-*.md file-path reference triggers failure" {
+  cat > "$TMP/plugins/gaia/scripts/fake.sh" <<'EOF'
+#!/usr/bin/env bash
+source plugins/gaia/commands/gaia-foo.md
+EOF
+  run "$SCRIPT" --project-root "$TMP"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"gaia-foo.md"* ]]
+}
+
+@test "E28-S127: invocation form /gaia-foo in SKILL.md prose does NOT trigger failure" {
+  # The slash-command invocation form '/gaia-foo' is valid everywhere — SKILL bodies
+  # and agent prose reference it constantly. It must NOT match the file-path regex.
+  cat > "$TMP/plugins/gaia/skills/fake-skill/SKILL.md" <<'EOF'
+# Example skill
+After completing this, run /gaia-dev-story or /gaia-create-story to continue.
+EOF
+  run "$SCRIPT" --project-root "$TMP"
+  [ "$status" -eq 0 ]
+}
+
+@test "E28-S127: docs/ reference to .claude/commands/gaia-*.md is allowlisted" {
+  mkdir -p "$TMP/docs"
+  cat > "$TMP/docs/legacy-note.md" <<'EOF'
+Historical: the legacy slash command lived at .claude/commands/gaia-dev-story.md.
+EOF
+  run "$SCRIPT" --project-root "$TMP"
+  [ "$status" -eq 0 ]
+}

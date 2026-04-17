@@ -1,0 +1,41 @@
+# GAIA-Public — Cloud Sync Whitelist
+#
+# Source of truth: ADR-046 "Hybrid Memory Loading" (docs/planning-artifacts/architecture.md §12)
+# and architecture.md §5.1 Data Store Map.
+#
+# ADR-046 establishes a two-path memory model:
+#   * Path 1 — Ground truth (ground-truth.md) is persisted and shared across sessions/machines.
+#   * Path 2 — Decision log (decision-log.md) is persisted and shared across sessions/machines.
+# conversation-context.md is ephemeral per-session state and MUST NOT be synced.
+#
+# Tier-aware whitelist (per _memory/config.yaml, ADR-014):
+#   * Tier 1 (validator, architect, pm, sm): ground-truth.md + decision-log.md tracked; conversation-context.md local.
+#   * Tier 2 (orchestrator, security, devops, test-architect, ...): decision-log.md tracked; conversation-context.md local.
+#   * Tier 3 (stack dev agents): decision-log.md tracked only.
+#
+# Validated by: tests/atdd/e28-s150-cloud-sync-whitelist.bats
+
+# --- Agent memory — ephemeral per-session state (NOT synced) ----------------
+_memory/*/conversation-context.md
+
+# --- Agent memory — archived rotations (NOT synced, per architecture §5.1) --
+_memory/*/archive/
+
+# --- Workflow checkpoints (NOT synced, per architecture §5.1) ---------------
+_memory/checkpoints/
+
+# --- Build / test / coverage outputs ----------------------------------------
+coverage/
+err
+
+# --- OS / editor artifacts --------------------------------------------------
+.DS_Store
+*.swp
+*.swo
+.idea/
+.vscode/
+
+# --- Local environment ------------------------------------------------------
+.env
+.env.local
+*.log

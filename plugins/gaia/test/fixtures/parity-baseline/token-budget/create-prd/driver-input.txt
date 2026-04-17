@@ -1,0 +1,6 @@
+/gaia-create-prd
+product_name: FixtureCo
+product_brief_path: docs/planning-artifacts/product-brief.md
+execution_mode: yolo
+driver: parity-baseline-token-budget
+fixture_id: create-prd-2026-04-17

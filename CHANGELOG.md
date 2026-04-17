@@ -13,6 +13,32 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) for t
 
 #### Added
 
+- **E28-S139** Cluster 19 token-reduction coverage (NFR-048). Added the
+  measurement driver at `plugins/gaia/test/scripts/token-reduction/` with
+  a pinned surrogate tokenizer (`tokenize.mjs`, `tokenizer.version`
+  `sha256:3c0c1f82…`), the 5 immutable fixture driver inputs under
+  `plugins/gaia/test/fixtures/parity-baseline/token-budget/{dev-story,
+  create-prd,code-review,sprint-planning,brownfield-onboarding}/driver-input.txt`,
+  and the 13-case structural contract at
+  `tests/cluster-19-e2e/token-reduction.bats` + the vitest-equivalent at
+  `test/validation/atdd/e28-s139.test.js`. Raw captures (baseline prompt,
+  native prompt, baseline count, native count, NCP-20 determinism re-run
+  count) are published under
+  `docs/test-artifacts/cluster-19/token-budget/{workflow}/` for all 5
+  workflows. Methodology pinned in
+  `docs/test-artifacts/cluster-19/token-reduction-methodology.md` (tokenizer,
+  scope, determinism, baseline-vs-native harness, workflow selection) and
+  results consolidated in
+  `docs/test-artifacts/cluster-19/token-reduction-results.md`. First run:
+  dev-story 50.0%, create-prd 40.0%, code-review 44.0%, sprint-planning 45.0%,
+  brownfield-onboarding 50.0% — every per-workflow row PASS on the 40% hard
+  gate; aggregate 45.8% is below the 55% stretch and recorded as a
+  non-blocking NCP-19 warning; NCP-20 determinism re-run is byte-identical
+  across all 5 workflows. **Cluster 19 token-reduction coverage recorded;
+  NFR-048 verdict: PASS.** `cluster-19-e2e-test-plan.md` matrix row 7 now
+  points at the results artifact; `test-plan.md §11.37.3` NCP-14..NCP-20
+  marked PASS with evidence links back to the results table.
+
 - **E28-S137** Cluster 19 quality-gate-enforcement parity test. Added
   `tests/cluster-19-e2e/quality-gate-enforcement.bats` (12 bats cases covering
   all 5 enforced testing-integration gates: `create-epics-stories.test-plan`,

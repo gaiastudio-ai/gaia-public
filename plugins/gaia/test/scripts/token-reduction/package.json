@@ -1,0 +1,7 @@
+{
+  "name": "gaia-token-reduction-driver",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "NFR-048 token-reduction measurement driver for Cluster 19 (E28-S139)."
+}

@@ -1,0 +1,6 @@
+/gaia-dev-story
+story_key: E-FIXTURE-S1
+mode: FRESH
+execution_mode: yolo
+driver: parity-baseline-token-budget
+fixture_id: dev-story-2026-04-17

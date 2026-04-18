@@ -1,7 +1,7 @@
 ---
 name: gaia-migrate
 description: Automate the upgrade from GAIA v1 (workflow.xml engine) to v2 (Claude Code native plugin) — backup, migrate templates/memory/config, validate. Use after the v2 plugins have been installed via /plugin marketplace add.
-when_to_use: When a user has an existing GAIA v1 installation (presence of _gaia/, _memory/, custom/) and wants to migrate to the v2 plugin layout. Run with `dry-run` first to see the planned operations.
+when_to_use: When a user has an existing GAIA v1 installation (presence of _gaia/, _memory/, custom/) and wants to migrate to the v2 plugin layout. Run with `dry-run` first to see the planned operations. After `/gaia-migrate apply` completes, manually run `/gaia-help` to smoke-test the post-migration install — filesystem-only validation cannot exercise skill invocation, so a live `/gaia-help` run is the only way to confirm slash-command routing, plugin discovery, and skill loading are wired up end-to-end.
 allowed-tools: [Read, Bash]
 ---
 
@@ -36,6 +36,8 @@ If the user has NOT installed the v2 plugins yet, point them to §1 Prerequisite
 4. **Surface the SUCCESS / FAILED banner.** On `SUCCESS`, confirm the migration is complete and remind the user the backup is at `.gaia-migrate-backup/{ts}/`. On `FAILED`, surface the printed restore command verbatim and instruct the user to inspect the backup before retrying.
 
 5. **Manual follow-up items.** If the script printed any `manual follow-up:` lines, list them to the user with §-references back to the migration guide.
+
+6. **Manual post-migration smoke-test.** Instruct the user to run `/gaia-help` in the migrated project and confirm it returns the context-sensitive help menu. This is the canonical post-migration smoke-test: the script's filesystem-only validation cannot exercise skill invocation, so only a live `/gaia-help` run proves slash-command routing, plugin discovery, and skill loading survived the migration. If `/gaia-help` does not respond, direct the user to §Troubleshooting of the migration guide.
 
 ## Authoritative source
 

@@ -26,10 +26,18 @@ jobs:
       - uses: mig4/setup-bats@af9a00deb21b5d795cabfeaa8d9060410377686d  # v1.2.0
         with:
           bats-version: 1.10.0
-      - name: Install jq and kcov
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y jq kcov
+      # E28-S175 — kcov is not in the default apt repositories on Ubuntu 24.04
+      # (noble), which caused `apt-get install -y jq kcov` to fail with
+      # "E: Unable to locate package kcov" on every PR and block the bats-tests
+      # job before any tests ran. kcov-based line coverage is advisory-only in
+      # run-with-coverage.sh (the script treats a missing kcov as a skip, not a
+      # failure); the authoritative gate is NFR-052 public-function coverage,
+      # which does not need kcov. Dropping kcov from the apt install restores
+      # the bats-tests signal on noble. If line-coverage reporting is needed
+      # later, reintroduce kcov via a pre-built binary download from the kcov
+      # GitHub releases rather than apt.
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
       - name: Run bats suite with coverage wrapper
         run: bash plugins/gaia/tests/run-with-coverage.sh
       - name: Upload coverage report

@@ -54,6 +54,29 @@ fi
 # The slash-command patterns are deliberately written against file-path context:
 #   .claude/commands/gaia-{name}.md   — legacy runtime surface
 #   plugins/gaia/commands/gaia-{name}.md — retired product-source surface
+#
+# compound-word-safety convention (E28-S164 / F3 from E28-S128 triage):
+#   Every E28-S128 workflow-artifact filename alternation — workflow.yaml,
+#   instructions.xml, checklist.md — MUST be prefixed with the anchor
+#   `(^|[^-a-z])` to prevent false positives inside compound words. This
+#   compound-word-safety anchor is the entire reason the alternation is
+#   wrapped rather than naked.
+#
+#   Without the anchor, a naked `manifest.yaml` pattern would match inside
+#   `agent-manifest.yaml`, `skill-manifest.yaml`, `workflow-manifest.yaml`,
+#   etc. — yielding spurious failures on perfectly legitimate filenames that
+#   merely share the trailing token. The `(^|[^-a-z])` prefix asserts the
+#   match begins at the start of a line OR is preceded by a non-hyphen,
+#   non-lowercase-letter character (whitespace, quote, slash, colon, etc.).
+#
+#   Concrete example:
+#     - naked `workflow\.yaml\b` would match `agent-workflow.yaml` — WRONG
+#     - anchored `(^|[^-a-z])workflow\.yaml\b` skips `agent-workflow.yaml`
+#       and only matches `workflow.yaml` as a standalone filename reference
+#
+#   When extending this PATTERN with a new workflow-artifact token, apply the
+#   same anchor unless the token is already safely distinctive (e.g., a full
+#   path fragment like `.claude/commands/...` carries its own delimiters).
 PATTERN='workflow\.xml|core/protocols|\.resolved/|lifecycle-sequence\.yaml|workflow-manifest\.csv|task-manifest\.csv|skill-manifest\.csv|\.claude/commands/gaia-[a-z0-9-]+\.md|plugins/gaia/commands/gaia-[a-z0-9-]+\.md|(^|[^-a-z])workflow\.yaml\b|(^|[^-a-z])instructions\.xml\b|(^|[^-a-z])checklist\.md\b'
 
 # E28-S128 negative filter — a matched line is treated as a false-positive (and dropped)

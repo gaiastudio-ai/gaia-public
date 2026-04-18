@@ -1,41 +1,293 @@
-<!-- COORDINATION NOTE (E28-S126 → E28-S130):
-     This file was created by E28-S126 with only the "Legacy engine cleanup" subsection
-     populated (under a placeholder ## Verify heading). E28-S130 fills in the remaining
-     top-level sections (Prerequisites, Backup, Install, Migrate Templates, Migrate Memory,
-     Update CLAUDE.md, Verify, Rollback, Reviewer Orientation). S130 MUST preserve the
-     "Legacy engine cleanup" subsection verbatim — it is the reference cutover runbook
-     tied to the gaia-cleanup-legacy-engine.sh script shipped in this same PR.
-     See: docs/implementation-artifacts/E28-S126-plan.md §Step 6 coordination note.
+<!-- Authored by E28-S126 (stub, "Legacy engine cleanup" subsection only) and
+     expanded by E28-S130 (full guide). The "Legacy engine cleanup" subsection
+     under §Verify is preserved verbatim from E28-S126.
 -->
 
 # GAIA v1 → v2 Migration Guide
 
-> **Status:** stub — E28-S130 expands this into the full v1→v2 migration guide.
-> The "Legacy engine cleanup" subsection under §Verify is the reference cutover
-> runbook for `plugins/gaia/scripts/gaia-cleanup-legacy-engine.sh`. It was
-> created by E28-S126 and MUST be preserved when E28-S130 fills out the
-> remaining sections.
+This guide walks an existing GAIA v1 user through upgrading to v2 (Claude Code native plugin) without losing custom templates, agent memory, project configuration, or in-flight work.
+
+**Audience:** developers running GAIA v1.127.x with the legacy `workflow.xml` engine. **Target:** GAIA v2 — published as Claude Code plugins (`gaia-public` + optional `gaia-enterprise`).
+
+**Scope of this guide:** end-user cutover after the v2 plugins have been published to the Claude Code marketplace. This guide is NOT used during the conversion program itself (per ADR-048).
 
 ## Table of Contents
 
-<!-- TOC placeholder — populated by E28-S130 with section anchors for:
-     Prerequisites, Backup, Install, Migrate Templates, Migrate Memory,
-     Update CLAUDE.md, Verify, Rollback, Reviewer Orientation. -->
+1. [Prerequisites](#1-prerequisites)
+2. [Backup](#2-backup)
+3. [Install](#3-install)
+4. [Migrate Templates](#4-migrate-templates)
+5. [Migrate Memory](#5-migrate-memory)
+6. [Update CLAUDE.md](#6-update-claudemd)
+7. [Verify](#7-verify)
+8. [Rollback](#8-rollback)
+9. [Reviewer Orientation](#9-reviewer-orientation)
 
-1. Prerequisites — _(pending E28-S130)_
-2. Backup — _(pending E28-S130)_
-3. Install — _(pending E28-S130)_
-4. Migrate Templates — _(pending E28-S130)_
-5. Migrate Memory — _(pending E28-S130)_
-6. Update CLAUDE.md — _(pending E28-S130)_
-7. **Verify**
-   - [Legacy engine cleanup (manual cutover)](#legacy-engine-cleanup-manual-cutover)
-8. Rollback — _(pending E28-S130)_
-9. Reviewer Orientation — _(pending E28-S130)_
+Step IDs are globally numbered (S1.1, S2.3, etc.) so support conversations can reference exact locations.
 
-## Verify
+---
 
-_Sections above the "Legacy engine cleanup" subsection are filled in by E28-S130._
+## 1. Prerequisites
+
+Before you migrate, satisfy every check below. The migration is safe ONLY when all four pass.
+
+### S1.1 — Confirm the v2 plugins are published
+
+The migration target is Claude Code's native plugin system. Run:
+
+```
+$ /plugin marketplace list
+```
+
+The output MUST include `gaia-public`. If you have an enterprise license, it should also include `gaia-enterprise`. If neither appears, **STOP** — the v2 plugins are not yet published to your marketplace and migration cannot proceed (AC-EC10).
+
+### S1.2 — Verify version compatibility
+
+`gaia-public` and `gaia-enterprise` MUST match at the minor version (both on `2.x.y`). Run:
+
+```
+$ /plugin marketplace info gaia-public
+$ /plugin marketplace info gaia-enterprise   # if licensed
+```
+
+Confirm the major.minor versions match. Mismatched pairs cause degraded enterprise features (AC-EC8).
+
+### S1.3 — Drain or discard in-flight checkpoints
+
+v2 cannot resume v1 checkpoints. Inspect:
+
+```
+$ ls _memory/checkpoints/
+```
+
+For each `.yaml` file in this directory (excluding `_memory/checkpoints/completed/`):
+
+- **Option A — drain:** complete the in-flight workflow under v1 first using the existing `/gaia-resume` flow. Once the workflow finishes, its checkpoint moves to `completed/`.
+- **Option B — discard:** if you can't drain (e.g., the workflow is irrelevant), move the checkpoint manually:
+
+  ```
+  $ mkdir -p _memory/checkpoints/completed
+  $ mv _memory/checkpoints/{stale-checkpoint}.yaml _memory/checkpoints/completed/
+  ```
+
+**Do not start migration with active checkpoints in `_memory/checkpoints/` (top level).** v2 will not be able to resume them and the user-experience is poor (AC-EC3).
+
+### S1.4 — Back up `.claude/settings.json`
+
+If you have customizations in `.claude/settings.json` (hooks, permissions, env vars), back it up explicitly:
+
+```
+$ cp .claude/settings.json .claude/settings.json.v1.bak
+```
+
+The migration does NOT overwrite this file automatically. You will re-apply v2-compatible permissions after install (AC-EC6).
+
+---
+
+## 2. Backup
+
+Take a full backup of every directory the migration touches. The backup is your single rollback target — keep it safe and verifiable.
+
+### S2.1 — Create a backup root
+
+```
+$ BACKUP_ROOT="$HOME/gaia-v1-backup-$(date +%Y%m%d-%H%M%S)"
+$ mkdir -p "$BACKUP_ROOT"
+$ echo "Backup root: $BACKUP_ROOT"
+```
+
+### S2.2 — Copy every relevant directory
+
+```
+$ cp -r _gaia/        "$BACKUP_ROOT/"
+$ cp -r _memory/      "$BACKUP_ROOT/"
+$ cp -r custom/       "$BACKUP_ROOT/"   # if exists
+$ cp -r docs/         "$BACKUP_ROOT/"
+$ cp -r .claude/      "$BACKUP_ROOT/"
+$ cp    global.yaml   "$BACKUP_ROOT/"   # if at project root
+$ cp    CLAUDE.md     "$BACKUP_ROOT/"
+```
+
+**Note:** `custom/` only exists if you've authored template overrides. Skip if absent.
+
+### S2.3 — Generate a manifest with checksums
+
+```
+$ ( cd "$BACKUP_ROOT" && find . -type f -exec shasum -a 256 {} \; > manifest.sha256 )
+$ wc -l "$BACKUP_ROOT/manifest.sha256"
+```
+
+The manifest serves two purposes: (1) post-migration `diff` evidence that custom templates and memory survived byte-identical (AC-EC1, AC-EC4); (2) rollback-restoration verification.
+
+### S2.4 — Confirm backup is non-empty and readable
+
+```
+$ du -sh "$BACKUP_ROOT"
+$ tail -3 "$BACKUP_ROOT/manifest.sha256"
+```
+
+Both commands should produce output. If either fails, **STOP** and resolve the disk/permissions issue before continuing.
+
+---
+
+## 3. Install
+
+### S3.1 — Choose your project_path track
+
+Open `_gaia/_config/global.yaml` (or the project root `global.yaml` if that's where it lives). Look for the `project_path` field.
+
+- If `project_path: "."` → follow **Track A** below
+- If `project_path: "{some-subdirectory}"` → follow **Track B** below
+
+Each track has its own numbered steps so you don't have to mentally branch. Run only the steps under your track.
+
+### Track A — `project_path: "."` (single-tree layout)
+
+In this layout, application code and the GAIA framework share the project root. The migration installs the plugin into the same root.
+
+```
+$ /plugin marketplace add gaia-public
+$ /plugin marketplace add gaia-enterprise   # if licensed
+```
+
+After install, verify:
+
+```
+$ /plugin list
+```
+
+Both plugins should be listed and active.
+
+### Track B — `project_path: "{subdirectory}"` (split-tree layout)
+
+In this layout, application source lives in a subdirectory (e.g., `gaia-public/`, `my-app/`) while GAIA framework lives at the project root. The plugin install command is the same; the difference is where you'll later sync templates and memory back.
+
+```
+$ /plugin marketplace add gaia-public
+$ /plugin marketplace add gaia-enterprise   # if licensed
+$ /plugin list
+```
+
+Note the value of `project_path` in your `global.yaml` — you'll need it for §4 and §5 to copy files into the correct subdirectory.
+
+### S3.2 — Network failure handling (AC-EC7)
+
+If `/plugin marketplace add` fails mid-download (network outage, marketplace unavailable):
+
+1. Wait 30s, then retry the same command. The marketplace install is idempotent — a partial install gets cleaned up automatically.
+2. If retry also fails, run `/plugin marketplace status` to see whether anything was partially installed.
+3. If status reports a partial install, run `/plugin uninstall {plugin-name}` to clean up, then retry the add.
+4. If the marketplace is fully unreachable, halt the migration. **The rollback at this stage is a no-op** because the install never completed; you can resume migration once the marketplace is reachable.
+
+---
+
+## 4. Migrate Templates
+
+If you authored custom template overrides under `custom/templates/`, preserve them byte-for-byte.
+
+### S4.1 — Copy custom/templates/ to its v2 location
+
+The v2 plugin honors `custom/templates/` at the project root in both layouts (Track A and Track B). For most users this means: do nothing — `custom/templates/` is already where the v2 plugin expects it.
+
+### S4.2 — Verify byte-identical preservation (AC-EC1)
+
+```
+$ diff -r "$BACKUP_ROOT/custom/templates" custom/templates
+```
+
+The output MUST be empty (no diff). If any line is reported, the templates have drifted — investigate and restore from the backup before continuing.
+
+---
+
+## 5. Migrate Memory
+
+Agent memory sidecars contain decision history, ground truth, and conversation context that MUST survive migration (AC-EC4).
+
+### S5.1 — Confirm sidecars survive in place
+
+```
+$ ls _memory/   # list every sidecar directory (validator-sidecar, devops-sidecar, etc.)
+```
+
+These directories already live under `_memory/` and the v2 plugin reads from the same location. No copy is required — confirm:
+
+```
+$ diff -r "$BACKUP_ROOT/_memory" _memory
+```
+
+The output should show only `_memory/checkpoints/` differences (which are expected — we drained those in §1.3) and any new sidecars created since the backup. The three canonical sidecar files MUST be unchanged for every Tier 1 / Tier 2 agent:
+
+- `decision-log.md`
+- `ground-truth.md` (Tier 1 only — validator, architect, pm, sm)
+- `conversation-context.md`
+
+### S5.2 — Verify checksums
+
+```
+$ ( cd _memory && find . -type f -name '*.md' -not -path './*/archive/*' -exec shasum -a 256 {} \; ) > /tmp/_memory.now.sha256
+$ ( cd "$BACKUP_ROOT/_memory" && find . -type f -name '*.md' -not -path './*/archive/*' -exec shasum -a 256 {} \; ) > /tmp/_memory.backup.sha256
+$ diff /tmp/_memory.now.sha256 /tmp/_memory.backup.sha256
+```
+
+Empty output = checksums match = sidecars are byte-identical.
+
+---
+
+## 6. Update CLAUDE.md
+
+The v2 `CLAUDE.md` is ≤50 lines (per NFR-049) and contains only environment + hard rules + plugin pointers. Your v1 `CLAUDE.md` likely runs ~220 lines with engine-execution narrative.
+
+### S6.1 — Replace your CLAUDE.md with the v2 template
+
+The plugin ships a reference v2 CLAUDE.md at `gaia-public/CLAUDE.md`. Use it as the starting template:
+
+```
+$ cp .claude/plugins/gaia-public/CLAUDE.md CLAUDE.md
+```
+
+The path above assumes the marketplace install location; adjust if your install is elsewhere (e.g., system-wide). Confirm:
+
+```
+$ wc -l CLAUDE.md
+```
+
+Should be 30–50 lines.
+
+### S6.2 — Re-apply project-specific customizations
+
+If your v1 CLAUDE.md had project-specific environment values (e.g., custom `project_path`, custom artifact paths), re-apply them to the slim v2 template. Keep the file under 50 lines.
+
+### S6.3 — Confirm version heading is preserved
+
+```
+$ head -1 CLAUDE.md
+```
+
+Must match `# GAIA Framework v{x.x.x}`. The version-bump script regex relies on this exact format.
+
+---
+
+## 7. Verify
+
+After install + template/memory/CLAUDE.md migration, run a smoke test before declaring victory.
+
+### S7.1 — Smoke-test three representative skills
+
+```
+$ /gaia
+$ /gaia-help
+$ /gaia-dev-story
+```
+
+Each command should resolve through the v2 plugin's SKILL.md and either show the orchestrator menu (`/gaia`), context-sensitive help (`/gaia-help`), or prompt for a story key (`/gaia-dev-story`). No "command not found" errors.
+
+### S7.2 — Confirm `/gaia-validate-framework` passes
+
+```
+$ /gaia-validate-framework
+```
+
+The skill verifies file inventory, manifest integrity, and config resolution. Expect `Overall Status: PASS` with no CRITICAL findings.
 
 ### Legacy engine cleanup (manual cutover)
 
@@ -50,7 +302,7 @@ engine protocols, the four retired `_config/` manifests, the five module
 Only **after** you have:
 
 - Installed the new `gaia-public` (and, if applicable, `gaia-enterprise`) plugin
-  via `/plugin marketplace add` (see [Install](#install)).
+  via `/plugin marketplace add` (see §3 Install).
 - Verified at least one representative workflow (`/gaia-dev-story`, `/gaia-create-prd`,
   `/gaia-sprint-plan`) completes successfully against the native plugin.
 - Completed any other migration steps above (template/memory/CLAUDE.md migrations).
@@ -123,3 +375,90 @@ are not in the deletion manifest.
 - NFR-050 — Zero XML Engine Files (`docs/planning-artifacts/prd.md:1708`)
 - FR-328 — Engine Deletion (`docs/planning-artifacts/prd.md:1637`)
 - Story: E28-S126 — Delete workflow.xml engine, protocols, and `.resolved` config files
+
+---
+
+## 8. Rollback
+
+If anything goes wrong during migration, **STOP** and follow this section instead of attempting forward fixes.
+
+**S8.1 — STOP. Do not run further migration steps.** Forward attempts after a partial migration produce inconsistent state that's harder to recover from than a clean rollback.
+
+**S8.2 — Uninstall the v2 plugins:**
+
+```
+$ /plugin uninstall gaia-enterprise   # if installed
+$ /plugin uninstall gaia-public
+```
+
+This is safe whether you're at step 3.1 or step 7.2 — uninstalling plugins is reversible.
+
+**S8.3 — Restore directories from backup** (idempotent — safe to run multiple times):
+
+```
+$ rm -rf _gaia/ _memory/ docs/ .claude/
+$ cp -r "$BACKUP_ROOT/_gaia/"   ./
+$ cp -r "$BACKUP_ROOT/_memory/" ./
+$ cp -r "$BACKUP_ROOT/docs/"    ./
+$ cp -r "$BACKUP_ROOT/.claude/" ./
+$ cp    "$BACKUP_ROOT/CLAUDE.md" ./
+$ cp    "$BACKUP_ROOT/global.yaml" ./   # if backed up at project root
+$ cp -r "$BACKUP_ROOT/custom/" ./       # if backed up
+```
+
+**S8.4 — Verify restoration with the manifest:**
+
+```
+$ ( find . -type f \( -path './_gaia/*' -o -path './_memory/*' -o -path './docs/*' -o -path './.claude/*' -o -name 'CLAUDE.md' -o -name 'global.yaml' \) -exec shasum -a 256 {} \; | sort ) > /tmp/restored.sha256
+$ ( cd "$BACKUP_ROOT" && find . -type f \( -path './_gaia/*' -o -path './_memory/*' -o -path './docs/*' -o -path './.claude/*' -o -name 'CLAUDE.md' -o -name 'global.yaml' \) -exec shasum -a 256 {} \; | sort ) > /tmp/backup.sha256
+$ diff /tmp/restored.sha256 /tmp/backup.sha256
+```
+
+Empty diff = restoration is byte-identical to backup.
+
+**S8.5 — Confirm v1 is functional:**
+
+```
+$ /gaia
+```
+
+If the v1 orchestrator launches normally, rollback succeeded. You can re-attempt migration later after addressing whatever caused the original failure (network, version skew, etc.). The backup remains valid for future attempts.
+
+---
+
+## 9. Reviewer Orientation
+
+This appendix gives an external reviewer (someone who did not work on the GAIA Native Conversion Program / E28) the minimum context to verify this guide.
+
+### 5-minute conceptual overview
+
+GAIA v1 ran on a custom `workflow.xml` engine (~258 lines) that orchestrated 81 workflow YAML+XML bundles, 28 agent persona files, ~120 pre-compiled `.resolved/` configs, and 4 engine protocols. Every `/gaia-*` slash command loaded `workflow.xml` to interpret its workflow.
+
+GAIA v2 replaces this entire stack with Claude Code's native primitives:
+
+- 81 workflows → 81 `SKILL.md` files (auto-discovered)
+- 28 agents → 28 `.claude/agents/{name}.md` subagents
+- 4 protocols → inline bash scripts (`scripts/resolve-config.sh`, `scripts/checkpoint.sh`, etc.)
+- ~120 `.resolved/` configs → resolved at skill-invocation time via `scripts/resolve-config.sh` (no pre-compilation step)
+
+The v2 system runs entirely on Claude Code primitives, with no custom engine. Token usage drops 40–55% on mechanical workflows (per NFR-048). Feature parity with v1.127.2-rc.1 is preserved (per NFR-053).
+
+The migration this guide describes is the **end-user cutover** that retires the v1 engine on a single user's machine after the v2 plugins are published. It is NOT used during the conversion program itself.
+
+### Key references
+
+- **PRD §4.27** (`docs/planning-artifacts/prd.md`) — GAIA Native Conversion Program definition
+- **ADR-041** (`docs/planning-artifacts/architecture.md` §Decision Log) — Native execution model via Claude Code Skills + Subagents + Plugins + Hooks
+- **ADR-048** (`docs/planning-artifacts/architecture.md` §Decision Log) — Engine deletion as program-closing action
+- **NFR-049** (`prd.md`) — `CLAUDE.md` ≤50 lines after migration
+- **NFR-050** (`prd.md`) — Zero XML engine files in `gaia-public/plugins/gaia/` after migration
+
+### What to verify in this guide
+
+1. Every section (1–9) is present and ordered correctly.
+2. Track A and Track B are clearly separated for users with different `project_path` values.
+3. Rollback section starts with **STOP** and uses idempotent commands.
+4. The "Legacy engine cleanup" subsection under §Verify (preserved verbatim from E28-S126) names the cleanup script's exact path, flags, and exit codes.
+5. Prerequisites blocks the migration with `marketplace list` checks.
+
+If all five items check out, the guide is mechanically correct. Substantive accuracy (e.g., "does this command actually work?") requires running through the steps in a sandbox — out of scope for a doc review.

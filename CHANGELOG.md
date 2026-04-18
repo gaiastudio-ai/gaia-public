@@ -13,6 +13,23 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) for t
 
 #### Added
 
+- **E28-S130** v1 → v2 migration guide. Expanded the E28-S126 stub at
+  `gaia-public/docs/migration-guide-v2.md` to a full 9-section guide
+  covering: Prerequisites (with `/plugin marketplace list` gate),
+  Backup (with checksums), Install (with two-track procedure for
+  `project_path: "."` vs subdirectory), Migrate Templates (byte-identical
+  preservation via `diff -r`), Migrate Memory (sidecar checksum verification),
+  Update CLAUDE.md (replaces ~227-line v1 with the slim 30-line v2 from
+  E28-S129), Verify (preserves the E28-S126 "Legacy engine cleanup"
+  subsection verbatim per its coordination note), Rollback (STOP-first
+  with idempotent restore commands), Reviewer Orientation appendix
+  (5-minute conceptual overview + ADR/PRD links for non-E28 reviewers).
+  Global step IDs (S1.1, S2.3, etc.) for support-conversation reference.
+  Pointer at `docs/migration/migration-guide-v2.md` (project-root convention).
+  Backed by 19 bats tests covering section presence, two-track procedure,
+  reviewer-orientation references, and the preserved E28-S126 cleanup
+  subsection.
+
 - **E28-S129** NFR-049 / FR-327 CLAUDE.md slim rewrite. Shipped the slim
   `gaia-public/CLAUDE.md` (30 lines) containing only environment configuration,
   how-to-start pointers, and hard rules. The project-root `CLAUDE.md` (the

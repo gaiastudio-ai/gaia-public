@@ -51,6 +51,14 @@ readonly SELF="next-step.sh"
 
 err() { printf "[%s] ERROR: %s\n" "$SELF" "$*" >&2; }
 
+# E28-S162: shared missing-file graceful fallback helper. Sourced here so the
+# resolve_paths function below can delegate the "legacy manifests absent"
+# decision to handle_missing_file instead of re-implementing the idiom.
+# Refs: FR-323, ADR-042, triage finding F3 of E28-S126.
+_NEXT_STEP_DIR="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck source=lib/missing-file-fallback.sh
+. "$_NEXT_STEP_DIR/lib/missing-file-fallback.sh"
+
 usage() {
   cat <<'USAGE'
 Usage: next-step.sh --workflow <current> [--story <key>] [--status <pass|fail>] [--help]
@@ -121,20 +129,28 @@ resolve_paths() {
     if [ -f "$c" ]; then manifest_file="$c"; break; fi
   done
 
-  # E28-S126: graceful-missing-file fallback (Val v1 Finding 2).
-  # Under the native plugin (post-ADR-048 cutover) lifecycle-sequence.yaml and
-  # workflow-manifest.csv are retired. Print a clear notice and exit 0 — do NOT
-  # treat absence as an error. Preserve the original exit-2 behavior only when
-  # the caller sets GAIA_NEXT_STEP_STRICT=1 (opt-in for legacy callers).
-  if [ -z "$sequence_file" ] || [ -z "$manifest_file" ]; then
-    if [ "${GAIA_NEXT_STEP_STRICT:-0}" = "1" ]; then
-      [ -z "$sequence_file" ] && err "lifecycle-sequence.yaml not found (searched: ${candidates_seq[*]})"
-      [ -z "$manifest_file" ] && err "workflow-manifest.csv not found (searched: ${candidates_man[*]})"
-      return 2
-    fi
-    # Print to stdout so callers that capture stdout see a predictable message.
-    echo "next-step: legacy manifests not available under native plugin — nothing to suggest"
-    return 10  # sentinel value: "no manifests" — callers treat as no-op, wrapper below exits 0
+  # E28-S126 / E28-S162: delegate the graceful-missing-file decision to the
+  # shared helper at scripts/lib/missing-file-fallback.sh. Under the native
+  # plugin (post-ADR-048 cutover) lifecycle-sequence.yaml and
+  # workflow-manifest.csv are retired — the helper returns sentinel 10 and
+  # prints a clear notice. Strict behavior is opt-in via GAIA_NEXT_STEP_STRICT=1.
+  local target="" target_label=""
+  if [ -z "$sequence_file" ]; then
+    target="${candidates_seq[0]}"
+    target_label="lifecycle-sequence.yaml (searched: ${candidates_seq[*]})"
+  elif [ -z "$manifest_file" ]; then
+    target="${candidates_man[0]}"
+    target_label="workflow-manifest.csv (searched: ${candidates_man[*]})"
+  fi
+  if [ -n "$target" ]; then
+    # The helper inspects $target on disk. Because the candidate arrays were
+    # probed above, if we reach this branch no candidate file existed — the
+    # helper will follow its graceful (rc=10, stdout notice) or strict
+    # (rc=2, stderr error) branch per GAIA_NEXT_STEP_STRICT.
+    handle_missing_file "$target" GAIA_NEXT_STEP_STRICT \
+      "next-step: legacy manifests not available under native plugin — nothing to suggest" \
+      "$target_label"
+    return $?
   fi
 
   printf "%s\n%s\n" "$sequence_file" "$manifest_file"

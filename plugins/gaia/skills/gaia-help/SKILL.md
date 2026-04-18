@@ -16,7 +16,7 @@ This skill is the native Claude Code conversion of the legacy `_gaia/core/tasks/
 - **Only suggest commands that exist in `_gaia/_config/workflow-manifest.csv` — never invent command names.** This mandate originates in `_gaia/core/engine/workflow.xml` (engine Step 7: Completion — "Only suggest commands that exist in workflow-manifest.csv — never invent command names") and is propagated into this skill because the native model removes the engine layer. Every suggested command MUST appear in `workflow-manifest.csv` at runtime. If a candidate from `gaia-help.csv` is not in the manifest, drop it from the suggestion list.
 - **Load `_gaia/_config/gaia-help.csv` as the primary intent-to-command map.** That file encodes which slash command handles which user intent (e.g., "I want to start a new project" → `/gaia-brainstorm-project`). It is authored by the team and must not be hard-coded into this skill.
 - **Detect lifecycle phase from `docs/` artifacts** — inspect `docs/planning-artifacts/`, `docs/implementation-artifacts/`, `docs/test-artifacts/`, and `docs/creative-artifacts/` with the Glob tool to determine which Phase the project is in (see Phase Guide below).
-- **If `_gaia/_config/workflow-manifest.csv` is missing** (AC-EC2): refuse to suggest any command and fall back to `/gaia` with a clear warning. Do NOT invent. This is the non-negotiable no-hallucination rule.
+- **If `_gaia/_config/workflow-manifest.csv` is missing** (AC-EC2): refuse to suggest any command and fall back to `/gaia` with a clear warning. Do NOT invent. This is the non-negotiable no-hallucination rule. The behavior contract for this fallback mirrors the shared bash helper at `plugins/gaia/scripts/lib/missing-file-fallback.sh` (E28-S162) — emit a clear notice and degrade gracefully to a safe no-op rather than erroring. Bash consumers of the same pattern source the helper directly; this skill, being LLM prose, implements the same contract in Step 1 of the instructions below.
 - Do NOT emit write operations. This skill is read-only and produces text suggestions only.
 
 ## Inputs
@@ -29,7 +29,7 @@ This skill is the native Claude Code conversion of the legacy `_gaia/core/tasks/
 
 - Use the Read tool to load `_gaia/_config/gaia-help.csv`. This is the primary intent-to-command map authored by the team.
 - Use the Read tool to load `_gaia/_config/workflow-manifest.csv`. This is the authority for which commands exist.
-- If `workflow-manifest.csv` is missing or unreadable, emit the warning `workflow-manifest.csv missing — cannot validate command suggestions, falling back to /gaia` and exit with only `/gaia` as the suggestion. Do NOT hallucinate commands.
+- If `workflow-manifest.csv` is missing or unreadable, emit the warning `workflow-manifest.csv missing — cannot validate command suggestions, falling back to /gaia` and exit with only `/gaia` as the suggestion. Do NOT hallucinate commands. This follows the same graceful-missing-file contract as `plugins/gaia/scripts/lib/missing-file-fallback.sh` (E28-S162): print a clear notice, degrade to a safe no-op, never error unless a strict-mode opt-in is set (not applicable for this skill).
 
 ### Step 2 — Parse the User Query
 
@@ -112,3 +112,4 @@ Every one of the above MUST survive the Step 4 manifest cross-check before being
 - ADR-048: Engine Deletion as Program-Closing Action — legacy task coexists with this skill until program close.
 - FR-323: Skill Conversion — slash-command identity preserved.
 - NFR-053: Full v1.127.2-rc.1 Feature Parity.
+- `plugins/gaia/scripts/lib/missing-file-fallback.sh` (E28-S162): shared bash helper whose missing-file contract this skill mirrors in prose.

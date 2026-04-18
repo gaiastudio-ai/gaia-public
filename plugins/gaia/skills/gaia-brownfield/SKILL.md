@@ -19,7 +19,7 @@ This skill is the native Claude Code conversion of the legacy `brownfield-onboar
 
 **Main context semantics (ADR-041):** This skill runs under `context: main` with full tool access. It orchestrates a large discovery pipeline that reads the target project and produces a canonical artifact set under `docs/planning-artifacts/` and `docs/test-artifacts/`.
 
-**Scripts-over-LLM (ADR-042 / FR-325):** Deterministic operations (config resolution, checkpoint writes, gate validation, lifecycle events) are delegated to the shared foundation scripts under `plugins/gaia/scripts/` via inline `!scripts/*.sh` calls. The canonical foundation set includes: `resolve-config.sh`, `checkpoint.sh` (deployed equivalent for spec's `checkpoint-write.sh` + `checkpoint-verify.sh`), `validate-gate.sh` (deployed equivalent for spec's `file-gate.sh`), `template-header.sh`, `memory-loader.sh`, `lifecycle-event.sh`. See the Reconciliation Note under Critical Rules for the spec-vs-deployed mapping.
+**Scripts-over-LLM (ADR-042 / FR-325):** Deterministic operations (config resolution, checkpoint writes, gate validation, lifecycle events) are delegated to the shared foundation scripts under `plugins/gaia/scripts/` via inline `!scripts/*.sh` calls. The canonical foundation set includes: `resolve-config.sh`, `checkpoint.sh` (with `write` / `read` / `validate` subcommands — the consolidated checkpoint surface per architecture §10.26.3), `validate-gate.sh` (deployed equivalent for spec's `file-gate.sh`), `template-header.sh`, `memory-loader.sh`, `lifecycle-event.sh`. See the Reconciliation Note under Critical Rules for the one remaining spec-vs-deployed name mapping.
 
 ## Critical Rules
 
@@ -36,7 +36,7 @@ This skill is the native Claude Code conversion of the legacy `brownfield-onboar
 
 ### Reconciliation Note — Architecture Spec vs Deployed Scripts
 
-Architecture §10.26.3 specifies ten foundation scripts. The currently deployed `plugins/gaia/scripts/` set uses unified equivalents: `checkpoint.sh` in place of the spec's `checkpoint-write.sh` + `checkpoint-verify.sh` split, and `validate-gate.sh` in place of the spec's `file-gate.sh`. This skill calls the deployed equivalents for parity with the live script set. If the spec-aligned names are added later under separate stories (E28-S9..E28-S16), the inline calls in `setup.sh` / `finalize.sh` can be updated without touching the skill body.
+Architecture §10.26.3 specifies the foundation-script surface. The live `plugins/gaia/scripts/` set exposes `checkpoint.sh` (with `write` / `read` / `validate` subcommands — same canonical name used by architecture §10.26.3 since E28-S172) alongside `validate-gate.sh`, which is the deployed equivalent for the spec's `file-gate.sh`. This skill calls the deployed names for parity with the live script set. If the `file-gate.sh` spec name is added later under a separate story (E28-S9..E28-S16), the inline calls in `setup.sh` / `finalize.sh` can be updated without touching the skill body. The checkpoint surface no longer requires reconciliation — `checkpoint.sh` is the canonical name in both the spec and the product.
 
 ## Inputs
 

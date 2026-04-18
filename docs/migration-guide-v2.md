@@ -443,6 +443,18 @@ GAIA v2 replaces this entire stack with Claude Code's native primitives:
 
 The v2 system runs entirely on Claude Code primitives, with no custom engine. Token usage drops 40–55% on mechanical workflows (per NFR-048). Feature parity with v1.127.2-rc.1 is preserved (per NFR-053).
 
+### Legacy script names — redirection note
+
+Early revisions of the architecture spec and several sprint-era story artifacts referenced three separate scripts for the checkpoint surface. During native conversion (E28-S10) those three were consolidated into a single `plugins/gaia/scripts/checkpoint.sh` dispatcher with `write` / `read` / `validate` subcommands. If you encounter any of the legacy names in older docs, stories, or custom hooks, map them as follows:
+
+| Legacy name | Consolidated replacement |
+|-------------|--------------------------|
+| `checkpoint-write.sh` | `checkpoint.sh write` |
+| `checkpoint-verify.sh` | `checkpoint.sh validate` |
+| `sha256-verify.sh` | Absorbed by `checkpoint.sh` — the `write` subcommand stamps `files_touched` sha256 checksums and the `validate` subcommand re-checks them. There is no standalone `sha256-verify.sh` in the shipped product. |
+
+Only the consolidated `checkpoint.sh` ships under `plugins/gaia/scripts/`. The legacy names are retained in historical story artifacts (E28-S10, E28-S83, E28-S105, E28-S136) for traceability; no live skill, hook, or script references them.
+
 The migration this guide describes is the **end-user cutover** that retires the v1 engine on a single user's machine after the v2 plugins are published. It is NOT used during the conversion program itself.
 
 ### Key references

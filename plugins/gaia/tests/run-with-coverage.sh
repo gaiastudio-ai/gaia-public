@@ -8,9 +8,11 @@
 #    some .bats file (the NFR-052 binding public-function coverage gate).
 # 4. If kcov is available, runs the suite under kcov to produce an advisory
 #    line-coverage report at coverage/ (HTML + JSON). kcov is optional — a
-#    missing kcov is NOT a hard failure of this wrapper; the CI job has a
-#    separate `kcov preflight` step that upgrades a missing kcov to a fatal
-#    error per AC-EC7.
+#    missing kcov is NOT a hard failure of this wrapper. The CI job does NOT
+#    install kcov on Ubuntu 24.04 (noble) because the package is not in the
+#    default apt repositories there (see E28-S175); line-coverage is therefore
+#    skipped in CI today. The authoritative public-function coverage gate
+#    (step 3, NFR-052) does not depend on kcov.
 #
 # Exit codes:
 #   0 — bats suite green AND every public function covered

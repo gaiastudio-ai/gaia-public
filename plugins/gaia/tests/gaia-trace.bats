@@ -92,7 +92,7 @@ ES
 # ================================================================
 
 @test "gaia-trace: validate-gate.sh traceability_exists passes when matrix exists" {
-  : > "$TEST_ARTIFACTS/traceability-matrix.md"
+  printf 'x\n' > "$TEST_ARTIFACTS/traceability-matrix.md"
   run "$SCRIPTS_DIR/validate-gate.sh" traceability_exists
   [ "$status" -eq 0 ]
 }

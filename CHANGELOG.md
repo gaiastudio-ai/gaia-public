@@ -9,6 +9,31 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) for t
 
 ## [Unreleased]
 
+### Sprint 24 (E28 — GAIA Native Conversion Program)
+
+#### Added
+
+- **E28-S170** manual integration-test plan for `/gaia-migrate` edge cases
+  AC-EC2 / AC-EC3 / AC-EC5 / AC-EC7 — the four edge cases from E28-S131 that
+  are not bats-testable without significant environmental scaffolding
+  (tmpfs size caps, corrupt-byte fixtures, sidecar schema drift fixtures,
+  signal-interrupt timing).
+  - Test plan document: `docs/test-artifacts/E28-S170-gaia-migrate-edge-cases-test-plan.md`
+    (project-root artifact; not in this repo). Nine sections: executive
+    summary, prerequisites (fixture + tooling), four scenarios (one per
+    edge case) with environment setup / reproduction steps / expected
+    behavior / pass-fail criteria / teardown, reporting, traceability.
+  - `gaia-public/plugins/gaia/skills/gaia-migrate/SKILL.md` — added a
+    cross-reference to the test plan under the References section so the
+    skill points users at the plan for advanced (manual) edge-case
+    verification.
+  - Observed-baseline recording (AC-EC5 and AC-EC7): the current
+    `gaia-migrate.sh` implementation does not detect sidecar schema drift
+    (EC5) and does not install a SIGINT trap handler (EC7). Both gaps are
+    logged in the story's Findings table as tech-debt / low-severity
+    follow-ups for future stories. Backup-before-migration ordering
+    preserves v1 state through the interrupt window.
+
 ### Sprint 23 (E28 — GAIA Native Conversion Program, Cluster 18 close)
 
 #### Added

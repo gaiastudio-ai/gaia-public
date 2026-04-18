@@ -52,6 +52,7 @@ The mechanical migration steps are documented in `gaia-public/docs/migration-gui
 
 - Migration guide (authoritative manual-steps source): `gaia-public/docs/migration-guide-v2.md` (E28-S130)
 - Backing script: `plugins/gaia/scripts/gaia-migrate.sh`
+- Manual integration-test plan (edge cases AC-EC2/3/5/7): `docs/test-artifacts/E28-S170-gaia-migrate-edge-cases-test-plan.md` (E28-S170) — reproducible steps, expected behavior, and environment setup for edge cases that are not bats-testable without dedicated scaffolding (tmpfs size caps, corrupt-byte fixtures, signal-interrupt timing)
 - ADR-042: Scripts-over-LLM for Deterministic Operations
 - ADR-048: Engine Deletion as Program-Closing Action
 - FR-326: Config Split (drives subtask 4.3 partition rules)

@@ -462,3 +462,62 @@ The migration this guide describes is the **end-user cutover** that retires the 
 5. Prerequisites blocks the migration with `marketplace list` checks.
 
 If all five items check out, the guide is mechanically correct. Substantive accuracy (e.g., "does this command actually work?") requires running through the steps in a sandbox — out of scope for a doc review.
+
+---
+
+## 10. Automated migration via `/gaia-migrate`
+
+The 9 sections above describe the **manual** migration. After the v2 plugins are installed (§3), the `/gaia-migrate` skill (E28-S131) automates §1.3 (drain checkpoints — manual still required), §2 (Backup), §4 (Migrate Templates), §5 (Migrate Memory), and §6 (Update CLAUDE.md, partial), plus the §7 Verify validation step. The §1.1 / §1.2 prerequisite checks and §3 Install are still manual (they require user judgement and the marketplace UI).
+
+### Recommended flow
+
+1. Complete §1 Prerequisites manually (§1.1 marketplace check, §1.2 version compatibility, §1.3 checkpoint drain, §1.4 settings.json backup).
+2. Install the v2 plugins per §3.
+3. Run `/gaia-migrate` with dry-run first:
+
+```
+$ /gaia-migrate dry-run
+```
+
+The skill prints the planned operations (backup destination, migration steps, validation checks) without writing anything.
+
+4. If the plan looks right, apply:
+
+```
+$ /gaia-migrate apply
+```
+
+The skill creates `.gaia-migrate-backup/{timestamp}/` BEFORE any migration write, runs the 3 migration subtasks, validates, and prints a `SUCCESS` or `FAILED` banner with the backup path and the exact restore command.
+
+### Equivalence to manual steps
+
+| Manual section | Automated by `/gaia-migrate`? |
+|---|---|
+| §1.1 marketplace plugin check | ❌ — manual (user must run `/plugin marketplace list`) |
+| §1.2 version compatibility | ❌ — manual |
+| §1.3 in-flight checkpoint drain | ❌ — manual (user judgement on drain vs discard) |
+| §1.4 settings.json backup | ✅ — covered by §2 backup step (the entire `.claude/` is backed up) |
+| §2 Backup (all directories + manifest) | ✅ — `.gaia-migrate-backup/{timestamp}/` with sha256 manifest |
+| §3 Install | ❌ — manual (marketplace UI) |
+| §4 Migrate Templates | ✅ — `_migrate_templates()` (verify-only when v2 path matches v1) |
+| §5 Migrate Memory | ✅ — `_migrate_sidecars()` (verify-only when layouts match) |
+| §6 Update CLAUDE.md | ⚠️ — partial (skill backs up CLAUDE.md but does not auto-rewrite — user does §6.1/§6.2 manually) |
+| §7 Verify | ✅ — `_run_validate()` (plugin discovery + YAML parse + structural check) |
+| §8 Rollback | ✅ — restore command printed in both SUCCESS and FAILED summaries |
+
+### Rollback after `/gaia-migrate`
+
+The skill never auto-restores. On `FAILED` (or if you want to roll back a successful migration), run the printed `cp -a` command verbatim:
+
+```
+$ cp -a "$HOME/path/to/.gaia-migrate-backup/{ts}/." "$HOME/path/to/project/"
+```
+
+Then uninstall the v2 plugins per §8.2.
+
+### When to use the manual flow instead
+
+- You need fine-grained control over which subdirectories migrate (the skill is all-or-nothing per subtask).
+- The skill's `HALT: ...` diagnostic shows your install is partial or already migrated — read §1 Prerequisites and decide whether to repair, force, or stop.
+- You're migrating a non-standard layout (e.g., `_memory/` lives outside `{project-root}/_memory/`). The skill assumes the canonical paths.
+

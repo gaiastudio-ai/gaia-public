@@ -3,6 +3,13 @@
 # gaia-storytelling (converted from _gaia/creative/workflows/storytelling/).
 #
 # Refs: E28-S104, FR-323, NFR-048, NFR-053, ADR-041
+#
+# Shell idioms: the `awk '/^## References/ { in_refs = 1 } !in_refs { print }'`
+# pattern used below for trailing-section removal follows the state-machine
+# convention codified in `gaia-shell-idioms` (see E28-S168 and the
+# gaia-shell-idioms/SKILL.md "awk range bug" section). Do NOT rewrite it as
+# `awk '/^## References/,0'` or any `/start/,/end/` range — see the skill for
+# why that idiom fails when start and end patterns can match the same line.
 
 setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../.." && pwd)"

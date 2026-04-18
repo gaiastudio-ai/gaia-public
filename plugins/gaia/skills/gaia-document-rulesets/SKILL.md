@@ -13,7 +13,7 @@ allowed-tools: [Read, Write, Edit, Grep]
 
 Provide the document-type-aware validation rulesets used by the validator (Val) when checking planning and test artifacts. This skill supplies the rules — it does not decide *when* to run them. Callers (the validator subagent, `gaia-val-validate`, `gaia-val-validate-plan`) detect the artifact type, load the matching section(s) of this skill JIT, and apply the rules listed there.
 
-Every section marker below is a contract. The JIT section loader (per `_gaia/core/engine/workflow.xml` Step 6 action on `skill_section_overrides`) scans for `<!-- SECTION: {id} -->` markers dynamically. Every caller reference like `document-rulesets§prd-rules` resolves to the matching marker in this file and reads the body until the corresponding `<!-- END SECTION -->`.
+Every section marker below is a contract. Under the ADR-041 native execution model, the Claude Code skill runtime resolves caller references like `document-rulesets§prd-rules` by scanning this file for the matching `<!-- SECTION: {id} -->` marker and reading the body until the corresponding `<!-- END SECTION -->`. Section resolution is native to the skill runtime — there is no separate engine to consult.
 
 ## Critical Rules
 

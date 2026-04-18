@@ -15,10 +15,12 @@ Provide the canonical read/write operations over per-agent memory sidecars (`dec
 
 Every section marker below is part of the public JIT contract consumed by callers such as:
 
-- The session-save action in `_gaia/core/engine/workflow.xml` Step 7 (loads `decision-formatting`, `context-summarization`, and `session-save`)
-- Tier-based session load in Step 3 (loads `session-load`)
-- Memory-hygiene workflows (load `stale-detection` and `deduplication`)
+- The session-save path in the native Claude Code skill runtime (loads `decision-formatting`, `context-summarization`, and `session-save` JIT when a workflow ends)
+- Tier-based session load invoked by the skill runtime when an agent is adopted (loads `session-load`)
+- Memory-hygiene skills (load `stale-detection` and `deduplication`)
 - Budget-sensitive save paths (load `budget-monitoring`, which is also replicated in the companion cross-agent skill)
+
+Sections are resolved by scanning for `<!-- SECTION: {id} -->` and `<!-- END SECTION -->` markers in this file — there is no external engine or Step number to consult. This is the ADR-041 native execution contract (introduced when the legacy XML-engine workflow layer was retired under E28-S126).
 
 Section IDs MUST match exactly. Renaming or merging sections is a breaking change.
 

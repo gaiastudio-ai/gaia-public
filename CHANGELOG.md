@@ -13,6 +13,21 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) for t
 
 #### Added
 
+- **E28-S171** `docs/INDEX.md` — single discovery entry point for GAIA
+  artifact directories. Addresses E28-S132 triage finding F1 (missing-setup,
+  low severity).
+  - `gaia-public/docs/INDEX.md` — new top-level index describing the three
+    GAIA artifact directories (`planning-artifacts/`,
+    `implementation-artifacts/`, `test-artifacts/`) with role descriptions
+    and typical contents for each. Clarifies that these directories live
+    under each GAIA project's own `docs/` tree (not vendored into the
+    marketplace repo).
+  - `gaia-public/README.md` — added a Documentation section linking to
+    `docs/INDEX.md` (AC3 cross-link).
+  - `gaia-public/tests/atdd/e28-s171-docs-index-entry-point.bats` — ATDD
+    coverage: ten assertions covering file existence, per-directory link
+    presence, per-directory role-description prose, README link-back,
+    top-level heading, non-trivial length.
 - **E28-S170** manual integration-test plan for `/gaia-migrate` edge cases
   AC-EC2 / AC-EC3 / AC-EC5 / AC-EC7 — the four edge cases from E28-S131 that
   are not bats-testable without significant environmental scaffolding

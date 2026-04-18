@@ -74,6 +74,12 @@ Claude Code auto-discovers plugin components at install time from conventional s
 4. **Symlinks work on macOS/Linux but are a portability hazard.** `git archive` and the marketplace clone step do not always preserve symlink targets cleanly. This plugin deliberately avoids symlinks.
 5. **Post-install `/reload-plugins` is mandatory** before newly installed components become callable in the current session. See the "Install" section above.
 
+## Documentation
+
+For a discovery entry point into the GAIA artifact directories
+(`planning-artifacts/`, `implementation-artifacts/`, `test-artifacts/`) and
+the role of each, see [docs/INDEX.md](./docs/INDEX.md).
+
 ## License
 
 AGPL-3.0 — see [LICENSE](./LICENSE).

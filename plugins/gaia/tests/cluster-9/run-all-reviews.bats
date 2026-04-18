@@ -24,7 +24,13 @@ SCRIPTS_DIR="$(cd "${BATS_TEST_DIRNAME}/../../scripts" && pwd)"
 setup() {
   common_setup
   TEST_PROJECT="$TEST_TMP"
-  ART="$TEST_PROJECT/docs/implementation-artifacts/stories"
+  # Post-E28-S99, review-gate.sh::locate_story_file resolves story files
+  # directly under IMPLEMENTATION_ARTIFACTS (flat directory), matching
+  # sprint-state.sh. The fixture must be installed at that flat location,
+  # not under a stories/ subdirectory — otherwise reviewers run but the
+  # writeback target resolves to "no story file found" and Review Gate
+  # rows stay UNVERIFIED. See E28-S174.
+  ART="$TEST_PROJECT/docs/implementation-artifacts"
   mkdir -p "$ART"
 
   export PROJECT_PATH="$TEST_PROJECT"

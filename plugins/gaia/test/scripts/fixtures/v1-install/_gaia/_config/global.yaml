@@ -1,0 +1,21 @@
+framework_name: "GAIA"
+framework_version: "1.127.2-rc.1"
+user_name: "test-user"
+project_name: "test-project"
+project_path: "."
+project_root: "{project-root}"
+memory_path: "{project-root}/_memory"
+checkpoint_path: "{project-root}/_memory/checkpoints"
+installed_path: "{project-root}/_gaia"
+config_path: "{project-root}/_gaia/_config"
+sizing_map:
+  S: 2
+  M: 5
+  L: 8
+  XL: 13
+ci_cd:
+  promotion_chain:
+    - id: staging
+      branch: staging
+val_integration:
+  template_output_review: true

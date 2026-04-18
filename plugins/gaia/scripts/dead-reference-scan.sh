@@ -115,6 +115,13 @@ is_allowlisted() {
   # E28-S129 bats file — asserts CLAUDE.md does NOT contain legacy paths, so its
   # negative-match assertions include the retired tokens as literals.
   [[ "$path" == */plugins/gaia/test/scripts/e28-s129-*.bats ]] && return 0
+  # E28-S131 migration tooling — gaia-migrate skill + script + bats + fixture all
+  # intentionally reference v1 retired paths (workflow.xml, etc.) for v1 detection
+  # and migration. Test fixtures simulate a v1 install and contain the literal files.
+  [[ "$path" == */plugins/gaia/skills/gaia-migrate/SKILL.md ]] && return 0
+  [[ "$path" == */plugins/gaia/scripts/gaia-migrate.sh ]] && return 0
+  [[ "$path" == */plugins/gaia/test/scripts/e28-s131-*.bats ]] && return 0
+  [[ "$path" == */test/scripts/fixtures/v1-install/* ]] && return 0
   # next-step.sh is the fallback mechanism itself — it ships with a
   # graceful-missing-file handler and all references are part of implementing
   # the fallback (see Val v1 Finding 2).

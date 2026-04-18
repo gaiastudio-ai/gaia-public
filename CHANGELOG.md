@@ -13,6 +13,47 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) for t
 
 #### Added
 
+- **E28-S131** `/gaia-migrate` skill — automate v1 → v2 upgrade. Final story
+  of Cluster 18.
+  - `gaia-public/plugins/gaia/skills/gaia-migrate/SKILL.md` — user-facing
+    flow (frontmatter `name: gaia-migrate` + description + `when_to_use`),
+    confirms intent, runs dry-run first, surfaces SUCCESS/FAILED banner,
+    cross-references the migration guide as the authoritative manual-steps
+    source.
+  - `gaia-public/plugins/gaia/scripts/gaia-migrate.sh` — backing script
+    (per ADR-042 scripts-over-LLM). Modes: `apply`, `dry-run`. Central
+    `_safe_write()` helper gates every cp/mv/rm/mkdir behind the dry-run
+    flag — single safety mechanism for AC5 dry-run idempotency and
+    AC-EC6 dry-run-accidental-write protection. Pipeline: detect → backup
+    → 3 migration subtasks (templates, sidecars, config-split per FR-326)
+    → validate → SUCCESS/FAILED summary with restore command.
+  - Backup is always created BEFORE any migration write (AC2).
+    Timestamped at `{project-root}/.gaia-migrate-backup/{YYYY-MM-DD-HHMMSS}/`
+    with `backup-manifest.yaml` containing sha256 per file.
+  - Config split (subtask 4.3) implements FR-326 partition: 17 local keys
+    stay in `_gaia/_config/global.yaml`, 6 shared keys move to
+    `{project-root}/config/project-config.yaml`.
+  - Sidecar migration (subtask 4.2) is verify-only — v1 and v2 layouts
+    match under current ADR set.
+  - Validation (AC4) checks plugin discoverability, YAML parse, and
+    structural keys. `/gaia-help` smoke-test deferred to manual follow-up
+    (can't invoke from script context).
+  - 24 bats tests at `plugins/gaia/test/scripts/e28-s131-gaia-migrate.bats`
+    cover SKILL.md frontmatter (4), backup-before-write (4), 3 migration
+    steps + partition (5), validation banners (2), dry-run + idempotency
+    (3), edge cases AC-EC1 / AC-EC6 / re-run safety / no-v1-detected (4),
+    arg parsing (2). v1 fixture tree at
+    `plugins/gaia/test/scripts/fixtures/v1-install/` (9 files).
+  - `dead-reference-scan.sh` allowlist extended for the new skill, script,
+    bats file, and fixture tree (all intentionally reference v1 retired
+    paths for detection / migration purposes).
+  - `gaia-public/docs/migration-guide-v2.md` extended with §10
+    "Automated migration via /gaia-migrate" cross-referencing the skill
+    and listing equivalence between manual sections and automated steps.
+
+  This story closes Cluster 18 (Cleanup & Migration) — the final 5
+  retirement / migration stories (S126-S131) are now all merged.
+
 - **E28-S130** v1 → v2 migration guide. Expanded the E28-S126 stub at
   `gaia-public/docs/migration-guide-v2.md` to a full 9-section guide
   covering: Prerequisites (with `/plugin marketplace list` gate),

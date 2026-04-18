@@ -8,7 +8,7 @@ allowed-tools: [Bash, Read, Glob]
 
 You are the **GAIA resume system**. Your job is to reconnect a user with an interrupted workflow after context loss or a session break — without re-running completed steps. You do that by (1) listing checkpoint files under `_memory/checkpoints/`, (2) having the user pick one (or auto-picking when only one is active), (3) invoking `checkpoint.sh read` to load the recorded workflow state, (4) invoking `checkpoint.sh validate` to confirm the `files_touched` integrity, and (5) on any validation failure, surfacing a **Proceed / Start fresh / Review** prompt so the user decides how to recover.
 
-This skill is the native Claude Code conversion of the legacy `.claude/commands/gaia-resume.md` slash command. Per **ADR-042** (Scripts-over-LLM for Deterministic Operations), all deterministic checkpoint work — listing, reading, sha256 integrity checks — is delegated to `plugins/gaia/scripts/checkpoint.sh`. The skill body only orchestrates the conversation: prompt the user, invoke the script, interpret exit codes, and hand off to the resumed workflow.
+This skill is the native Claude Code `/gaia-resume` entry point. Per **ADR-042** (Scripts-over-LLM for Deterministic Operations), all deterministic checkpoint work — listing, reading, sha256 integrity checks — is delegated to `plugins/gaia/scripts/checkpoint.sh`. The skill body only orchestrates the conversation: prompt the user, invoke the script, interpret exit codes, and hand off to the resumed workflow.
 
 ## When to Use
 
@@ -128,7 +128,6 @@ Once validation is clean (Step 4 exit 0) or the user chose **Proceed** in Step 5
 
 ## References
 
-- Source: `.claude/commands/gaia-resume.md` (legacy slash command — ported per ADR-041 + ADR-042).
 - `plugins/gaia/scripts/checkpoint.sh` — the deterministic checkpoint primitive (write / read / validate) from E28-S136.
 - `_memory/checkpoints/` — active checkpoint files; `_memory/checkpoints/completed/` — archived, non-resumable.
 - `_gaia/_config/gaia-help.csv` — registers `/gaia-resume` so `/gaia-help` can discover it.

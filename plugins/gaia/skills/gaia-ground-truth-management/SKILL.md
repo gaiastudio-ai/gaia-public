@@ -13,7 +13,7 @@ allowed-tools: [Read, Write, Edit, Grep]
 
 Back Val's ground-truth rewrite path with deterministic operations over the per-agent `ground-truth.md` sidecar file. This skill is the body-of-knowledge reference used by every Val workflow that touches ground truth — `val-validate-artifact`, `val-validate-plan`, `val-refresh-ground-truth`, and brownfield seeding.
 
-Sections below are loaded JIT by callers (per `_gaia/core/engine/workflow.xml` Step 6). Each section marker is part of the public contract: renaming or removing one is a breaking change against the calling workflows.
+Sections below are loaded JIT by callers under the ADR-041 native execution model: the Claude Code skill runtime scans for `<!-- SECTION: {id} -->` and `<!-- END SECTION -->` markers in this file and loads only the requested section body. Each section marker is part of the public contract — renaming or removing one is a breaking change against every caller that references it by ID.
 
 ## Critical Rules
 

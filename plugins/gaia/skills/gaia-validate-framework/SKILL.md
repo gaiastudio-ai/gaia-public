@@ -17,7 +17,7 @@ This skill is the native Claude Code conversion of the legacy validate-framework
 - **Check every path reference in every file.** Every `{installed_path}/...`, `{project-root}/...`, and `{project-path}/...` reference must resolve to an actual file. Dangling references are CRITICAL findings.
 - **Verify config resolution works end-to-end.** Load `global.yaml` via `scripts/resolve-config.sh` (ADR-044) and confirm it parses. Under the native model there is no `.resolved/` pre-compilation step — config is resolved at skill-invocation time. Flag `global.yaml` parse failure as CRITICAL.
 - **Report format preserves the legacy output shape.** Severity column, section column, finding column, suggested-fix column. Downstream tooling (CI checks, triage workflows) consume this shape — do NOT invent a new one.
-- **Fail fast when manifest.yaml is missing (AC-EC3).** If `_gaia/_config/manifest.yaml` is absent, emit a CRITICAL finding `manifest.yaml missing — cannot validate framework` and exit non-zero. No partial report.
+- **Fail fast when manifest.yaml is missing (AC-EC3).** If `_gaia/_config/manifest.yaml` is absent, emit a CRITICAL finding `manifest.yaml missing — cannot validate framework` and exit non-zero. No partial report. This is the strict-mode variant of the graceful-missing-file contract documented in `plugins/gaia/scripts/lib/missing-file-fallback.sh` (E28-S162): validate-framework treats the manifest as a hard prerequisite (strict = exit non-zero with an error), whereas other callers (next-step.sh, gaia-help) treat similar retired-path files as graceful no-ops. Strictness is a per-caller policy, not a helper default.
 - **Use inline `!` bash for deterministic ops (ADR-042).** Manifest reads, directory listings, and `shasum` go through inline `!` bash. Do NOT re-implement manifest parsing in LLM prose.
 
 ## Inputs
@@ -144,3 +144,4 @@ Grouping: CRITICAL first, then WARNING, then INFO. Within each severity, sort by
 - FR-323 — Native Skill Format Compliance.
 - NFR-053 — Functional parity with the legacy task.
 - Reference implementation: `plugins/gaia/skills/gaia-fix-story/SKILL.md`.
+- `plugins/gaia/scripts/lib/missing-file-fallback.sh` (E28-S162): shared bash helper; this skill adopts the strict variant of its contract for manifest.yaml (AC-EC3).

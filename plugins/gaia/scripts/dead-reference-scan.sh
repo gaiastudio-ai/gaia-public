@@ -126,6 +126,12 @@ is_allowlisted() {
   # graceful-missing-file handler and all references are part of implementing
   # the fallback (see Val v1 Finding 2).
   [[ "$path" == */plugins/gaia/scripts/next-step.sh ]] && return 0
+  # E28-S162 — the shared missing-file graceful fallback helper and its smoke
+  # test legitimately name the retired files in docstrings/examples because the
+  # helper IS the fallback mechanism for those exact paths. next-step.sh above
+  # already has this carve-out for the same reason.
+  [[ "$path" == */plugins/gaia/scripts/lib/missing-file-fallback.sh ]] && return 0
+  [[ "$path" == */plugins/gaia/scripts/tests/smoke-e28-s162.sh ]] && return 0
   # gaia-help/SKILL.md IS the no-hallucination fallback contract; its
   # references document the AC-EC2 fallback mechanism and are guarded by
   # e28-s126-gaia-help-fallback.bats (Val v1 Finding 8).

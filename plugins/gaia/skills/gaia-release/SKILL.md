@@ -82,7 +82,7 @@ Drop `--dry-run` and run the bump for real:
 /gaia-build-configs
 ```
 
-Stage any regenerated `.resolved/` files alongside the bump in the next step.
+Stage any regenerated resolved-config artifacts alongside the bump in the next step.
 
 ### Step 5 — Commit the bump
 

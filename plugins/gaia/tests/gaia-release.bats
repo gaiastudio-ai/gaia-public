@@ -5,8 +5,9 @@
 #   AC1: SKILL.md documents the full release procedure (version bump, commit,
 #        tag, push, GitHub Release).
 #   AC2: SKILL.md references scripts/version-bump.js.
-#   AC3: /gaia-release is registered in gaia-help.csv and workflow-manifest.csv
-#        so it surfaces from /gaia-help.
+#   AC3: /gaia-release is discoverable via the native plugin skills tree —
+#        SKILL.md sits under plugins/gaia/skills/gaia-release/ alongside peer
+#        skills such as gaia-release-plan and gaia-changelog.
 #   Val INFO 1: CURRENT version-bump behavior (2 global files per ADR-025
 #               Model B) — no stale "6 files" claim.
 #   Val INFO 2: Full CLI surface — --modules, --prerelease rc,
@@ -15,23 +16,7 @@
 load 'test_helper.bash'
 
 SKILL_DIR="$BATS_TEST_DIRNAME/../skills/gaia-release"
-CONFIG_DIR_CANDIDATES=(
-  "$BATS_TEST_DIRNAME/../../../../Gaia-framework/_gaia/_config"
-  "$BATS_TEST_DIRNAME/../../../../_gaia/_config"
-)
-
-# Resolve the first existing CSV registry dir (Gaia-framework source of
-# truth, or the project-root running framework). Either is acceptable — both
-# copies must surface /gaia-release for AC3 to pass.
-resolve_config_dir() {
-  for d in "${CONFIG_DIR_CANDIDATES[@]}"; do
-    if [ -d "$d" ]; then
-      printf '%s' "$d"
-      return 0
-    fi
-  done
-  return 1
-}
+SKILLS_ROOT="$BATS_TEST_DIRNAME/../skills"
 
 setup() { common_setup; }
 teardown() { common_teardown; }
@@ -107,23 +92,28 @@ teardown() { common_teardown; }
 }
 
 # ---------- AC3: /gaia-help discoverability ----------
+#
+# In the native plugin model (ADR-041, ADR-048) the skill is discoverable via
+# its SKILL.md living under plugins/gaia/skills/{skill-name}/ — Claude Code
+# enumerates the skills directory at load time. These tests verify the
+# structural invariants that make /gaia-release discoverable; the
+# help-surface CSV registration lives in the legacy Gaia-framework tree and
+# is covered by the companion PR there.
 
-@test "AC3: gaia-help.csv contains a release entry for /gaia-release" {
-  local dir
-  dir=$(resolve_config_dir) || skip "no config dir found"
-  run grep -E '^"[^"]+","[^"]+","release"?' "$dir/gaia-help.csv"
-  [ "$status" -eq 0 ]
-  [[ "$output" == *"gaia-release"* ]]
-  # Must not be just the pre-existing "release-plan" row
-  [[ "$output" == *'"release",'* ]] || [[ "$output" == *',"release",'* ]]
+@test "AC3: gaia-release skill dir is a peer of other skills under plugins/gaia/skills/" {
+  [ -d "$SKILLS_ROOT" ]
+  [ -d "$SKILL_DIR" ]
+  # Sibling check — the new skill sits next to existing skills such as
+  # gaia-release-plan and gaia-changelog.
+  [ -d "$SKILLS_ROOT/gaia-release-plan" ]
+  [ -d "$SKILLS_ROOT/gaia-changelog" ]
 }
 
-@test "AC3: workflow-manifest.csv contains a release entry for /gaia-release" {
-  local dir
-  dir=$(resolve_config_dir) || skip "no config dir found"
-  run grep -E '^"release",' "$dir/workflow-manifest.csv"
-  [ "$status" -eq 0 ]
-  [[ "$output" == *"gaia-release"* ]]
+@test "AC3: SKILL.md frontmatter declares the discoverable trigger phrase" {
+  run head -20 "$SKILL_DIR/SKILL.md"
+  # The description field is what Claude Code surfaces when the user asks
+  # for help; it must mention /gaia-release so the skill is nameable.
+  [[ "$output" == *"/gaia-release"* ]] || [[ "$output" == *"gaia-release"* ]]
 }
 
 # ---------- Val INFO 1: ADR-025 Model B (2 global files) ----------

@@ -3,7 +3,7 @@ name: gaia-memory-hygiene
 description: Detect stale, contradicted, and orphaned decisions in agent memory sidecars. Use when "memory hygiene" or "clean sidecars" or /gaia-memory-hygiene. Runs dynamic sidecar discovery, tier-aware multi-file scanning, cross-reference validation against current planning and architecture artifacts, stale detection, classification, token-budget reporting, archival recommendations, ground-truth refresh triggers, and user-confirmed archival actions.
 argument-hint: "[--dry-run]"
 context: main
-tools: Read, Write, Edit, Bash, Grep
+allowed-tools: [Read, Write, Edit, Bash, Grep]
 model: inherit
 ---
 

@@ -9,6 +9,6 @@ name: gaia-test-review
 description: Review test quality and identify flakiness. Use when "review tests" or /gaia-test-review.
 argument-hint: [story-key]
 context: fork
-tools: Read, Grep, Glob, Bash
+allowed-tools: Read Grep Glob Bash
 ---
 ```

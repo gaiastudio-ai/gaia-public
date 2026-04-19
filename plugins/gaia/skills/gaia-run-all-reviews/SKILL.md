@@ -3,7 +3,7 @@ name: gaia-run-all-reviews
 description: Run all 6 review workflows sequentially via subagents. Use when "run all reviews".
 argument-hint: "[story-key]"
 context: fork
-tools: Read, Grep, Glob, Bash
+allowed-tools: [Read, Grep, Glob, Bash]
 ---
 
 ## Mission

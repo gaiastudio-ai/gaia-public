@@ -11,6 +11,42 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) for t
 
 ### Sprint 24 (E28 — GAIA Native Conversion Program)
 
+#### Reverted
+
+- **E28-S187 — reverts E28-S185**: restore `allowed-tools:` as the canonical
+  SKILL.md frontmatter field across all 115 plugin skills and 3 enterprise
+  mirror skills. E28-S185 renamed `allowed-tools:` → `tools:` based on a
+  misreading of the Claude Code skills documentation at
+  https://code.claude.com/docs/en/skills. On 2026-04-19 the official docs
+  were re-read and confirmed that `allowed-tools:` IS the canonical field
+  name (both the YAML list form `allowed-tools: [A, B]` and the
+  space/comma-separated string form `allowed-tools: A, B` are accepted).
+  The "0 skills" symptom that motivated E28-S185 is unrelated — it is a
+  known limitation of `/reload-plugins` not counting plugin-shipped skills;
+  Anthropic's own `claude-code-setup` plugin reproduces the same counter
+  behavior while shipping `tools:` in its SKILL.md.
+  - Net effect: documented canonical field name restored; no behavioral
+    change because both forms are accepted by the Claude Code skill loader.
+  - `plugins/gaia/skills/*/SKILL.md` (115 files): `tools: A, B, C` →
+    `allowed-tools: [A, B, C]` (YAML list form).
+  - `gaia-enterprise/plugins/gaia-enterprise/skills/*/SKILL.md` (3 files):
+    re-reverted in lockstep in the enterprise repo.
+  - `plugins/gaia/scripts/fix-skill-tools-field.sh` removed; replaced by
+    `plugins/gaia/scripts/revert-skill-tools-field.sh` — idempotent
+    companion script that converts `tools: A, B, C` back to
+    `allowed-tools: [A, B, C]`.
+  - `plugins/gaia/tests/skill-frontmatter-guard.bats` flipped: now enforces
+    that every plugin SKILL.md uses `allowed-tools:` (not `tools:`) and
+    that values use YAML list form.
+  - `.github/scripts/lint-skill-frontmatter.sh` flipped: rejects the
+    retired `tools:` top-level key, validates the `allowed-tools:` key
+    (canonical field).
+  - Parity bats suites (44 files), shell smoke scripts (10 files), and
+    `_reference-frontmatter.md` docs (10 files) reverted to reference the
+    restored `allowed-tools:` field.
+  - `plugins/gaia/tests/e28-s187-revert-tools-field.bats`: new regression
+    test covering AC1–AC6 and round-trip behavior of the revert script.
+
 #### Added
 
 - **E28-S171** `docs/INDEX.md` — single discovery entry point for GAIA

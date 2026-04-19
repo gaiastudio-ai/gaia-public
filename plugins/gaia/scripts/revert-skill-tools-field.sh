@@ -1,25 +1,31 @@
 #!/usr/bin/env bash
-# fix-skill-tools-field.sh — E28-S185
+# revert-skill-tools-field.sh — E28-S187
 #
-# Rename the legacy `allowed-tools:` YAML frontmatter key to Claude Code's
-# canonical `tools:` key across all plugin SKILL.md files, and normalize
-# the value to a comma-separated string.
+# Reverts the E28-S185 rename: restores `allowed-tools:` as the canonical
+# YAML frontmatter key in SKILL.md, in list form (`[A, B, C]`). The
+# official Claude Code skills documentation at
+# https://code.claude.com/docs/en/skills confirms `allowed-tools:` is the
+# canonical key; E28-S185 mistakenly renamed it to `tools:` based on a
+# misreading of those docs.
 #
-# Conversion rules (applied ONLY inside the YAML frontmatter block — between
-# the first two `---` fences):
-#   allowed-tools: [A, B, C]   -> tools: A, B, C
-#   allowed-tools: A B C       -> tools: A, B, C
-#   allowed-tools: []          -> (line removed; defaults to inherited tools)
+# Conversion rules (reverse of fix-skill-tools-field.sh, E28-S185) —
+# applied ONLY inside the YAML frontmatter block (between the first two
+# `---` fences):
+#   tools: A, B, C       -> allowed-tools: [A, B, C]
+#   tools: A B C         -> allowed-tools: [A, B, C]
+#   tools: A             -> allowed-tools: [A]
+#   tools:               -> (line removed; no tools to declare)
+#   allowed-tools: ...   -> left untouched (already reverted)
 #
 # Idempotent: running the script a second time is a no-op because no file
-# contains `allowed-tools:` after a successful first run.
+# contains a top-level `tools:` key after a successful first run.
 #
 # Usage:
-#   fix-skill-tools-field.sh <file> [<file> ...]
+#   revert-skill-tools-field.sh <file> [<file> ...]
 # or
-#   fix-skill-tools-field.sh --plugin-skills       # operate on the 115 plugin SKILLs
-#   fix-skill-tools-field.sh --enterprise-skills   # operate on enterprise mirror SKILLs
-#   fix-skill-tools-field.sh --all                 # both of the above
+#   revert-skill-tools-field.sh --plugin-skills       # operate on the 115 plugin SKILLs
+#   revert-skill-tools-field.sh --enterprise-skills   # operate on enterprise mirror SKILLs
+#   revert-skill-tools-field.sh --all                 # both of the above
 #
 # Exit codes:
 #   0  success (files converted or already clean)
@@ -32,17 +38,17 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 FRAMEWORK_ROOT="$(cd "$REPO_ROOT/.." && pwd)"
 
 # _rewrite_frontmatter <file>
-# Rewrites the file in place, transforming allowed-tools: lines within the
-# YAML frontmatter only. Body content is preserved byte-for-byte.
+# Rewrites the file in place, transforming `tools:` lines within the YAML
+# frontmatter only. Body content is preserved byte-for-byte.
 _rewrite_frontmatter() {
   local file="$1"
   if [ ! -f "$file" ]; then
-    echo "fix-skill-tools-field: not a file: $file" >&2
+    echo "revert-skill-tools-field: not a file: $file" >&2
     return 2
   fi
 
   local tmp
-  tmp="$(mktemp "${TMPDIR:-/tmp}/skill-tools-XXXXXX")"
+  tmp="$(mktemp "${TMPDIR:-/tmp}/skill-tools-revert-XXXXXX")"
   # shellcheck disable=SC2064
   trap "rm -f '$tmp'" RETURN
 
@@ -57,22 +63,22 @@ _rewrite_frontmatter() {
     }
 
     # Only rewrite while we are inside the frontmatter block.
-    in_fm == 1 && /^allowed-tools:[[:space:]]*/ {
+    in_fm == 1 && /^tools:[[:space:]]*/ {
       line = $0
       # Strip the leading key (with any trailing whitespace).
-      sub(/^allowed-tools:[[:space:]]*/, "", line)
+      sub(/^tools:[[:space:]]*/, "", line)
 
-      # Empty value -> drop the line entirely (default inherits parent tools).
-      if (line == "" || line == "[]") { next }
+      # Empty value -> drop the line entirely.
+      if (line == "") { next }
 
-      # Bracketed list: [A, B, C] or [A,B,C] or [A]
+      # Defensive: if already bracketed (should not happen on round-trip
+      # input, but handle gracefully), strip brackets for normalization.
       if (line ~ /^\[.*\]$/) {
         gsub(/^\[[[:space:]]*/, "", line)
         gsub(/[[:space:]]*\]$/, "", line)
       }
 
-      # Normalize: split on comma or whitespace, re-join with ", ".
-      # This handles both "[A, B, C]" (now "A, B, C") and "A B C".
+      # Split on comma or whitespace and re-emit in list form.
       n = 0
       delete toks
       count = split(line, raw, /[,[:space:]]+/)
@@ -83,7 +89,7 @@ _rewrite_frontmatter() {
 
       out = toks[1]
       for (i = 2; i <= n; i++) out = out ", " toks[i]
-      print "tools: " out
+      print "allowed-tools: [" out "]"
       next
     }
 
@@ -97,14 +103,12 @@ _rewrite_frontmatter() {
 }
 
 _collect_plugin_skills() {
-  # 115 plugin SKILL.md files under gaia-public/plugins/gaia/skills/*/SKILL.md
   local base="$REPO_ROOT/plugins/gaia/skills"
   [ -d "$base" ] || return 0
   find "$base" -mindepth 2 -maxdepth 2 -name SKILL.md -type f | sort
 }
 
 _collect_enterprise_skills() {
-  # Enterprise mirror SKILLs (3 files at time of E28-S185).
   local base="$FRAMEWORK_ROOT/gaia-enterprise/plugins/gaia-enterprise/skills"
   [ -d "$base" ] || return 0
   find "$base" -mindepth 2 -maxdepth 2 -name SKILL.md -type f | sort
@@ -154,7 +158,7 @@ main() {
     fi
   done
 
-  printf 'fix-skill-tools-field: processed %d file(s), %d rewritten\n' \
+  printf 'revert-skill-tools-field: processed %d file(s), %d rewritten\n' \
     "$total" "$changed"
 }
 

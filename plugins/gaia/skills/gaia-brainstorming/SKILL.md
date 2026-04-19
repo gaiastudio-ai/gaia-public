@@ -3,7 +3,7 @@ name: gaia-brainstorming
 description: Facilitated brainstorming session using diverse creative techniques. Use when the user wants to run a structured ideation session (mind mapping, SCAMPER, six thinking hats, etc.) with ranked output.
 argument-hint: "[brainstorming topic]"
 context: fork
-tools: Read, Write, Glob
+allowed-tools: [Read, Write, Glob]
 ---
 
 # gaia-brainstorming

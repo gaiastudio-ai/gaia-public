@@ -42,8 +42,8 @@ setup() {
   head -20 "$SKILL_FILE" | grep -q '^context: fork'
 }
 
-@test "E28-S104: storytelling frontmatter tools is present" {
-  head -20 "$SKILL_FILE" | grep -q '^tools:'
+@test "E28-S104: storytelling frontmatter allowed-tools is present" {
+  head -20 "$SKILL_FILE" | grep -q '^allowed-tools:'
 }
 
 # ---------- AC1: Story framework pipeline preserved ----------

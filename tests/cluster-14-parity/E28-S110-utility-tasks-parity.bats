@@ -13,7 +13,7 @@
 #   gaia-help                  ← help.md (45 lines)
 #
 #   AC1: All 5 SKILL.md files exist at canonical paths with valid
-#        frontmatter (name, description, tools) and pass the
+#        frontmatter (name, description, allowed-tools) and pass the
 #        frontmatter linter with zero errors.
 #   AC2..AC6: Each converted SKILL.md preserves every `<critical><mandate>`
 #        (or Instructions step) from its source as explicit prose in a
@@ -105,12 +105,12 @@ setup() {
   done
 }
 
-# ---------- AC1: tools declared ----------
+# ---------- AC1: allowed-tools declared ----------
 
-@test "E28-S110: all 5 new SKILL.md files declare tools" {
+@test "E28-S110: all 5 new SKILL.md files declare allowed-tools" {
   for skill in "${NEW_SKILLS[@]}"; do
     file="$SKILLS_DIR/$skill/SKILL.md"
-    head -30 "$file" | grep -qE '^tools:.+Read'
+    head -30 "$file" | grep -qE '^allowed-tools:.+Read'
   done
 }
 
@@ -292,17 +292,17 @@ setup() {
   done
 }
 
-# ---------- tools is canonical & per-skill-appropriate ----------
+# ---------- allowed-tools is canonical & per-skill-appropriate ----------
 
 @test "E28-S110: gaia-help does NOT require Write (read-only + suggest)" {
   file="$SKILLS_DIR/gaia-help/SKILL.md"
-  # Help should not write artifacts — tools should omit Write
+  # Help should not write artifacts — allowed-tools should omit Write
   # (but this is advisory — skill still passes if Write listed; enforce via grep)
-  grep -qE '^tools:.+' "$file"
+  grep -qE '^allowed-tools:.+' "$file"
 }
 
 @test "E28-S110: gaia-changelog includes Bash (needs git) and Write (emits CHANGELOG.md)" {
   file="$SKILLS_DIR/gaia-changelog/SKILL.md"
-  grep -qE '^tools:.+Bash' "$file"
-  grep -qE '^tools:.+Write' "$file"
+  grep -qE '^allowed-tools:.+Bash' "$file"
+  grep -qE '^allowed-tools:.+Write' "$file"
 }

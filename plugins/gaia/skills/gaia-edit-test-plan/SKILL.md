@@ -2,7 +2,7 @@
 name: gaia-edit-test-plan
 description: Edit an existing test plan by adding new test cases while preserving all existing content. Use when "edit the test plan" or /gaia-edit-test-plan.
 context: fork
-tools: Read, Write, Edit, Grep, Glob, Bash
+allowed-tools: [Read, Write, Edit, Grep, Glob, Bash]
 ---
 
 ## Setup

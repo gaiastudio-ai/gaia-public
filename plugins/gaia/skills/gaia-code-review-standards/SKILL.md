@@ -1,7 +1,7 @@
 ---
 name: gaia-code-review-standards
 description: Universal review checklist, SOLID violation detection, cyclomatic and cognitive complexity thresholds, and the review-gate-completion hard gate enforced before a story moves to done. Shared dev skill JIT-loaded by dev-story, code-review, and stack dev agents.
-tools: Read, Grep
+allowed-tools: [Read, Grep]
 ---
 
 ## About

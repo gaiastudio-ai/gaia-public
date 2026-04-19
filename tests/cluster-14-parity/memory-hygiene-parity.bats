@@ -5,7 +5,7 @@
 # to a native SKILL.md at plugins/gaia/skills/gaia-memory-hygiene/SKILL.md.
 #
 #   AC1: SKILL.md exists with valid YAML frontmatter (name, description,
-#        argument-hint, tools) per E28-S74 schema; passes the
+#        argument-hint, allowed-tools) per E28-S74 schema; passes the
 #        frontmatter linter with zero errors.
 #   AC2: Twelve legacy steps preserved as prose — Dynamic Sidecar Discovery,
 #        Tier-Aware Multi-File Scanning, Reference Artifact Loading,
@@ -61,17 +61,17 @@ setup() {
   awk '/^---$/{n++; next} n==1{print}' "$SKILL_FILE" | grep -qiE '^description:.*(memory|hygiene|sidecar)'
 }
 
-@test "E28-S107: SKILL.md frontmatter has tools field" {
-  awk '/^---$/{n++; next} n==1{print}' "$SKILL_FILE" | grep -q '^tools:'
+@test "E28-S107: SKILL.md frontmatter has allowed-tools field" {
+  awk '/^---$/{n++; next} n==1{print}' "$SKILL_FILE" | grep -q '^allowed-tools:'
 }
 
-@test "E28-S107: SKILL.md frontmatter tools contains Read, Write, Edit, Bash, Grep" {
+@test "E28-S107: SKILL.md frontmatter allowed-tools contains Read, Write, Edit, Bash, Grep" {
   fm=$(awk '/^---$/{n++; next} n==1{print}' "$SKILL_FILE")
-  echo "$fm" | grep -q 'tools:.*Read'
-  echo "$fm" | grep -q 'tools:.*Write'
-  echo "$fm" | grep -q 'tools:.*Edit'
-  echo "$fm" | grep -q 'tools:.*Bash'
-  echo "$fm" | grep -q 'tools:.*Grep'
+  echo "$fm" | grep -q 'allowed-tools:.*Read'
+  echo "$fm" | grep -q 'allowed-tools:.*Write'
+  echo "$fm" | grep -q 'allowed-tools:.*Edit'
+  echo "$fm" | grep -q 'allowed-tools:.*Bash'
+  echo "$fm" | grep -q 'allowed-tools:.*Grep'
 }
 
 # ---------- AC2: Twelve legacy steps preserved as prose sections ----------

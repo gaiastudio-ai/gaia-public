@@ -3,7 +3,7 @@
 #
 # Drives the RED → GREEN cycle for E28-S35 / brief P4-S1:
 #   - Cluster 4 SKILL.md directory structure
-#   - Cluster 4 frontmatter (name, description, argument-hint, context: fork, tools)
+#   - Cluster 4 frontmatter (name, description, argument-hint, context: fork, allowed-tools)
 #   - Shared setup.sh / finalize.sh pattern
 #   - Legacy instructions preserved verbatim (output path, step ordering)
 #   - E28-S7 frontmatter linter passes
@@ -45,7 +45,7 @@ if [ -f "$SKILL_MD" ]; then
     }
     in_fm == 1 { print }
   ' "$SKILL_MD")
-  for field in name description argument-hint context tools; do
+  for field in name description argument-hint context allowed-tools; do
     if grep -qE "^${field}:" <<<"$fm"; then
       ok "frontmatter has $field"
     else

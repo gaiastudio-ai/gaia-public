@@ -69,8 +69,8 @@ _body() {
   _frontmatter "$SKILL_FILE" | grep -q "^description:"
 }
 
-@test "AC1: SKILL.md frontmatter contains tools field" {
-  _frontmatter "$SKILL_FILE" | grep -q "^tools:"
+@test "AC1: SKILL.md frontmatter contains allowed-tools field" {
+  _frontmatter "$SKILL_FILE" | grep -q "^allowed-tools:"
 }
 
 @test "AC1: SKILL.md documents the awk range-bug pattern" {

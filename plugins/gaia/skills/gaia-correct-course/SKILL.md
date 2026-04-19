@@ -2,7 +2,7 @@
 name: gaia-correct-course
 description: "Manage mid-sprint scope changes by updating story files (source of truth) and reconciling sprint-status.yaml via sprint-state.sh. Supports scope changes, priority shifts, blocker resolution, resource changes, and story injection. GAIA-native replacement for the legacy correct-course XML engine workflow."
 argument-hint: "[story-key] [change-type]"
-tools: Read, Edit, Bash
+allowed-tools: [Read, Edit, Bash]
 version: "1.0.0"
 ---
 

@@ -51,17 +51,17 @@ setup() {
   awk '/^---$/{n++; next} n==1{print}' "$SKILL_FILE" | grep -qiE '^description:.*(context|ai|project)'
 }
 
-@test "E28-S106: gaia-project-context frontmatter has tools field" {
-  awk '/^---$/{n++; next} n==1{print}' "$SKILL_FILE" | grep -q '^tools:'
+@test "E28-S106: gaia-project-context frontmatter has allowed-tools field" {
+  awk '/^---$/{n++; next} n==1{print}' "$SKILL_FILE" | grep -q '^allowed-tools:'
 }
 
-@test "E28-S106: gaia-project-context frontmatter tools contains scan tools (Read, Glob, Grep, Bash)" {
+@test "E28-S106: gaia-project-context frontmatter allowed-tools contains scan tools (Read, Glob, Grep, Bash)" {
   fm=$(awk '/^---$/{n++; next} n==1{print}' "$SKILL_FILE")
-  echo "$fm" | grep -q 'tools:.*Read'
-  echo "$fm" | grep -q 'tools:.*Glob'
-  echo "$fm" | grep -q 'tools:.*Grep'
-  echo "$fm" | grep -q 'tools:.*Bash'
-  echo "$fm" | grep -q 'tools:.*Write'
+  echo "$fm" | grep -q 'allowed-tools:.*Read'
+  echo "$fm" | grep -q 'allowed-tools:.*Glob'
+  echo "$fm" | grep -q 'allowed-tools:.*Grep'
+  echo "$fm" | grep -q 'allowed-tools:.*Bash'
+  echo "$fm" | grep -q 'allowed-tools:.*Write'
 }
 
 @test "E28-S106: gaia-project-context frontmatter has model or version field" {

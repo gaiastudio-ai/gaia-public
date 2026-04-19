@@ -3,7 +3,7 @@
 #
 # Validates:
 #   AC1: SKILL.md frontmatter matches canonical reviewer pattern (context:fork,
-#        tools: Read, Grep, Glob, Bash, NO Write, NO Edit)
+#        allowed-tools: Read Grep Glob Bash, NO Write, NO Edit)
 #   AC2: Subagent wiring — Zara dispatched for OWASP analysis
 #   AC3: OWASP methodology preserved verbatim from legacy workflow
 #   AC4: review-gate.sh integration with review_name = "Security Review"
@@ -41,33 +41,33 @@ setup() {
   head -20 "$SKILL_DIR/SKILL.md" | grep -q '^context: fork'
 }
 
-@test "E28-S67: SKILL.md frontmatter has tools containing Read" {
-  head -20 "$SKILL_DIR/SKILL.md" | grep -q 'tools:.*Read'
+@test "E28-S67: SKILL.md frontmatter has allowed-tools containing Read" {
+  head -20 "$SKILL_DIR/SKILL.md" | grep -q 'allowed-tools:.*Read'
 }
 
-@test "E28-S67: SKILL.md frontmatter has tools containing Grep" {
-  head -20 "$SKILL_DIR/SKILL.md" | grep -q 'tools:.*Grep'
+@test "E28-S67: SKILL.md frontmatter has allowed-tools containing Grep" {
+  head -20 "$SKILL_DIR/SKILL.md" | grep -q 'allowed-tools:.*Grep'
 }
 
-@test "E28-S67: SKILL.md frontmatter has tools containing Glob" {
-  head -20 "$SKILL_DIR/SKILL.md" | grep -q 'tools:.*Glob'
+@test "E28-S67: SKILL.md frontmatter has allowed-tools containing Glob" {
+  head -20 "$SKILL_DIR/SKILL.md" | grep -q 'allowed-tools:.*Glob'
 }
 
-@test "E28-S67: SKILL.md frontmatter has tools containing Bash" {
-  head -20 "$SKILL_DIR/SKILL.md" | grep -q 'tools:.*Bash'
+@test "E28-S67: SKILL.md frontmatter has allowed-tools containing Bash" {
+  head -20 "$SKILL_DIR/SKILL.md" | grep -q 'allowed-tools:.*Bash'
 }
 
 # ---------- AC1: Tool-allowlist enforcement (NFR-048) ----------
 
-@test "E28-S67: SKILL.md tools does NOT contain Write" {
+@test "E28-S67: SKILL.md allowed-tools does NOT contain Write" {
   local tools_line
-  tools_line=$(head -20 "$SKILL_DIR/SKILL.md" | grep '^tools:')
+  tools_line=$(head -20 "$SKILL_DIR/SKILL.md" | grep '^allowed-tools:')
   [[ "$tools_line" != *"Write"* ]]
 }
 
-@test "E28-S67: SKILL.md tools does NOT contain Edit" {
+@test "E28-S67: SKILL.md allowed-tools does NOT contain Edit" {
   local tools_line
-  tools_line=$(head -20 "$SKILL_DIR/SKILL.md" | grep '^tools:')
+  tools_line=$(head -20 "$SKILL_DIR/SKILL.md" | grep '^allowed-tools:')
   [[ "$tools_line" != *"Edit"* ]]
 }
 
@@ -184,7 +184,7 @@ setup() {
 @test "E28-S67: _reference-frontmatter.md contains verbatim brief example" {
   grep -q 'name: gaia-security-review' "$SKILL_DIR/_reference-frontmatter.md"
   grep -q 'context: fork' "$SKILL_DIR/_reference-frontmatter.md"
-  grep -q 'tools: Read, Grep, Glob, Bash' "$SKILL_DIR/_reference-frontmatter.md"
+  grep -q 'allowed-tools: Read Grep Glob Bash' "$SKILL_DIR/_reference-frontmatter.md"
 }
 
 # ---------- Shared scripts existence ----------

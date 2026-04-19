@@ -9,6 +9,6 @@ name: gaia-security-review
 description: Pre-merge OWASP-focused security review. Use when "security review" or /gaia-security-review.
 argument-hint: [story-key]
 context: fork
-tools: Read, Grep, Glob, Bash
+allowed-tools: Read Grep Glob Bash
 ---
 ```

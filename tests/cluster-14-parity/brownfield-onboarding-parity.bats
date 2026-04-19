@@ -5,7 +5,7 @@
 # to a native SKILL.md at plugins/gaia/skills/gaia-brownfield/SKILL.md.
 #
 #   AC1: SKILL.md exists at the native-conversion target path with valid
-#        frontmatter (name, description, tools, model) per E28-S74 schema
+#        frontmatter (name, description, allowed-tools, model) per E28-S74 schema
 #        and passes the frontmatter linter with zero errors.
 #   AC2: All five multi-scan branches preserved as prose sections —
 #        doc-code, hardcoded, integration-seam, runtime-behavior, security.
@@ -55,21 +55,21 @@ setup() {
   awk '/^---$/{n++; next} n==1{print}' "$SKILL_FILE" | grep -qi '^description:.*brownfield'
 }
 
-@test "E28-S105: SKILL.md frontmatter has tools field" {
-  awk '/^---$/{n++; next} n==1{print}' "$SKILL_FILE" | grep -q '^tools:'
+@test "E28-S105: SKILL.md frontmatter has allowed-tools field" {
+  awk '/^---$/{n++; next} n==1{print}' "$SKILL_FILE" | grep -q '^allowed-tools:'
 }
 
-@test "E28-S105: SKILL.md frontmatter tools contains Agent (subagent delegation)" {
-  awk '/^---$/{n++; next} n==1{print}' "$SKILL_FILE" | grep -q 'tools:.*Agent'
+@test "E28-S105: SKILL.md frontmatter allowed-tools contains Agent (subagent delegation)" {
+  awk '/^---$/{n++; next} n==1{print}' "$SKILL_FILE" | grep -q 'allowed-tools:.*Agent'
 }
 
-@test "E28-S105: SKILL.md frontmatter tools contains Read, Write, Bash, Grep, Glob" {
+@test "E28-S105: SKILL.md frontmatter allowed-tools contains Read, Write, Bash, Grep, Glob" {
   fm=$(awk '/^---$/{n++; next} n==1{print}' "$SKILL_FILE")
-  echo "$fm" | grep -q 'tools:.*Read'
-  echo "$fm" | grep -q 'tools:.*Write'
-  echo "$fm" | grep -q 'tools:.*Bash'
-  echo "$fm" | grep -q 'tools:.*Grep'
-  echo "$fm" | grep -q 'tools:.*Glob'
+  echo "$fm" | grep -q 'allowed-tools:.*Read'
+  echo "$fm" | grep -q 'allowed-tools:.*Write'
+  echo "$fm" | grep -q 'allowed-tools:.*Bash'
+  echo "$fm" | grep -q 'allowed-tools:.*Grep'
+  echo "$fm" | grep -q 'allowed-tools:.*Glob'
 }
 
 @test "E28-S105: SKILL.md frontmatter has model field per E28-S74 schema" {

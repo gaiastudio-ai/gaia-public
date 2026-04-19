@@ -103,7 +103,7 @@ teardown() { common_teardown; }
   echo "$frontmatter" | grep -q '^context: fork'
 }
 
-@test "SKILL.md frontmatter contains 'allowed-tools' key" {
+@test "SKILL.md frontmatter contains 'allowed-tools' list" {
   frontmatter=$(awk 'BEGIN{in_fm=0;seen=0}/^---[[:space:]]*$/{if(seen==0){in_fm=1;seen=1;next}else if(in_fm==1){exit}}in_fm==1{print}' "$SKILL_FILE")
   echo "$frontmatter" | grep -q '^allowed-tools:'
 }

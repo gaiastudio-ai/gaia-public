@@ -119,6 +119,120 @@ YAML
   [ "$status" -eq 2 ]
 }
 
+# ---------------------------------------------------------------------------
+# E28-S191 / B1 — 6-level precedence ladder
+# ---------------------------------------------------------------------------
+# Precedence (shared): 1) --shared <path>  2) --config <path> (legacy alias)
+#   3) $GAIA_SHARED_CONFIG  4) $CLAUDE_PROJECT_ROOT/config/project-config.yaml
+#   5) $PWD/config/project-config.yaml  6) $CLAUDE_SKILL_DIR/config/project-config.yaml (legacy)
+# Same ladder for local overlay (--local → $GAIA_LOCAL_CONFIG →
+#   $CLAUDE_PROJECT_ROOT/config/global.yaml → $PWD/config/global.yaml →
+#   $CLAUDE_SKILL_DIR/config/global.yaml).
+
+mk_cfg_at() {
+  # mk_cfg_at <dir> <tag>  — writes a valid shared config with a distinctive
+  # project_root value so we can tell which source wins.
+  local dir="$1" tag="$2"
+  mkdir -p "$dir/config"
+  cat > "$dir/config/project-config.yaml" <<YAML
+project_root: /tmp/gaia-$tag
+project_path: /tmp/gaia-$tag/app
+memory_path: /tmp/gaia-$tag/_memory
+checkpoint_path: /tmp/gaia-$tag/_memory/checkpoints
+installed_path: /tmp/gaia-$tag/_gaia
+framework_version: 1.127.2-rc.1
+date: 2026-04-15
+YAML
+}
+
+@test "B1 precedence L1: --shared flag wins over every other source" {
+  mk_cfg_at "$TEST_TMP/a" a  # --shared target
+  mk_cfg_at "$TEST_TMP/b" b  # --config (legacy alias)
+  mk_cfg_at "$TEST_TMP/c" c  # $GAIA_SHARED_CONFIG
+  mk_cfg_at "$TEST_TMP/d" d  # $CLAUDE_PROJECT_ROOT/config/...
+  mk_cfg_at "$TEST_TMP/e" e  # $PWD/config/...
+  mk_cfg_at "$TEST_TMP/f" f  # $CLAUDE_SKILL_DIR/config/... (legacy)
+  cd "$TEST_TMP/e"
+  GAIA_SHARED_CONFIG="$TEST_TMP/c/config/project-config.yaml" \
+  CLAUDE_PROJECT_ROOT="$TEST_TMP/d" \
+  CLAUDE_SKILL_DIR="$TEST_TMP/f" \
+    run "$SCRIPT" --shared "$TEST_TMP/a/config/project-config.yaml" \
+                  --config "$TEST_TMP/b/config/project-config.yaml"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"project_root='/tmp/gaia-a'"* ]]
+}
+
+@test "B1 precedence L2: --config legacy alias wins when --shared absent" {
+  mk_cfg_at "$TEST_TMP/b" b
+  mk_cfg_at "$TEST_TMP/c" c
+  mk_cfg_at "$TEST_TMP/d" d
+  mk_cfg_at "$TEST_TMP/e" e
+  mk_cfg_at "$TEST_TMP/f" f
+  cd "$TEST_TMP/e"
+  GAIA_SHARED_CONFIG="$TEST_TMP/c/config/project-config.yaml" \
+  CLAUDE_PROJECT_ROOT="$TEST_TMP/d" \
+  CLAUDE_SKILL_DIR="$TEST_TMP/f" \
+    run "$SCRIPT" --config "$TEST_TMP/b/config/project-config.yaml"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"project_root='/tmp/gaia-b'"* ]]
+}
+
+@test "B1 precedence L3: \$GAIA_SHARED_CONFIG wins when flags absent" {
+  mk_cfg_at "$TEST_TMP/c" c
+  mk_cfg_at "$TEST_TMP/d" d
+  mk_cfg_at "$TEST_TMP/e" e
+  mk_cfg_at "$TEST_TMP/f" f
+  cd "$TEST_TMP/e"
+  GAIA_SHARED_CONFIG="$TEST_TMP/c/config/project-config.yaml" \
+  CLAUDE_PROJECT_ROOT="$TEST_TMP/d" \
+  CLAUDE_SKILL_DIR="$TEST_TMP/f" \
+    run "$SCRIPT"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"project_root='/tmp/gaia-c'"* ]]
+}
+
+@test "B1 precedence L4: \$CLAUDE_PROJECT_ROOT/config wins when env+flags absent" {
+  mk_cfg_at "$TEST_TMP/d" d
+  mk_cfg_at "$TEST_TMP/e" e
+  mk_cfg_at "$TEST_TMP/f" f
+  cd "$TEST_TMP/e"
+  CLAUDE_PROJECT_ROOT="$TEST_TMP/d" \
+  CLAUDE_SKILL_DIR="$TEST_TMP/f" \
+    run env -u GAIA_SHARED_CONFIG "$SCRIPT"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"project_root='/tmp/gaia-d'"* ]]
+}
+
+@test "B1 precedence L5: \$PWD/config wins when higher sources absent" {
+  mk_cfg_at "$TEST_TMP/e" e
+  mk_cfg_at "$TEST_TMP/f" f
+  cd "$TEST_TMP/e"
+  CLAUDE_SKILL_DIR="$TEST_TMP/f" \
+    run env -u GAIA_SHARED_CONFIG -u CLAUDE_PROJECT_ROOT "$SCRIPT"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"project_root='/tmp/gaia-e'"* ]]
+}
+
+@test "B1 precedence L6: \$CLAUDE_SKILL_DIR legacy fallback works last" {
+  mk_cfg_at "$TEST_TMP/f" f
+  # PWD is $TEST_TMP (no config/ here), project-root unset, env unset.
+  cd "$TEST_TMP"
+  CLAUDE_SKILL_DIR="$TEST_TMP/f" \
+    run env -u GAIA_SHARED_CONFIG -u CLAUDE_PROJECT_ROOT "$SCRIPT"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"project_root='/tmp/gaia-f'"* ]]
+}
+
+@test "B1 --help prints the 6-level precedence ladder" {
+  run "$SCRIPT" --help
+  [ "$status" -eq 0 ]
+  # Help text is emitted on stderr; bats' run captures both.
+  [[ "$output" == *"--shared"* ]]
+  [[ "$output" == *"GAIA_SHARED_CONFIG"* ]]
+  [[ "$output" == *"CLAUDE_PROJECT_ROOT"* ]]
+  [[ "$output" == *"CLAUDE_SKILL_DIR"* ]]
+}
+
 @test "resolve-config.sh: spaces in values round-trip safely via eval" {
   local dir="$TEST_TMP/sp"
   mkdir -p "$dir/config"

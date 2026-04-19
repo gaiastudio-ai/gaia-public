@@ -42,8 +42,8 @@ setup() {
   head -20 "$SKILL_FILE" | grep -q '^context: fork'
 }
 
-@test "E28-S104: pitch-deck frontmatter tools present" {
-  head -20 "$SKILL_FILE" | grep -q '^tools:'
+@test "E28-S104: pitch-deck frontmatter allowed-tools present" {
+  head -20 "$SKILL_FILE" | grep -q '^allowed-tools:'
 }
 
 # ---------- AC3: Standard pitch structure preserved ----------

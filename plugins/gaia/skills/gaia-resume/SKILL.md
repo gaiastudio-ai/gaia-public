@@ -130,7 +130,7 @@ Once validation is clean (Step 4 exit 0) or the user chose **Proceed** in Step 5
 
 - `plugins/gaia/scripts/checkpoint.sh` — the deterministic checkpoint primitive (write / read / validate) from E28-S136.
 - `_memory/checkpoints/` — active checkpoint files; `_memory/checkpoints/completed/` — archived, non-resumable.
-- `_gaia/_config/gaia-help.csv` — registers `/gaia-resume` so `/gaia-help` can discover it.
+- `${CLAUDE_PLUGIN_ROOT}/knowledge/gaia-help.csv` — registers `/gaia-resume` so `/gaia-help` can discover it.
 - ADR-041: Native Execution Model via Claude Code Skills + Subagents + Plugins + Hooks.
 - ADR-042: Scripts-over-LLM for Deterministic Operations.
 - ADR-048: Engine Deletion as Program-Closing Action — legacy command coexists with this skill until program close.

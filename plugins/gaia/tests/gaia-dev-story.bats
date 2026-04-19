@@ -43,9 +43,9 @@ teardown() { common_teardown; }
   [[ "$output" == *"context: fork"* ]]
 }
 
-@test "AC1: SKILL.md frontmatter contains tools with Read Write Edit Grep Glob Bash" {
+@test "AC1: SKILL.md frontmatter contains allowed-tools with Read Write Edit Grep Glob Bash" {
   run awk '/^---/{n++; next} n==1' "$SKILL_DIR/SKILL.md"
-  [[ "$output" == *"tools:"* ]]
+  [[ "$output" == *"allowed-tools:"* ]]
   [[ "$output" == *"Read"* ]]
   [[ "$output" == *"Write"* ]]
   [[ "$output" == *"Edit"* ]]

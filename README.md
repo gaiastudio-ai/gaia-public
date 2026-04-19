@@ -2,6 +2,20 @@
 
 GAIA Framework — Generative Agile Intelligence Architecture. Public Claude Code marketplace distributing the `gaia` plugin: 25 specialized agents, 62 workflows, and 8 shared skills.
 
+## Pre-Release Notice (v1.127.x)
+
+GAIA v2 (plugin-based) is currently in **early-adopter preview**. The v1 → v2 migration path (`/gaia-migrate apply`) is functional on a reference fixture but is still stabilizing on real v1 projects.
+
+**If you are evaluating GAIA:** start a fresh project with the v2 plugin — do not migrate a production v1 project yet.
+
+**If you must migrate a v1 project today:**
+
+- Back up your `_gaia/`, `_memory/`, and `custom/` directories before running `/gaia-migrate apply`. The migrator creates its own backup under `.gaia-migrate-backup/`, but an independent copy is cheap insurance.
+- After migration, run `plugins/gaia/scripts/audit-v2-migration.sh` (from the plugin install) against your project root and confirm zero failing skills before trusting any generated output.
+- Some skills still reference legacy v1 paths (`_gaia/_config/*`) in their body prose and will fall back to a degraded-but-functional response on a freshly migrated project. Tracked under E28-S196 and the post-migration audit follow-ups.
+
+We will remove this notice once the v2 migration regression gate is green and the remaining SKILL.md path references are closed out (tracked in E28-S195, E28-S196, and the B5 triage story).
+
 ## Install
 
 ```

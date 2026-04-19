@@ -38,9 +38,9 @@ teardown() { common_teardown; }
   [[ "$output" == *"context: fork"* ]]
 }
 
-@test "AC1: frontmatter contains tools" {
+@test "AC1: frontmatter contains allowed-tools" {
   run head -20 "$SKILL_DIR/SKILL.md"
-  [[ "$output" == *"tools:"* ]]
+  [[ "$output" == *"allowed-tools:"* ]]
 }
 
 # ---------- AC2: Template carried into skill directory ----------

@@ -1,13 +1,28 @@
 #!/usr/bin/env bash
-# resolve-config.sh — GAIA foundation script (E28-S9, extended by E28-S142)
+# resolve-config.sh — GAIA foundation script (E28-S9, extended by E28-S142, E28-S191)
 set -euo pipefail
 LC_ALL=C
 export LC_ALL
 #
 # Reads up to two input files and merges them:
-#   - team-shared: ${CLAUDE_SKILL_DIR}/config/project-config.yaml
-#                  (or --shared <path>, or --config <path> legacy alias)
-#   - machine-local: global.yaml (or --local <path>)
+#   - team-shared:  config/project-config.yaml
+#   - machine-local: config/global.yaml
+#
+# Shared path discovery precedence (E28-S191 / AC1):
+#   1. --shared <path>           explicit flag wins
+#   2. --config <path>           legacy alias from E28-S9 single-file mode
+#   3. $GAIA_SHARED_CONFIG       env override
+#   4. $CLAUDE_PROJECT_ROOT/config/project-config.yaml  (if file exists)
+#   5. $PWD/config/project-config.yaml                  (if file exists)
+#   6. $CLAUDE_SKILL_DIR/config/project-config.yaml     (legacy, bats fixtures)
+#
+# Local overlay discovery precedence (E28-S191 / AC2):
+#   1. --local <path>            explicit flag
+#   2. $GAIA_LOCAL_CONFIG        env override
+#   3. $CLAUDE_PROJECT_ROOT/config/global.yaml          (if file exists)
+#   4. $PWD/config/global.yaml                          (if file exists)
+#   5. $CLAUDE_SKILL_DIR/config/global.yaml             (legacy, bats fixtures)
+#
 # Applies GAIA_* environment overrides on top, validates required fields,
 # and emits deterministic output on stdout:
 #   - default:        KEY='VALUE' lines, single-quoted, alpha-sorted
@@ -190,6 +205,8 @@ validate_schema() {
 #   --config <path>   equivalent to --shared <path>; kept for backward compat.
 
 SHARED_PATH=""
+SHARED_PATH_VIA_SHARED=""   # populated by --shared only (L1 precedence)
+SHARED_PATH_VIA_CONFIG=""   # populated by --config only (L2 legacy alias)
 LOCAL_PATH=""
 SCHEMA_PATH=""
 FORMAT="shell"
@@ -198,9 +215,9 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --shared)
       [ $# -ge 2 ] || die "flag --shared requires a path argument"
-      SHARED_PATH="$2"; shift 2 ;;
+      SHARED_PATH_VIA_SHARED="$2"; shift 2 ;;
     --shared=*)
-      SHARED_PATH="${1#--shared=}"; shift ;;
+      SHARED_PATH_VIA_SHARED="${1#--shared=}"; shift ;;
     --local)
       [ $# -ge 2 ] || die "flag --local requires a path argument"
       LOCAL_PATH="$2"; shift 2 ;;
@@ -208,9 +225,9 @@ while [ $# -gt 0 ]; do
       LOCAL_PATH="${1#--local=}"; shift ;;
     --config)
       [ $# -ge 2 ] || die "flag --config requires a path argument"
-      SHARED_PATH="$2"; shift 2 ;;
+      SHARED_PATH_VIA_CONFIG="$2"; shift 2 ;;
     --config=*)
-      SHARED_PATH="${1#--config=}"; shift ;;
+      SHARED_PATH_VIA_CONFIG="${1#--config=}"; shift ;;
     --schema)
       [ $# -ge 2 ] || die "flag --schema requires a path argument"
       SCHEMA_PATH="$2"; shift 2 ;;
@@ -222,7 +239,7 @@ while [ $# -gt 0 ]; do
     --format=*)
       FORMAT="${1#--format=}"; shift ;;
     -h|--help)
-      sed -n '1,56p' "$0" >&2; exit 0 ;;
+      sed -n '1,73p' "$0" >&2; exit 0 ;;
     *)
       die "unknown argument: $1" ;;
   esac
@@ -233,12 +250,56 @@ case "$FORMAT" in
   *) die "unsupported --format '$FORMAT' (expected shell|json)" ;;
 esac
 
-# ---------- Shared-file discovery ----------
+# ---------- Shared-file discovery (E28-S191 / AC1) ----------
+#
+# 6-level precedence ladder. A flag or env wins unconditionally (levels 1-3);
+# the file-system fallbacks (levels 4-6) only win if the candidate file is
+# actually present, so missing project-level configs never mask the legacy
+# CLAUDE_SKILL_DIR fallback used by the bats fixture suite.
 
-if [ -z "$SHARED_PATH" ]; then
-  if [ -n "${CLAUDE_SKILL_DIR:-}" ]; then
-    SHARED_PATH="${CLAUDE_SKILL_DIR}/config/project-config.yaml"
-  fi
+# L1 / L2: --shared wins over --config (legacy alias), irrespective of order
+# on the command line. Early-returns before any env/fs fallback runs.
+if [ -n "$SHARED_PATH_VIA_SHARED" ]; then
+  SHARED_PATH="$SHARED_PATH_VIA_SHARED"
+elif [ -n "$SHARED_PATH_VIA_CONFIG" ]; then
+  SHARED_PATH="$SHARED_PATH_VIA_CONFIG"
+fi
+
+if [ -z "$SHARED_PATH" ] && [ -n "${GAIA_SHARED_CONFIG:-}" ]; then
+  SHARED_PATH="$GAIA_SHARED_CONFIG"
+fi
+if [ -z "$SHARED_PATH" ] \
+   && [ -n "${CLAUDE_PROJECT_ROOT:-}" ] \
+   && [ -f "${CLAUDE_PROJECT_ROOT}/config/project-config.yaml" ]; then
+  SHARED_PATH="${CLAUDE_PROJECT_ROOT}/config/project-config.yaml"
+fi
+if [ -z "$SHARED_PATH" ] && [ -f "${PWD}/config/project-config.yaml" ]; then
+  SHARED_PATH="${PWD}/config/project-config.yaml"
+fi
+if [ -z "$SHARED_PATH" ] && [ -n "${CLAUDE_SKILL_DIR:-}" ]; then
+  SHARED_PATH="${CLAUDE_SKILL_DIR}/config/project-config.yaml"
+fi
+
+# ---------- Local-overlay discovery (E28-S191 / AC2) ----------
+#
+# Mirrors the shared ladder minus the --config legacy alias (which has always
+# been shared-only). A missing overlay is a soft no-op per E28-S142 / AC4.
+
+if [ -z "$LOCAL_PATH" ] && [ -n "${GAIA_LOCAL_CONFIG:-}" ]; then
+  LOCAL_PATH="$GAIA_LOCAL_CONFIG"
+fi
+if [ -z "$LOCAL_PATH" ] \
+   && [ -n "${CLAUDE_PROJECT_ROOT:-}" ] \
+   && [ -f "${CLAUDE_PROJECT_ROOT}/config/global.yaml" ]; then
+  LOCAL_PATH="${CLAUDE_PROJECT_ROOT}/config/global.yaml"
+fi
+if [ -z "$LOCAL_PATH" ] && [ -f "${PWD}/config/global.yaml" ]; then
+  LOCAL_PATH="${PWD}/config/global.yaml"
+fi
+if [ -z "$LOCAL_PATH" ] \
+   && [ -n "${CLAUDE_SKILL_DIR:-}" ] \
+   && [ -f "${CLAUDE_SKILL_DIR}/config/global.yaml" ]; then
+  LOCAL_PATH="${CLAUDE_SKILL_DIR}/config/global.yaml"
 fi
 
 # ---------- Detect "at least one input is present" ----------

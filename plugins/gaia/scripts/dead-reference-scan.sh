@@ -114,6 +114,19 @@ is_allowlisted() {
   [[ "$(basename "$path")" == "CHANGELOG.md" ]] && return 0
   # Migration-guide filename is allowlisted.
   [[ "$(basename "$path")" == migration-guide* ]] && return 0
+  # E28-S194 — plugins/gaia/knowledge/ ships reference CSVs byte-identical to v1
+  # (gaia-help.csv, workflow-manifest.csv). These are LLM reference data consumed
+  # by the /gaia-help skill as an intent-to-command map and no-hallucination
+  # guard; they are NOT active code that resolves the legacy paths embedded in
+  # column values. The skills that Read these CSVs use them for the command-name
+  # column only. Allowlist the whole knowledge/ tree so future knowledge files
+  # (if they embed legacy paths as reference data) are covered too.
+  [[ "$path" == */plugins/gaia/knowledge/* ]] && return 0
+  # E28-S194 — knowledge-paths-guard.bats is the regression guard for the
+  # plugin-shipped CSVs. Its assertions name `workflow-manifest.csv` and the
+  # retired `_gaia/_config/` pattern as literals — they ARE the pattern the
+  # test enforces zero-of, so the filename mentions are contractual.
+  [[ "$path" == */plugins/gaia/tests/knowledge-paths-guard.bats ]] && return 0
   # The Cluster 19 parity guard ASSERTS zero engine loads — preserve verbatim.
   [[ "$path" == */plugins/gaia/test/e28-s133-full-lifecycle-atdd.bats ]] && return 0
   # Comment-only references in foundation scripts (see plan v4 Modified-files table).

@@ -145,6 +145,10 @@ is_allowlisted() {
   [[ "$path" == */plugins/gaia/scripts/gaia-migrate.sh ]] && return 0
   [[ "$path" == */plugins/gaia/test/scripts/e28-s131-*.bats ]] && return 0
   [[ "$path" == */test/scripts/fixtures/v1-install/* ]] && return 0
+  # E28-S186 — gaia-migrate bats test deliberately seeds .claude/commands/gaia-*.md
+  # stubs in the fixture because the script's job is to remove them. The literal
+  # legacy paths appear in setup() and in delete/preserve assertions.
+  [[ "$path" == */plugins/gaia/tests/gaia-migrate.bats ]] && return 0
   # next-step.sh is the fallback mechanism itself — it ships with a
   # graceful-missing-file handler and all references are part of implementing
   # the fallback (see Val v1 Finding 2).

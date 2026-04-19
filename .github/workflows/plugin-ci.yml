@@ -36,7 +36,12 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.2.2
       - uses: mig4/setup-bats@af9a00deb21b5d795cabfeaa8d9060410377686d  # v1.2.0
         with:
-          bats-version: 1.10.0
+          # E28-S184 — bump bats to 1.11.0. bats 1.10.0 has an output-buffering
+          # issue where tests that invoke subshells (`run bash $wrapper`) can
+          # silently lose their `ok` TAP lines in the parent runner, producing
+          # a false "Executed N instead of expected M tests" warning that
+          # fails the job. 1.11.0 fixes this via deterministic FD handling.
+          bats-version: 1.11.0
       # E28-S175 — kcov is not in the default apt repositories on Ubuntu 24.04
       # (noble), which caused `apt-get install -y jq kcov` to fail with
       # "E: Unable to locate package kcov" on every PR and block the bats-tests

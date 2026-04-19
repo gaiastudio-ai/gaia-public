@@ -31,10 +31,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 FRAMEWORK_ROOT="$(cd "$REPO_ROOT/.." && pwd)"
 
-# rewrite_frontmatter <file>
+# _rewrite_frontmatter <file>
 # Rewrites the file in place, transforming allowed-tools: lines within the
 # YAML frontmatter only. Body content is preserved byte-for-byte.
-rewrite_frontmatter() {
+_rewrite_frontmatter() {
   local file="$1"
   if [ ! -f "$file" ]; then
     echo "fix-skill-tools-field: not a file: $file" >&2
@@ -96,21 +96,21 @@ rewrite_frontmatter() {
   fi
 }
 
-collect_plugin_skills() {
+_collect_plugin_skills() {
   # 115 plugin SKILL.md files under gaia-public/plugins/gaia/skills/*/SKILL.md
   local base="$REPO_ROOT/plugins/gaia/skills"
   [ -d "$base" ] || return 0
   find "$base" -mindepth 2 -maxdepth 2 -name SKILL.md -type f | sort
 }
 
-collect_enterprise_skills() {
+_collect_enterprise_skills() {
   # Enterprise mirror SKILLs (3 files at time of E28-S185).
   local base="$FRAMEWORK_ROOT/gaia-enterprise/plugins/gaia-enterprise/skills"
   [ -d "$base" ] || return 0
   find "$base" -mindepth 2 -maxdepth 2 -name SKILL.md -type f | sort
 }
 
-usage() {
+_usage() {
   cat >&2 <<EOF
 Usage:
   $(basename "$0") <file> [<file> ...]
@@ -122,21 +122,21 @@ EOF
 }
 
 main() {
-  [ "$#" -ge 1 ] || usage
+  [ "$#" -ge 1 ] || _usage
 
   local -a files=()
   case "$1" in
     --plugin-skills)
-      while IFS= read -r f; do files+=("$f"); done < <(collect_plugin_skills)
+      while IFS= read -r f; do files+=("$f"); done < <(_collect_plugin_skills)
       ;;
     --enterprise-skills)
-      while IFS= read -r f; do files+=("$f"); done < <(collect_enterprise_skills)
+      while IFS= read -r f; do files+=("$f"); done < <(_collect_enterprise_skills)
       ;;
     --all)
-      while IFS= read -r f; do files+=("$f"); done < <(collect_plugin_skills)
-      while IFS= read -r f; do files+=("$f"); done < <(collect_enterprise_skills)
+      while IFS= read -r f; do files+=("$f"); done < <(_collect_plugin_skills)
+      while IFS= read -r f; do files+=("$f"); done < <(_collect_enterprise_skills)
       ;;
-    -h|--help) usage ;;
+    -h|--help) _usage ;;
     *)
       files=("$@")
       ;;
@@ -147,7 +147,7 @@ main() {
     total=$((total + 1))
     local before after
     before="$(shasum -a 256 "$f" | awk '{print $1}')"
-    rewrite_frontmatter "$f"
+    _rewrite_frontmatter "$f"
     after="$(shasum -a 256 "$f" | awk '{print $1}')"
     if [ "$before" != "$after" ]; then
       changed=$((changed + 1))

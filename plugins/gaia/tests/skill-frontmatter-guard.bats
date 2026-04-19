@@ -14,7 +14,8 @@ load test_helper
 setup() {
   common_setup
   PLUGIN_SKILLS_DIR="$(cd "$BATS_TEST_DIRNAME/../skills" && pwd)"
-  export PLUGIN_SKILLS_DIR
+  FIXER="$(cd "$BATS_TEST_DIRNAME/../scripts" && pwd)/fix-skill-tools-field.sh"
+  export PLUGIN_SKILLS_DIR FIXER
 }
 
 teardown() { common_teardown; }
@@ -45,4 +46,92 @@ teardown() { common_teardown; }
     printf '  %s\n' $hits
     return 1
   fi
+}
+
+# ---------- fix-skill-tools-field.sh behavioral tests (NFR-052 main() coverage) ----------
+
+@test "fix-skill-tools-field.sh main converts bracketed allowed-tools to comma-sep tools" {
+  local file="$TEST_TMP/SKILL.md"
+  cat > "$file" <<'EOF'
+---
+name: test
+description: test
+allowed-tools: [Read, Bash, Grep]
+---
+
+body
+EOF
+  run "$FIXER" "$file"
+  [ "$status" -eq 0 ]
+  grep -q '^tools: Read, Bash, Grep$' "$file"
+  ! grep -q '^allowed-tools:' "$file"
+}
+
+@test "fix-skill-tools-field.sh main converts space-separated allowed-tools to comma-sep" {
+  local file="$TEST_TMP/SKILL.md"
+  cat > "$file" <<'EOF'
+---
+name: test
+description: test
+allowed-tools: Read Write Edit
+---
+EOF
+  run "$FIXER" "$file"
+  [ "$status" -eq 0 ]
+  grep -q '^tools: Read, Write, Edit$' "$file"
+}
+
+@test "fix-skill-tools-field.sh main drops allowed-tools: [] empty-list line" {
+  local file="$TEST_TMP/SKILL.md"
+  cat > "$file" <<'EOF'
+---
+name: test
+description: test
+allowed-tools: []
+---
+EOF
+  run "$FIXER" "$file"
+  [ "$status" -eq 0 ]
+  ! grep -q '^allowed-tools:' "$file"
+  ! grep -q '^tools:' "$file"
+}
+
+@test "fix-skill-tools-field.sh main is idempotent on second run" {
+  local file="$TEST_TMP/SKILL.md"
+  cat > "$file" <<'EOF'
+---
+name: test
+description: test
+allowed-tools: [Read]
+---
+EOF
+  "$FIXER" "$file" >/dev/null
+  local first_sha
+  first_sha="$(shasum -a 256 "$file" | awk '{print $1}')"
+  run "$FIXER" "$file"
+  [ "$status" -eq 0 ]
+  local second_sha
+  second_sha="$(shasum -a 256 "$file" | awk '{print $1}')"
+  [ "$first_sha" = "$second_sha" ]
+}
+
+@test "fix-skill-tools-field.sh main does not touch body content" {
+  local file="$TEST_TMP/SKILL.md"
+  cat > "$file" <<'EOF'
+---
+name: test
+description: test
+allowed-tools: [Read]
+---
+
+Body line that mentions allowed-tools: [SomeExample] in documentation.
+EOF
+  run "$FIXER" "$file"
+  [ "$status" -eq 0 ]
+  grep -q 'Body line that mentions allowed-tools: \[SomeExample\] in documentation\.' "$file"
+}
+
+@test "fix-skill-tools-field.sh main rejects zero-arg invocation" {
+  run "$FIXER"
+  [ "$status" -eq 1 ]
 }

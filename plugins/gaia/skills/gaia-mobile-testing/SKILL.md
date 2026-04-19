@@ -3,7 +3,7 @@ name: gaia-mobile-testing
 description: Create mobile test plan with device matrix, Appium configuration, and responsive testing scenarios. Use when "mobile testing" or /gaia-mobile-testing.
 argument-hint: "[story-key]"
 context: main
-tools: Read, Write, Edit, Grep, Glob, Bash
+allowed-tools: [Read, Write, Edit, Grep, Glob, Bash]
 ---
 
 ## Setup

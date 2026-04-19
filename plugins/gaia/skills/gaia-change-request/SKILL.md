@@ -2,7 +2,7 @@
 name: gaia-change-request
 description: "DEPRECATED -- Thin redirect to gaia-add-feature. Preserved for backward compatibility per ADR-041 / FR-323. Use /gaia-add-feature directly."
 argument-hint: "[request-text]"
-tools: Read, Glob, Bash, Skill
+allowed-tools: [Read, Glob, Bash, Skill]
 ---
 
 ## Setup

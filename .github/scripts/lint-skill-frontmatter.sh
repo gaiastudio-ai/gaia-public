@@ -11,8 +11,7 @@ set -euo pipefail
 
 REQUIRED_FIELDS=("name" "description")
 
-# Canonical tool set — the single source of truth for tools validation (E28-S96 AC5,
-# renamed from allowed-tools under E28-S185 to align with Claude Code's native skill schema).
+# Canonical tool set — the single source of truth for allowed-tools validation (E28-S96 AC5).
 # To add a new tool, update this array only — no other code changes required.
 CANONICAL_TOOLS=("Read" "Write" "Edit" "Bash" "Grep" "Glob" "WebFetch" "WebSearch" "Task" "Agent" "Skill")
 
@@ -65,33 +64,30 @@ while IFS= read -r -d '' file; do
     fi
   done
 
-  # Validate tools field if present (E28-S96, renamed from allowed-tools under E28-S185
-  # to align with Claude Code's native skill schema).
-  tools_line=$(echo "$frontmatter" | awk '/^tools[[:space:]]*:/ { sub(/^tools[[:space:]]*:[[:space:]]*/, ""); print; found=1 } END { if (!found) exit 1 }') || true
+  # Validate allowed-tools field if present (E28-S96).
+  # Extract the allowed-tools line from frontmatter.
+  allowed_tools_line=$(echo "$frontmatter" | awk '/^allowed-tools[[:space:]]*:/ { sub(/^allowed-tools[[:space:]]*:[[:space:]]*/, ""); print; found=1 } END { if (!found) exit 1 }') || true
 
-  if [ -n "$tools_line" ]; then
-    # Reject bracketed list form — Claude Code expects a comma-separated string.
-    if echo "$tools_line" | grep -qE '^\['; then
-      echo "ERROR: $file uses bracketed list for tools: — must be a comma-separated string (E28-S185)"
-      errors=$((errors + 1))
-    fi
-
-    # Normalize: strip brackets (defensive), commas, and extra whitespace.
-    normalized=$(echo "$tools_line" | sed 's/\[//g; s/\]//g; s/,/ /g' | xargs)
+  if [ -n "$allowed_tools_line" ]; then
+    # Normalize: strip brackets, commas, and extra whitespace.
+    normalized=$(echo "$allowed_tools_line" | sed 's/\[//g; s/\]//g; s/,/ /g' | xargs)
 
     if [ -n "$normalized" ]; then
       for tool in $normalized; do
         if ! is_canonical_tool "$tool"; then
-          echo "ERROR: $file invalid tool: $tool"
+          echo "ERROR: $file invalid allowed-tool: $tool"
           errors=$((errors + 1))
         fi
       done
     fi
   fi
 
-  # E28-S185: the legacy allowed-tools key is retired — fail loudly if it reappears.
-  if echo "$frontmatter" | grep -qE '^allowed-tools[[:space:]]*:'; then
-    echo "ERROR: $file uses retired frontmatter key 'allowed-tools:' — rename to 'tools:' (E28-S185)"
+  # E28-S187: the E28-S185 `tools:` top-level key is retired. The canonical
+  # Claude Code skills field is `allowed-tools:` (see
+  # https://code.claude.com/docs/en/skills). Fail loudly if a skill
+  # regresses to the `tools:` key.
+  if echo "$frontmatter" | grep -qE '^tools[[:space:]]*:'; then
+    echo "ERROR: $file uses retired frontmatter key 'tools:' — rename to 'allowed-tools:' (E28-S187)"
     errors=$((errors + 1))
   fi
 

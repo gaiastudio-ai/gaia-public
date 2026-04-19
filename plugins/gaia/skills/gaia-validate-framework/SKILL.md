@@ -2,7 +2,7 @@
 name: gaia-validate-framework
 description: Scan the GAIA framework tree for consistency, broken references, and missing components. Use when "validate framework" or /gaia-validate-framework. Walks _gaia/, compares against _gaia/_config/manifest.yaml, checks workflow integrity, agent integrity, command integrity, manifest integrity, config resolution, skill index integrity, and knowledge index integrity, then emits a severity-grouped findings report. Native Claude Code conversion of the legacy validate-framework task (E28-S111, Cluster 14).
 argument-hint: "[--report-path]"
-tools: Read, Bash, Grep
+allowed-tools: [Read, Bash, Grep]
 ---
 
 ## Mission

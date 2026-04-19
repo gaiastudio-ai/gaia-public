@@ -2,7 +2,7 @@
 name: gaia-test-design
 description: Create risk-based test plans through collaborative discovery with the test-architect subagent (Sable). Use when "design test plan" or /gaia-test-design.
 context: fork
-tools: Read, Write, Edit, Grep, Glob, Bash, Agent
+allowed-tools: [Read, Write, Edit, Grep, Glob, Bash, Agent]
 ---
 
 ## Setup

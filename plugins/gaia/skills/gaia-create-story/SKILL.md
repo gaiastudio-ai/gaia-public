@@ -2,7 +2,7 @@
 name: gaia-create-story
 description: Create a detailed story file from epics-and-stories.md with full frontmatter, acceptance criteria, and sprint-state registration. Cluster 7 architecture skill.
 argument-hint: [story-key]
-tools: Read, Write, Edit, Bash
+allowed-tools: [Read, Write, Edit, Bash]
 ---
 
 ## Setup

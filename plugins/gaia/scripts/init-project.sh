@@ -225,7 +225,8 @@ into the repository.
 ## How to Start
 
 - Run `/gaia` to activate the orchestrator.
-- Run `/gaia-help` for context-sensitive guidance.
+- Run `/gaia:gaia-help` for context-sensitive guidance. The `gaia:` prefix
+  targets the plugin's `gaia-help` skill directly.
 
 ## Directory Layout
 

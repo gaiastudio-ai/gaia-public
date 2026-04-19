@@ -63,7 +63,7 @@ Write a structured brainstorm artifact to `docs/creative-artifacts/brainstorm-{s
 - Competitive landscape
 - Opportunity areas (ranked)
 - Parking Lot (deprioritized ideas with reasoning and revival conditions)
-- Next steps per `_gaia/_config/lifecycle-sequence.yaml`
+- Next steps per `${CLAUDE_PLUGIN_ROOT}/knowledge/lifecycle-sequence.yaml` (routing table ships inside the plugin under ADR-041's `knowledge/` convention; the legacy v1 location `_gaia/_config/lifecycle-sequence.yaml` is retired and no longer used)
 
 Where `{slug}` is a short kebab-case slug derived from the project vision (e.g., `brainstorm-ai-code-review.md`).
 

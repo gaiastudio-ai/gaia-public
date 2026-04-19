@@ -1,0 +1,694 @@
+# Lifecycle Sequence Manifest — Single source of truth for next-step suggestions
+# Consulted by the workflow engine at completion (Step 7).
+# Every workflow in workflow-manifest.csv MUST have an entry here.
+
+sequence:
+
+  # ═══════════════════════════════════════════
+  # PHASE 1: ANALYSIS
+  # ═══════════════════════════════════════════
+
+  brainstorm-project:
+    phase: 1-analysis
+    command: /gaia-brainstorm
+    next:
+      primary: /gaia-market-research
+      alternatives:
+        - command: /gaia-domain-research
+          context: "If domain-specific research is needed first"
+        - command: /gaia-tech-research
+          context: "If technology evaluation is needed first"
+
+  market-research:
+    phase: 1-analysis
+    command: /gaia-market-research
+    next:
+      primary: /gaia-domain-research
+      alternatives:
+        - command: /gaia-tech-research
+          context: "If technology evaluation is needed"
+        - command: /gaia-product-brief
+          context: "If all research is complete"
+
+  domain-research:
+    phase: 1-analysis
+    command: /gaia-domain-research
+    next:
+      primary: /gaia-tech-research
+      alternatives:
+        - command: /gaia-product-brief
+          context: "If all research is complete"
+
+  technical-research:
+    phase: 1-analysis
+    command: /gaia-tech-research
+    next:
+      primary: /gaia-advanced-elicitation
+      alternatives:
+        - command: /gaia-product-brief
+          context: "If skipping advanced elicitation — go directly to product brief"
+
+  advanced-elicitation:
+    phase: 1-analysis
+    module: lifecycle
+    command: /gaia-advanced-elicitation
+    next:
+      primary: /gaia-product-brief
+      alternatives:
+        - command: /gaia-create-prd
+          context: "If product brief already exists"
+
+  create-product-brief:
+    phase: 1-analysis
+    command: /gaia-product-brief
+    next:
+      primary: /gaia-create-prd
+
+  # ═══════════════════════════════════════════
+  # PHASE 2: PLANNING
+  # ═══════════════════════════════════════════
+
+  create-prd:
+    phase: 2-planning
+    command: /gaia-create-prd
+    next:
+      primary: /gaia-val-validate
+
+  val-validate:
+    phase: 2-planning
+    command: /gaia-val-validate
+    next:
+      on_pass: /gaia-create-ux
+      on_fail: /gaia-edit-prd
+
+  edit-prd:
+    phase: 2-planning
+    command: /gaia-edit-prd
+    next:
+      primary: /gaia-val-validate
+
+  create-ux-design:
+    phase: 2-planning
+    command: /gaia-create-ux
+    next:
+      primary: /gaia-review-a11y
+      alternatives:
+        - command: /gaia-create-arch
+          context: "If accessibility review will be done later"
+
+  # ═══════════════════════════════════════════
+  # PHASE 3: SOLUTIONING
+  # ═══════════════════════════════════════════
+
+  create-architecture:
+    phase: 3-solutioning
+    command: /gaia-create-arch
+    next:
+      primary: /gaia-review-api
+      note: "Optional if APIs exist, otherwise skip to /gaia-adversarial"
+      parallel:
+        - /gaia-threat-model
+        - /gaia-infra-design
+
+  edit-architecture:
+    phase: 3-solutioning
+    command: /gaia-edit-arch
+    next:
+      primary: /gaia-adversarial
+      note: "Optional for MINOR edits, required for SIGNIFICANT"
+      alternatives:
+        - command: /gaia-add-stories
+          context: "If cascade creates new stories"
+        - command: /gaia-test-design
+          context: "If cascade affects test plan"
+
+  create-epics-stories:
+    phase: 3-solutioning
+    command: /gaia-create-epics
+    next:
+      primary: /gaia-atdd
+      alternatives:
+        - command: /gaia-threat-model
+          context: "If threat modeling not yet done"
+
+  security-threat-model:
+    phase: 3-solutioning
+    command: /gaia-threat-model
+    next:
+      primary: /gaia-infra-design
+
+  infrastructure-design:
+    phase: 3-solutioning
+    command: /gaia-infra-design
+    next:
+      primary: /gaia-trace
+
+  implementation-readiness:
+    phase: 3-solutioning
+    command: /gaia-readiness-check
+    next:
+      primary: /gaia-create-story
+      note: "Create and validate story files before sprint planning"
+
+  # ═══════════════════════════════════════════
+  # PHASE 4: IMPLEMENTATION (loops & branches)
+  # ═══════════════════════════════════════════
+
+  create-story:
+    phase: 4-implementation
+    command: /gaia-create-story
+    next:
+      primary: /gaia-validate-story
+      alternatives:
+        - command: /gaia-create-story
+          context: "To create another story before validating"
+
+  validate-story:
+    phase: 4-implementation
+    command: /gaia-validate-story
+    next:
+      on_pass: /gaia-create-story
+      on_pass_note: "Create more stories, or run /gaia-sprint-plan when all stories are ready"
+      on_fail: /gaia-fix-story
+      alternatives:
+        - command: /gaia-sprint-plan
+          context: "When all stories are created and validated (ready-for-dev)"
+
+  fix-story:
+    phase: 4-implementation
+    command: /gaia-fix-story
+    next:
+      primary: /gaia-validate-story
+
+  sprint-planning:
+    phase: 4-implementation
+    command: /gaia-sprint-plan
+    next:
+      primary: /gaia-dev-story
+      alternatives:
+        - command: /gaia-sprint-status
+          context: "To review current sprint state"
+
+  dev-story:
+    phase: 4-implementation
+    command: /gaia-dev-story
+    next:
+      primary: /gaia-check-dod
+      alternatives:
+        - command: /gaia-run-all-reviews
+          context: "If DoD was already verified"
+        - command: /gaia-code-review
+          context: "To run individual code review first"
+
+  check-dod:
+    phase: 4-implementation
+    command: /gaia-check-dod
+    next:
+      on_pass: /gaia-run-all-reviews
+      on_fail: /gaia-dev-story
+
+  code-review:
+    phase: 4-implementation
+    command: /gaia-code-review
+    next:
+      primary: /gaia-run-all-reviews
+      alternatives:
+        - command: /gaia-dev-story
+          context: "If review found issues requiring code changes"
+
+  qa-generate-tests:
+    phase: 4-implementation
+    command: /gaia-qa-tests
+    next:
+      primary: /gaia-run-all-reviews
+      alternatives:
+        - command: /gaia-dev-story
+          context: "If tests revealed implementation gaps"
+
+  security-review:
+    phase: 4-implementation
+    command: /gaia-security-review
+    next:
+      primary: /gaia-run-all-reviews
+      alternatives:
+        - command: /gaia-dev-story
+          context: "If security issues require code changes"
+
+  run-all-reviews:
+    phase: 4-implementation
+    command: /gaia-run-all-reviews
+    next:
+      primary: /gaia-check-review-gate
+      alternatives:
+        - command: /gaia-dev-story
+          context: "If any review failed and code changes are needed"
+
+  check-review-gate:
+    phase: 4-implementation
+    command: /gaia-check-review-gate
+    next:
+      on_all_passed: /gaia-sprint-status
+      on_failures: /gaia-dev-story
+      on_pending: /gaia-run-all-reviews
+
+  val-validate-artifact:
+    phase: 4-implementation
+    command: /gaia-val-validate
+    next:
+      standalone: true
+      note: "Invoked inline by workflow engine at template-output checkpoints"
+
+  val-validate-plan:
+    phase: 4-implementation
+    command: /gaia-val-validate-plan
+    next:
+      standalone: true
+      note: "Invoked inline by workflow engine at planning gate"
+
+  val-refresh-ground-truth:
+    phase: 4-implementation
+    command: /gaia-refresh-ground-truth
+    next:
+      standalone: true
+      suggestions:
+        - command: /gaia-val-validate
+          context: "To validate an artifact using refreshed ground truth"
+
+  change-request:
+    phase: 4-implementation
+    command: /gaia-change-request
+    next:
+      primary: /gaia-add-stories
+      alternatives:
+        - command: /gaia-correct-course
+          context: "If sprint scope needs adjustment"
+        - command: /gaia-edit-arch
+          context: "If architecture changes are needed"
+
+  add-stories:
+    phase: 4-implementation
+    command: /gaia-add-stories
+    next:
+      primary: /gaia-trace
+      note: "Update traceability matrix with new stories"
+      alternatives:
+        - command: /gaia-sprint-plan
+          context: "To plan a sprint with the new stories"
+        - command: /gaia-correct-course
+          context: "If current sprint scope needs adjustment"
+
+  tech-debt-review:
+    phase: 4-implementation
+    command: /gaia-tech-debt-review
+    next:
+      primary: /gaia-create-story
+      alternatives:
+        - command: /gaia-sprint-plan
+          context: "To plan a tech debt paydown sprint"
+
+  sprint-status:
+    phase: 4-implementation
+    command: /gaia-sprint-status
+    next:
+      context_dependent: true
+      note: "Suggest based on sprint state — if stories in backlog: /gaia-create-story; if invalid: /gaia-correct-course; if all done: /gaia-retro"
+
+  epic-status:
+    phase: 4-implementation
+    command: /gaia-epic-status
+    next:
+      primary: /gaia-sprint-plan
+      alternatives:
+        - command: /gaia-sprint-status
+          context: "To check current sprint progress"
+
+  correct-course:
+    phase: 4-implementation
+    command: /gaia-correct-course
+    next:
+      primary: /gaia-sprint-status
+      alternatives:
+        - command: /gaia-sprint-plan
+          context: "If re-planning is needed"
+
+  triage-findings:
+    phase: 4-implementation
+    command: /gaia-triage-findings
+    next:
+      primary: /gaia-add-stories
+      alternatives:
+        - command: /gaia-create-story
+          context: "To create individual stories from triaged findings"
+
+  action-items:
+    phase: 4-implementation
+    command: /gaia-action-items
+    next:
+      standalone: true
+
+  retrospective:
+    phase: 4-implementation
+    command: /gaia-retro
+    next:
+      primary: /gaia-sprint-plan
+      alternatives:
+        - command: /gaia-release-plan
+          context: "If all epics are complete and ready for deployment"
+
+  # ═══════════════════════════════════════════
+  # PHASE 5: DEPLOYMENT
+  # ═══════════════════════════════════════════
+
+  release-plan:
+    phase: 5-deployment
+    command: /gaia-release-plan
+    next:
+      primary: /gaia-rollback-plan
+      parallel:
+        - /gaia-deploy-checklist
+
+  rollback-plan:
+    phase: 5-deployment
+    command: /gaia-rollback-plan
+    next:
+      primary: /gaia-deploy-checklist
+
+  deployment-checklist:
+    phase: 5-deployment
+    command: /gaia-deploy-checklist
+    next:
+      primary: /gaia-post-deploy
+      note: "Deploy to production first, then run post-deploy verification"
+
+  post-deploy-verify:
+    phase: 5-deployment
+    command: /gaia-post-deploy
+    next:
+      terminal: true
+      note: "Lifecycle complete. Start new cycle with /gaia-retro for lessons learned."
+
+  # ═══════════════════════════════════════════
+  # ANYTIME WORKFLOWS (no lifecycle position)
+  # ═══════════════════════════════════════════
+
+  # -- Core module --
+  brainstorming:
+    module: core
+    command: /gaia-brainstorming
+    next:
+      standalone: true
+      note: "Return to current lifecycle phase"
+
+  bridge-toggle:
+    module: core
+    command: /gaia-bridge-enable
+    next:
+      standalone: true
+      note: "Run /gaia-build-configs to regenerate resolved configs after toggling"
+
+  party-mode:
+    module: core
+    command: /gaia-party
+    next:
+      standalone: true
+      note: "Return to current lifecycle phase"
+
+  # -- Lifecycle cross-phase --
+  add-feature:
+    module: lifecycle
+    command: /gaia-add-feature
+    next:
+      primary: /gaia-sprint-plan
+      note: "Orchestrator cascades through PRD → architecture → test plan → stories → traceability → readiness"
+      alternatives:
+        - command: /gaia-correct-course
+          context: "If new stories should enter current sprint"
+        - command: /gaia-create-story
+          context: "To elaborate individual stories before sprint planning"
+
+  # -- Lifecycle anytime --
+  brownfield-onboarding:
+    module: lifecycle
+    command: /gaia-brownfield
+    next:
+      standalone: true
+      suggestions:
+        - command: /gaia-create-arch
+          context: "To formalize the discovered architecture"
+        - command: /gaia-test-design
+          context: "To create a test plan for the existing project"
+
+  document-project:
+    module: lifecycle
+    command: /gaia-document-project
+    next:
+      standalone: true
+
+  generate-project-context:
+    module: lifecycle
+    command: /gaia-project-context
+    next:
+      standalone: true
+
+  memory-hygiene:
+    module: lifecycle
+    command: /gaia-memory-hygiene
+    next:
+      standalone: true
+      note: "Run periodically to detect stale or contradicted decisions in agent memory sidecars"
+
+  create-stakeholder:
+    module: lifecycle
+    command: /gaia-create-stakeholder
+    next:
+      standalone: true
+      suggestions:
+        - command: /gaia-party
+          context: "To start a Party Mode discussion with the new stakeholder"
+
+  performance-review:
+    module: lifecycle
+    command: /gaia-performance-review
+    next:
+      standalone: true
+      suggestions:
+        - command: /gaia-dev-story
+          context: "To implement performance fixes"
+
+  # -- Deprecated (kept for manifest consistency until workflows are removed) --
+  validate-prd:
+    module: lifecycle
+    command: /gaia-validate-prd
+    deprecated: true
+    next:
+      standalone: true
+      note: "Deprecated — superseded by /gaia-val-validate. Will be removed in E10-S3."
+
+  edit-ux-design:
+    module: lifecycle
+    command: /gaia-edit-ux
+    next:
+      standalone: true
+      note: "Standalone UX design editor"
+
+  # -- Quick flow --
+  quick-spec:
+    module: lifecycle
+    command: /gaia-quick-spec
+    next:
+      primary: /gaia-quick-dev
+
+  quick-dev:
+    module: lifecycle
+    command: /gaia-quick-dev
+    next:
+      primary: /gaia-code-review
+
+  # -- Testing module --
+  edit-test-plan:
+    module: testing
+    command: /gaia-edit-test-plan
+    next:
+      standalone: true
+      suggestions:
+        - command: /gaia-atdd
+          context: "To generate acceptance tests for high-risk stories"
+        - command: /gaia-trace
+          context: "To update traceability matrix with new test cases"
+
+  test-design:
+    module: testing
+    command: /gaia-test-design
+    next:
+      primary: /gaia-create-epics
+      note: "Test plan is required before creating epics"
+
+  test-framework:
+    module: testing
+    command: /gaia-test-framework
+    next:
+      standalone: true
+      suggestions:
+        - command: /gaia-test-design
+          context: "To create a test plan using the framework"
+
+  ci-setup:
+    module: testing
+    command: /gaia-ci-setup
+    next:
+      primary: /gaia-readiness-check
+
+  ci-edit:
+    module: testing
+    command: /gaia-ci-edit
+    next:
+      standalone: true
+      suggestions:
+        - command: /gaia-build-configs
+          context: "Regenerate resolved configs after editing the promotion chain"
+
+  atdd:
+    module: testing
+    command: /gaia-atdd
+    next:
+      primary: /gaia-threat-model
+      alternatives:
+        - command: /gaia-trace
+          context: "If threat model and infra design are already done"
+
+  test-automation:
+    module: testing
+    command: /gaia-test-automate
+    next:
+      standalone: true
+      suggestions:
+        - command: /gaia-run-all-reviews
+          context: "To complete the review gate"
+
+  test-review:
+    module: testing
+    command: /gaia-test-review
+    next:
+      standalone: true
+      suggestions:
+        - command: /gaia-run-all-reviews
+          context: "To complete the review gate"
+
+  test-gap-analysis:
+    module: testing
+    command: /gaia-test-gap-analysis
+    next:
+      standalone: true
+      suggestions:
+        - command: /gaia-sprint-plan
+          context: "To schedule remediation stories discovered by the gap analysis"
+        - command: /gaia-trace
+          context: "To update traceability matrix after closing coverage gaps"
+        - command: /gaia-test-design
+          context: "To redesign the test plan based on gap analysis findings"
+
+  fill-test-gaps:
+    module: testing
+    command: /gaia-fill-test-gaps
+    next:
+      standalone: true
+      suggestions:
+        - command: /gaia-test-gap-analysis
+          context: "To regenerate the gap analysis report before triaging"
+        - command: /gaia-sprint-plan
+          context: "To schedule remediation stories from the triage table"
+
+  traceability:
+    module: testing
+    command: /gaia-trace
+    next:
+      primary: /gaia-ci-setup
+
+  nfr-assessment:
+    module: testing
+    command: /gaia-nfr
+    next:
+      standalone: true
+      suggestions:
+        - command: /gaia-test-design
+          context: "To design tests covering the assessed NFRs"
+
+  accessibility-testing:
+    module: testing
+    command: /gaia-a11y-testing
+    next:
+      standalone: true
+
+  performance-testing:
+    module: testing
+    command: /gaia-perf-testing
+    next:
+      standalone: true
+
+  mobile-testing:
+    module: testing
+    command: /gaia-mobile-testing
+    next:
+      standalone: true
+
+  teach-me-testing:
+    module: testing
+    command: /gaia-teach-testing
+    next:
+      standalone: true
+
+  review-a11y:
+    module: testing
+    command: /gaia-review-a11y
+    next:
+      primary: /gaia-create-arch
+      note: "When used in lifecycle flow (after UX design)"
+
+  # -- Creative module --
+  design-thinking:
+    module: creative
+    command: /gaia-design-thinking
+    next:
+      standalone: true
+      suggestions:
+        - command: /gaia-create-ux
+          context: "To translate design thinking insights into UX specs"
+
+  innovation-strategy:
+    module: creative
+    command: /gaia-innovation
+    next:
+      standalone: true
+
+  problem-solving:
+    module: creative
+    command: /gaia-problem-solving
+    next:
+      standalone: true
+
+  storytelling:
+    module: creative
+    command: /gaia-storytelling
+    next:
+      standalone: true
+
+  slide-deck:
+    module: creative
+    command: /gaia-slide-deck
+    next:
+      standalone: true
+
+  pitch-deck:
+    module: creative
+    command: /gaia-pitch-deck
+    next:
+      standalone: true
+
+  creative-sprint:
+    module: creative
+    command: /gaia-creative-sprint
+    next:
+      standalone: true
+      suggestions:
+        - command: /gaia-product-brief
+          context: "To formalize creative sprint outputs"

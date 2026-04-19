@@ -80,7 +80,7 @@ Write a structured product brief to `docs/creative-artifacts/product-brief-{slug
 - **Risks and Assumptions** — known risks, dependencies, and assumptions
 - **Competitive Landscape** — summary of competitive positioning from upstream research
 - **Success Metrics** — measurable KPIs and success criteria
-- **Next Steps** — per `_gaia/_config/lifecycle-sequence.yaml`
+- **Next Steps** — per `${CLAUDE_PLUGIN_ROOT}/knowledge/lifecycle-sequence.yaml` (routing table ships inside the plugin under ADR-041's `knowledge/` convention; the legacy v1 location `_gaia/_config/lifecycle-sequence.yaml` is retired and no longer used)
 
 Where `{slug}` is a short kebab-case slug derived from the product vision (e.g., `product-brief-ai-code-review.md`).
 

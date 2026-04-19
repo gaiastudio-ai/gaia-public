@@ -19,7 +19,7 @@ invocations. Converted under ADR-041 (native execution model) and ADR-045
 orchestrate sequential fork-subagent invocations. `gaia-run-all-reviews` is the
 **fixed-sequence** variant (6 canonical reviewers); `gaia-party` is the
 **dynamic** variant — the participant set is resolved at invitation time from
-`_gaia/_config/agent-manifest.csv` + `custom/stakeholders/*.md`. Orchestration
+`${CLAUDE_PLUGIN_ROOT}/knowledge/agent-manifest.csv` + `custom/stakeholders/*.md`. Orchestration
 pattern is the same (sequential, never parallel, never reordered); only the
 input-resolution step differs.
 
@@ -49,9 +49,14 @@ input-resolution step differs.
 
 #### Source 1: GAIA agent discovery
 
-1. Read `_gaia/_config/agent-manifest.csv` to enumerate all installed GAIA
-   agents.
-2. For each row, extract `name`, `displayName`, `title`, `module`.
+1. Read `${CLAUDE_PLUGIN_ROOT}/knowledge/agent-manifest.csv` to enumerate all
+   installed GAIA agents. (The registry ships inside the plugin under ADR-041's
+   `knowledge/` convention; the legacy v1 location `_gaia/_config/agent-manifest.csv`
+   is retired and no longer used.)
+2. For each row, extract `name`, `displayName`, `title`, `module`. The v1 CSV
+   had a trailing `path` column pointing at `_gaia/lifecycle/agents/*.md`; that
+   column has been dropped — party invokes subagents by id, and the plugin file
+   path is derivable as `plugins/gaia/agents/{name}.md` when needed.
 3. Build the GAIA agent list (existing behavior, unchanged).
 
 #### Source 2: Stakeholder discovery (AC-EC1, AC-EC2, AC-EC3, AC-EC9)

@@ -122,7 +122,7 @@ Write the PRD to `docs/planning-artifacts/prd.md` with all sections populated:
 
 ### Step 12 — Adversarial Review
 
-- Read `_gaia/_config/adversarial-triggers.yaml` to evaluate trigger rules. Determine the current `change_type`: if invoked with a change_type context (e.g., from add-feature triage), use that value. If no context is available (standalone PRD creation), default to "feature".
+- Read `${CLAUDE_PLUGIN_ROOT}/knowledge/adversarial-triggers.yaml` to evaluate trigger rules. (This policy table ships inside the plugin under ADR-041's `knowledge/` convention; the legacy v1 location `_gaia/_config/adversarial-triggers.yaml` is retired and no longer used.) Determine the current `change_type`: if invoked with a change_type context (e.g., from add-feature triage), use that value. If no context is available (standalone PRD creation), default to "feature".
 - Look up the trigger rule for `change_type` + artifact "prd". If adversarial is false for this combination: skip the adversarial review. Add a "## Review Findings Incorporated" section with "Adversarial review not triggered — change type: {change_type}".
 - If adversarial is true: spawn a subagent to run the adversarial review task against `docs/planning-artifacts/prd.md`.
 - When subagent returns: verify `adversarial-review-prd-*.md` exists in `docs/planning-artifacts/`.

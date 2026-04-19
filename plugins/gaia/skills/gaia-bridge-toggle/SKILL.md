@@ -1,13 +1,13 @@
 ---
 name: gaia-bridge-toggle
-description: Toggle the Test Execution Bridge on or off by flipping test_execution_bridge.bridge_enabled in _gaia/_config/global.yaml, preserving comments and YAML formatting. Idempotent — no write when already in target state. Under the native plugin, the flip takes effect immediately — no config rebuild step is required. Use via /gaia-bridge-enable or /gaia-bridge-disable. Native Claude Code conversion of the legacy bridge-toggle workflow (E28-S111, Cluster 14).
+description: Toggle the Test Execution Bridge on or off by flipping test_execution_bridge.bridge_enabled in config/project-config.yaml (per ADR-044), preserving comments and YAML formatting. Idempotent — no write when already in target state. Under the native plugin, the flip takes effect immediately — no config rebuild step is required. Use via /gaia-bridge-enable or /gaia-bridge-disable. Native Claude Code conversion of the legacy bridge-toggle workflow (E28-S111, Cluster 14).
 argument-hint: "enable|disable"
 allowed-tools: [Read, Edit, Bash]
 ---
 
 ## Mission
 
-You are toggling the Test Execution Bridge. The bridge flag lives at `test_execution_bridge.bridge_enabled` in `_gaia/_config/global.yaml`. When enabled, dev-story and review workflows run real test runners via the bridge (Layer 1 → Layer 2 → Layer 3) and emit evidence under `docs/test-artifacts/test-results/`. When disabled, workflows fall back to narrative test reporting.
+You are toggling the Test Execution Bridge. The bridge flag lives at `test_execution_bridge.bridge_enabled` in `config/project-config.yaml` (per ADR-044's two-file config split — shared project config is versioned alongside the project, machine-local overlay lives in `config/global.yaml`). Reads resolve via `scripts/resolve-config.sh`; writes are direct regex-based in-place edits against `config/project-config.yaml`. The legacy v1 location `_gaia/_config/global.yaml` is retired and no longer used. When enabled, dev-story and review workflows run real test runners via the bridge (Layer 1 → Layer 2 → Layer 3) and emit evidence under `docs/test-artifacts/test-results/`. When disabled, workflows fall back to narrative test reporting.
 
 Two slash commands front this skill via wrapper aliases:
 - `/gaia-bridge-enable` → delegates here with mode=`enable`
@@ -17,11 +17,11 @@ This skill is the native Claude Code conversion of the legacy bridge-toggle work
 
 ## Critical Rules
 
-- **Modify global.yaml in place, preserving ALL comments, key ordering, and formatting.** Never regenerate the full file. A successful toggle emits a single-line change.
+- **Modify `config/project-config.yaml` in place, preserving ALL comments, key ordering, and formatting.** Never regenerate the full file. A successful toggle emits a single-line change.
 - **Use regex-based in-place edit targeting ONLY the `bridge_enabled:` line — never regenerate the full file.** Pattern: `/^(\s+bridge_enabled:\s*)(true|false)/m`. Replace capture group 2 with the target value.
 - **Idempotent: if the flag is already in the target state, do NOT write the file.** A byte-level diff must show zero changes. Report `Bridge already {enabled|disabled}` and exit with status ok.
 - **Fail fast when the test_execution_bridge block is missing (AC-EC2).** Emit `test_execution_bridge block missing — run /gaia-ci-setup first` and exit non-zero. Do NOT create a new block silently.
-- **The flag flip takes effect immediately.** Under the native plugin there is no pre-compiled config cache to refresh (ADR-044/ADR-048 retired the `.resolved/` chain). Downstream workflows read `global.yaml` directly via `resolve-config.sh` on their next invocation.
+- **The flag flip takes effect immediately.** Under the native plugin there is no pre-compiled config cache to refresh (ADR-044/ADR-048 retired the `.resolved/` chain). Downstream workflows read `config/project-config.yaml` directly via `scripts/resolve-config.sh` on their next invocation.
 
 ## Inputs
 
@@ -39,10 +39,10 @@ The skill runs five steps in strict order, mirroring the legacy `bridge-toggle/i
 
 ## Step 1 — Read Current Bridge State
 
-- Read `_gaia/_config/global.yaml`.
+- Resolve the current config via `scripts/resolve-config.sh` and inspect the `test_execution_bridge` block. The authoritative file on disk is `config/project-config.yaml` (ADR-044). The legacy v1 location `_gaia/_config/global.yaml` is retired and no longer used — do NOT probe it.
 - Extract the `test_execution_bridge.bridge_enabled` value.
 - **AC-EC2 / AC3:** If the `test_execution_bridge` section is missing entirely, or the section exists but the `bridge_enabled` key is missing, treat `bridge_enabled` as `false`. In the missing-section case, fail fast with `test_execution_bridge block missing — run /gaia-ci-setup first` and exit non-zero — do NOT create a new block silently.
-- Capture the raw file bytes for idempotency verification.
+- Capture the raw file bytes of `config/project-config.yaml` for idempotency verification.
 - Report: `Current bridge state: {enabled|disabled}`.
 
 ## Step 2 — Idempotency Check
@@ -52,11 +52,11 @@ The skill runs five steps in strict order, mirroring the legacy `bridge-toggle/i
 
 ## Step 3 — Write Updated State
 
-- Use a regex-based in-place edit (`Edit` tool) to update ONLY the `bridge_enabled:` line within the `test_execution_bridge:` section.
+- Use a regex-based in-place edit (`Edit` tool) against `config/project-config.yaml` to update ONLY the `bridge_enabled:` line within the `test_execution_bridge:` section.
 - Regex pattern: `/^(\s+bridge_enabled:\s*)(true|false)/m` — replace capture group 2 with the target value.
 - This preserves inline comments on the same line and all surrounding YAML content.
-- If the `test_execution_bridge` section is missing: emit the error from Step 1 (`test_execution_bridge section not found in global.yaml — cannot toggle. Add the section first (see ADR-028 §10.20.7).`) and exit non-zero.
-- Write the updated content back to global.yaml.
+- If the `test_execution_bridge` section is missing: emit the error from Step 1 (`test_execution_bridge section not found in config/project-config.yaml — cannot toggle. Add the section first (see ADR-028 §10.20.7).`) and exit non-zero.
+- Write the updated content back to `config/project-config.yaml`.
 
 ## Step 4 — Post-Flip Checks (Enable Only)
 
@@ -80,7 +80,7 @@ The skill runs five steps in strict order, mirroring the legacy `bridge-toggle/i
 - If `mode == enable` and `post_flip_result.kind == 'present_valid'`: include the detected runners table (name + tier).
 - If `mode == enable` and `post_flip_result.kind == 'present_invalid'`: include the schema validation errors as warnings. The `bridge_enabled` flag is NOT rolled back (AC5).
 - If `mode == enable` and `post_flip_result.kind == 'absent'`: include the user's selected option (a/b/c) or the YOLO auto-skip warning.
-- **AC6 — the summary confirms the flag change is effective immediately.** Under the native plugin (ADR-044/ADR-048) there is no pre-compiled config cache to refresh — downstream workflows read `global.yaml` directly via `scripts/resolve-config.sh` on their next invocation.
+- **AC6 — the summary confirms the flag change is effective immediately.** Under the native plugin (ADR-044/ADR-048) there is no pre-compiled config cache to refresh — downstream workflows read `config/project-config.yaml` directly via `scripts/resolve-config.sh` on their next invocation.
 - If `mode == disable`: the summary only confirms the new state. No post-flip check output (AC7 — Step 4 was skipped).
 
 ## Edge Cases
@@ -93,8 +93,8 @@ The skill runs five steps in strict order, mirroring the legacy `bridge-toggle/i
 ## References
 
 - Legacy source: `_gaia/core/workflows/bridge-toggle/instructions.xml` (69 lines) — parity reference for NFR-053.
-- Authoritative file edited: `_gaia/_config/global.yaml` at `test_execution_bridge.bridge_enabled`.
-- Post-edit trigger: `/gaia-build-configs` (mandatory; non-optional).
+- Authoritative file edited: `config/project-config.yaml` at `test_execution_bridge.bridge_enabled` (per ADR-044). The legacy v1 location `_gaia/_config/global.yaml` is retired and no longer used.
+- No post-edit trigger required under the native plugin (ADR-044/ADR-048 retired the `.resolved/` pre-compilation step — downstream readers pick up changes on next invocation).
 - Wrapper aliases: `plugins/gaia/skills/gaia-bridge-enable/SKILL.md`, `plugins/gaia/skills/gaia-bridge-disable/SKILL.md`.
 - ADR-041 — Native Execution Model via Claude Code Skills + Subagents + Plugins + Hooks.
 - ADR-042 — Scripts-over-LLM for Deterministic Operations (inline `!` bash for the regex edit and the build-configs re-run).

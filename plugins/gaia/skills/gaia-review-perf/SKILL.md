@@ -115,7 +115,7 @@ Invoke the Juno performance subagent to perform deep performance analysis on all
   - FAILED stays FAILED
 - Invoke the shared `review-gate.sh` script to update the story's Review Gate table:
   ```bash
-  ${CLAUDE_PLUGIN_ROOT}/../scripts/review-gate.sh update --story "{story_key}" --gate "Performance Review" --verdict "{PASSED|FAILED}"
+  ${CLAUDE_PLUGIN_ROOT}/scripts/review-gate.sh update --story "{story_key}" --gate "Performance Review" --verdict "{PASSED|FAILED}"
   ```
 - Confirm the update succeeded (exit code 0).
 - Report the final status to the user.

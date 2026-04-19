@@ -74,17 +74,17 @@ For each approved change, apply it to the story file (source of truth):
 
 For stories **removed** from the sprint (moved back to backlog):
 ```bash
-PROJECT_PATH="${CLAUDE_PROJECT_ROOT}" "${CLAUDE_PLUGIN_ROOT}/../scripts/sprint-state.sh" transition --story {story_key} --to backlog
+PROJECT_PATH="${CLAUDE_PROJECT_ROOT}" "${CLAUDE_PLUGIN_ROOT}/scripts/sprint-state.sh" transition --story {story_key} --to backlog
 ```
 
 For stories **injected** into the sprint:
 ```bash
-PROJECT_PATH="${CLAUDE_PROJECT_ROOT}" "${CLAUDE_PLUGIN_ROOT}/../scripts/sprint-state.sh" transition --story {story_key} --to {target_status}
+PROJECT_PATH="${CLAUDE_PROJECT_ROOT}" "${CLAUDE_PLUGIN_ROOT}/scripts/sprint-state.sh" transition --story {story_key} --to {target_status}
 ```
 
 For stories that **changed status** but remain in the sprint:
 ```bash
-PROJECT_PATH="${CLAUDE_PROJECT_ROOT}" "${CLAUDE_PLUGIN_ROOT}/../scripts/sprint-state.sh" transition --story {story_key} --to {new_status}
+PROJECT_PATH="${CLAUDE_PROJECT_ROOT}" "${CLAUDE_PLUGIN_ROOT}/scripts/sprint-state.sh" transition --story {story_key} --to {new_status}
 ```
 
 ### Step 6 --- Log Course Correction

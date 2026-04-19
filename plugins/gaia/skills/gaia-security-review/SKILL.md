@@ -122,7 +122,7 @@ Check code changes against each OWASP category:
   - FAILED stays FAILED
 - Invoke the shared `review-gate.sh` script to update the story's Review Gate table:
   ```bash
-  ${CLAUDE_PLUGIN_ROOT}/../scripts/review-gate.sh update --story "{story_key}" --gate "Security Review" --verdict "{PASSED|FAILED}"
+  ${CLAUDE_PLUGIN_ROOT}/scripts/review-gate.sh update --story "{story_key}" --gate "Security Review" --verdict "{PASSED|FAILED}"
   ```
 - Confirm the update succeeded (exit code 0).
 - Report the final status to the user.

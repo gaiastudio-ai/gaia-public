@@ -28,7 +28,7 @@ This skill is the native Claude Code conversion of the legacy `_gaia/lifecycle/w
 Run the sprint-status-dashboard.sh formatter script:
 
 ```bash
-PROJECT_PATH="${CLAUDE_PROJECT_ROOT}" "${CLAUDE_PLUGIN_ROOT}/../scripts/sprint-status-dashboard.sh"
+PROJECT_PATH="${CLAUDE_PROJECT_ROOT}" "${CLAUDE_PLUGIN_ROOT}/scripts/sprint-status-dashboard.sh"
 ```
 
 If the script exits 0, present its stdout output to the user verbatim — do not reformat, filter, or enhance the dashboard output. The script produces the canonical dashboard rendering.

@@ -3,7 +3,7 @@ name: gaia-validate-story
 description: Full story validation with factual verification via Val subagent. Invokes the validator in an isolated forked context and records the outcome via review-gate.sh using canonical PASSED/FAILED/UNVERIFIED vocabulary.
 argument-hint: "[story-key]"
 context: fork
-allowed-tools: [Read, Grep, Glob, Bash]
+tools: Read, Grep, Glob, Bash
 ---
 
 ## Setup

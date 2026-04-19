@@ -79,8 +79,8 @@ run_finalize() {
   grep -q "^description:" "$SKILLS_DIR/$SKILL/SKILL.md"
 }
 
-@test "AC1: SKILL.md frontmatter has allowed-tools field" {
-  grep -q "^allowed-tools:" "$SKILLS_DIR/$SKILL/SKILL.md"
+@test "AC1: SKILL.md frontmatter has tools field" {
+  grep -q "^tools:" "$SKILLS_DIR/$SKILL/SKILL.md"
 }
 
 @test "AC1: SKILL.md frontmatter has context: fork" {

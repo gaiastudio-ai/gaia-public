@@ -2,7 +2,7 @@
 name: gaia-ci-setup
 description: Scaffold a CI pipeline with quality checks. Use when "setup CI pipeline" or /gaia-ci-setup.
 argument-hint: "[--preset solo|small-team|standard|enterprise|custom]"
-allowed-tools: Read Grep Glob Bash Write Edit
+tools: Read, Grep, Glob, Bash, Write, Edit
 ---
 
 ## Setup

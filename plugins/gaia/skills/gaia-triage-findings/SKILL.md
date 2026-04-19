@@ -2,7 +2,7 @@
 name: gaia-triage-findings
 description: "Scan in-progress and completed story files for development findings and triage each into a new backlog story, an existing story, or dismiss. Produces new story files with complete frontmatter (15 required fields, status: backlog, sprint_id: null). Source story findings tables stay intact for idempotent re-triage. GAIA-native replacement for the legacy triage-findings XML engine workflow."
 argument-hint: "[story-key?]"
-allowed-tools: [Read, Write, Bash]
+tools: Read, Write, Bash
 version: "1.0.0"
 ---
 

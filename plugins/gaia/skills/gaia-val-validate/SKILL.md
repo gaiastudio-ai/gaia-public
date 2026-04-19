@@ -3,7 +3,7 @@ name: gaia-val-validate
 description: Validate an artifact against the codebase and ground truth -- scans file paths, verifies claims, and reports findings with evidence. Use when "validate artifact" or /gaia-val-validate.
 argument-hint: "[artifact-path]"
 context: fork
-allowed-tools: [Read, Grep, Glob, Bash]
+tools: Read, Grep, Glob, Bash
 ---
 
 ## Setup

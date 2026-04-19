@@ -3,7 +3,7 @@ name: gaia-qa-tests
 description: Generate QA test cases and review test coverage. Use when "generate QA tests" or /gaia-qa-tests.
 argument-hint: "[story-key]"
 context: fork
-allowed-tools: Read Grep Glob Bash
+tools: Read, Grep, Glob, Bash
 ---
 
 ## Setup

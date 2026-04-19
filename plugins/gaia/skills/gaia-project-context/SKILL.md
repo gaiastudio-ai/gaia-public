@@ -1,7 +1,7 @@
 ---
 name: gaia-project-context
 description: "Generate an AI-optimised project context document by aggregating planning artifacts and source-tree metadata into a single project-context.md. Use when 'generate project context' or /gaia-project-context. GAIA-native replacement for the legacy generate-project-context XML engine workflow."
-allowed-tools: [Read, Write, Bash, Grep, Glob]
+tools: Read, Write, Bash, Grep, Glob
 model: inherit
 version: "1.0.0"
 ---

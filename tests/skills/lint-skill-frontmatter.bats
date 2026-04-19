@@ -1,11 +1,11 @@
 #!/usr/bin/env bats
-# lint-skill-frontmatter.bats — frontmatter linter allowed-tools validation tests (E28-S96)
+# lint-skill-frontmatter.bats — frontmatter linter tools validation tests (E28-S96)
 #
 # Validates:
-#   AC1: Valid allowed-tools list passes lint (both array and space-separated formats)
+#   AC1: Valid tools list passes lint (both array and space-separated formats)
 #   AC2: Invalid tool name produces error with file path and tool name
 #   AC3: Full-tree backward compatibility — all existing SKILL.md files pass
-#   AC4: Missing allowed-tools field passes lint (optional field)
+#   AC4: Missing tools field passes lint (optional field)
 #   AC5: Single CANONICAL_TOOLS array is the sole authority
 #
 # Usage:
@@ -49,35 +49,46 @@ run_linter() {
   cd "$FIXTURE_DIR" && bash "$SCRIPT"
 }
 
-# ---------- AC1: Valid allowed-tools (YAML array format) passes lint ----------
+# ---------- AC1: Valid tools (comma-separated string) passes lint ----------
 
-@test "AC1: valid allowed-tools in YAML array format passes lint" {
-  create_skill_fixture "valid-array" "name: valid-array
+@test "AC1: valid tools in comma-separated string format passes lint" {
+  create_skill_fixture "valid-csv" "name: valid-csv
 description: A test skill
-allowed-tools: [Read, Write, Bash]"
+tools: Read, Write, Bash"
   run run_linter
   [ "$status" -eq 0 ]
 }
 
-# ---------- AC1: Valid allowed-tools (space-separated format) passes lint ----------
+# ---------- E28-S185: Bracketed tools: list is REJECTED ----------
 
-@test "AC1: valid allowed-tools in space-separated format passes lint" {
+@test "AC1: bracketed tools: list is rejected (E28-S185)" {
+  create_skill_fixture "bracketed" "name: bracketed
+description: A test skill
+tools: [Read, Write, Bash]"
+  run run_linter
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"bracketed list"* ]] || [[ "$output" == *"comma-separated string"* ]]
+}
+
+# ---------- AC1: Valid tools (space-separated format) passes lint ----------
+
+@test "AC1: valid tools in space-separated format passes lint" {
   create_skill_fixture "valid-space" "name: valid-space
 description: A test skill
-allowed-tools: Read Write Bash"
+tools: Read Write Bash"
   run run_linter
   [ "$status" -eq 0 ]
 }
 
 # ---------- AC2: Invalid tool name produces error ----------
 
-@test "AC2: invalid tool name in allowed-tools produces error with tool name and file path" {
+@test "AC2: invalid tool name in tools produces error with tool name and file path" {
   create_skill_fixture "invalid-tool" "name: invalid-tool
 description: A test skill
-allowed-tools: [Read, FooBar]"
+tools: Read, FooBar"
   run run_linter
   [ "$status" -eq 1 ]
-  [[ "$output" == *"invalid allowed-tool"* ]]
+  [[ "$output" == *"invalid tool"* ]]
   [[ "$output" == *"FooBar"* ]]
   [[ "$output" == *"invalid-tool/SKILL.md"* ]]
 }
@@ -88,31 +99,42 @@ allowed-tools: [Read, FooBar]"
   cd "$REPO_ROOT" && bash "$SCRIPT"
 }
 
-# ---------- AC4: Missing allowed-tools field passes lint ----------
+# ---------- AC4: Missing tools field passes lint ----------
 
-@test "AC4: missing allowed-tools field does not cause error" {
-  create_skill_fixture "no-allowed-tools" "name: no-allowed-tools
-description: A test skill without allowed-tools"
+@test "AC4: missing tools field does not cause error" {
+  create_skill_fixture "no-tools" "name: no-tools
+description: A test skill without tools"
   run run_linter
   [ "$status" -eq 0 ]
 }
 
-# ---------- AC1 variant: Both YAML array and space formats handled ----------
+# ---------- AC1 variant: All canonical tools accepted ----------
 
-@test "AC1: all canonical tools in YAML array format passes lint" {
+@test "AC1: all canonical tools in comma-separated format pass lint" {
   create_skill_fixture "all-tools" "name: all-tools
 description: A test skill
-allowed-tools: [Read, Write, Edit, Grep, Glob, Bash, Agent, Skill, WebSearch, WebFetch, Task]"
+tools: Read, Write, Edit, Grep, Glob, Bash, Agent, Skill, WebSearch, WebFetch, Task"
   run run_linter
   [ "$status" -eq 0 ]
 }
 
-# ---------- Edge: Empty allowed-tools value passes lint ----------
+# ---------- E28-S185: Retired allowed-tools key is REJECTED ----------
 
-@test "Edge: empty allowed-tools value does not cause error" {
+@test "E28-S185: retired allowed-tools key is rejected" {
+  create_skill_fixture "legacy" "name: legacy
+description: A test skill
+allowed-tools: Read, Write"
+  run run_linter
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"retired"* ]] || [[ "$output" == *"allowed-tools"* ]]
+}
+
+# ---------- Edge: Empty tools value passes lint ----------
+
+@test "Edge: empty tools value does not cause error" {
   create_skill_fixture "empty-tools" "name: empty-tools
 description: A test skill
-allowed-tools: "
+tools: "
   run run_linter
   [ "$status" -eq 0 ]
 }
@@ -122,7 +144,7 @@ allowed-tools: "
 @test "AC2: multiple invalid tool names each produce separate error lines" {
   create_skill_fixture "multi-invalid" "name: multi-invalid
 description: A test skill
-allowed-tools: [Read, FooBar, BazQux]"
+tools: [Read, FooBar, BazQux]"
   run run_linter
   [ "$status" -eq 1 ]
   [[ "$output" == *"FooBar"* ]]

@@ -347,6 +347,94 @@ _migrate_config_split() {
 }
 
 # ---------------------------------------------------------------------------
+# Subtask 4.4 — remove legacy .claude/commands/gaia-*.md stubs (E28-S186)
+#
+# Claude Code registers slash commands from two places: the v2 plugin's
+# SKILL.md files AND the legacy `.claude/commands/*.md` stub files left over
+# from a v1 install. After `/gaia-migrate apply` installs the v2 plugin, the
+# legacy stubs still register the same commands — every /gaia-* appears twice
+# in the palette. This step removes the `.claude/commands/gaia-*.md` stubs
+# (AC1-AC7 of E28-S186) after a verbatim backup into the migration backup
+# tree. The glob is leading-anchored (gaia-*.md) so a user's own
+# `my-gaia-tool.md` is never touched.
+# ---------------------------------------------------------------------------
+
+# Populated by _collect_legacy_command_stubs. Caller reads STUB_COUNT and
+# iterates the STUB_PATHS array; both are reset on every call.
+STUB_PATHS=()
+STUB_COUNT=0
+
+# _collect_legacy_command_stubs: find every file under .claude/commands/
+# whose basename matches gaia-*.md at the leading prefix. Populates the
+# STUB_PATHS array and STUB_COUNT in place.
+_collect_legacy_command_stubs() {
+  STUB_PATHS=()
+  STUB_COUNT=0
+  local dir="$PROJECT_ROOT/.claude/commands"
+  [[ ! -d "$dir" ]] && return 0
+  # -maxdepth 1 — only direct children (we never recurse into subfolders).
+  # -name 'gaia-*.md' — leading-anchored glob, NOT *gaia*.md.
+  # -type f — skip directories and symlinks to non-files (defensive).
+  while IFS= read -r -d '' f; do
+    STUB_PATHS+=("$f")
+    STUB_COUNT=$((STUB_COUNT + 1))
+  done < <(find "$dir" -maxdepth 1 -type f -name 'gaia-*.md' -print0 2>/dev/null)
+}
+
+_migrate_legacy_command_stubs() {
+  echo
+  echo "=== migrate 4.4: legacy .claude/commands/gaia-*.md stubs ==="
+
+  _collect_legacy_command_stubs
+
+  if [[ "$STUB_COUNT" -eq 0 ]]; then
+    echo "Legacy command stubs to remove (0 files) — none present"
+    echo "  stubs PASS"
+    return 0
+  fi
+
+  echo "Legacy command stubs to remove ($STUB_COUNT files):"
+  local f
+  for f in "${STUB_PATHS[@]}"; do
+    echo "  - ${f#"$PROJECT_ROOT"/}"
+  done
+
+  if [[ "$DRY_RUN" == "true" ]]; then
+    echo "  [dry-run] would back up the above files to $BACKUP_DIR/.claude/commands/"
+    echo "  [dry-run] would sha256-verify each backup copy"
+    echo "  [dry-run] would delete each source stub after verification"
+    echo "  stubs PASS"
+    return 0
+  fi
+
+  # Backup MUST precede delete. The v1 stubs are small (<5KB each) so this
+  # is cheap. Preserve directory structure under the timestamped backup dir.
+  local backup_commands_dir="$BACKUP_DIR/.claude/commands"
+  mkdir -p "$backup_commands_dir"
+
+  local deleted=0
+  for f in "${STUB_PATHS[@]}"; do
+    local base dest src_sha dst_sha
+    base="$(basename "$f")"
+    dest="$backup_commands_dir/$base"
+    cp -a "$f" "$dest"
+    src_sha=$(shasum -a 256 "$f" | awk '{print $1}')
+    dst_sha=$(shasum -a 256 "$dest" | awk '{print $1}')
+    if [[ "$src_sha" != "$dst_sha" ]]; then
+      echo "ERROR: backup checksum mismatch for $f (src=$src_sha dst=$dst_sha)" >&2
+      echo "  stubs FAIL — aborting before delete (source files left intact)"
+      return 3
+    fi
+    rm -f "$f"
+    deleted=$((deleted + 1))
+  done
+
+  echo "  backed up $deleted stub(s) to: ${backup_commands_dir#"$PROJECT_ROOT"/}"
+  echo "  deleted $deleted stub(s) from: .claude/commands/"
+  echo "  stubs PASS"
+}
+
+# ---------------------------------------------------------------------------
 # Step: validation (AC4)
 # ---------------------------------------------------------------------------
 _run_validate() {
@@ -421,6 +509,11 @@ if ! _migrate_config_split; then
   echo "Restore: cp -a \"$BACKUP_DIR/.\" \"$PROJECT_ROOT/\""
   exit 3
 fi
+if ! _migrate_legacy_command_stubs; then
+  echo "FAILED: legacy command stubs migration (E28-S186)"
+  echo "Restore: cp -a \"$BACKUP_DIR/.\" \"$PROJECT_ROOT/\""
+  exit 3
+fi
 
 # Validate (AC4)
 if [[ "$DRY_RUN" == "false" ]]; then
@@ -445,5 +538,16 @@ else
   echo "SUCCESS — v1 → v2 migration complete."
   echo "Backup: $BACKUP_DIR"
   echo "Restore command (if needed): cp -a \"$BACKUP_DIR/.\" \"$PROJECT_ROOT/\""
+  # E28-S186 — legacy command stubs rollback path
+  if [[ -d "$BACKUP_DIR/.claude/commands" ]]; then
+    echo
+    echo "Legacy command stubs were backed up to: $BACKUP_DIR/.claude/commands/"
+    echo "To restore v1 stubs (if you need to run v1 again):"
+    echo "  cp -a \"$BACKUP_DIR/.claude/commands/\" \"$PROJECT_ROOT/.claude/\""
+    echo
+    echo "Known limitation: /gaia-migrate is project-local. If you installed"
+    echo "GAIA v1 globally, also run:"
+    echo "  rm ~/.claude/commands/gaia-*.md"
+  fi
 fi
 echo "==============================================================="

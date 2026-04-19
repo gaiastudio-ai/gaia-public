@@ -2,7 +2,7 @@
 name: gaia-migrate
 description: Automate the upgrade from GAIA v1 (workflow.xml engine) to v2 (Claude Code native plugin) — backup, migrate templates/memory/config, validate. Use after the v2 plugins have been installed via /plugin marketplace add.
 when_to_use: When a user has an existing GAIA v1 installation (presence of _gaia/, _memory/, custom/) and wants to migrate to the v2 plugin layout. Run with `dry-run` first to see the planned operations. After `/gaia-migrate apply` completes, manually run `/gaia-help` to smoke-test the post-migration install — filesystem-only validation cannot exercise skill invocation, so a live `/gaia-help` run is the only way to confirm slash-command routing, plugin discovery, and skill loading are wired up end-to-end.
-allowed-tools: [Read, Bash]
+tools: Read, Bash
 ---
 
 ## Mission
@@ -37,7 +37,13 @@ If the user has NOT installed the v2 plugins yet, point them to §1 Prerequisite
 
 5. **Manual follow-up items.** If the script printed any `manual follow-up:` lines, list them to the user with §-references back to the migration guide.
 
-6. **Manual post-migration smoke-test.** Instruct the user to run `/gaia-help` in the migrated project and confirm it returns the context-sensitive help menu. This is the canonical post-migration smoke-test: the script's filesystem-only validation cannot exercise skill invocation, so only a live `/gaia-help` run proves slash-command routing, plugin discovery, and skill loading survived the migration. If `/gaia-help` does not respond, direct the user to §Troubleshooting of the migration guide.
+6. **Manual post-migration smoke-test.** Instruct the user to run `/gaia-help` in the migrated project and confirm two things:
+   (a) `/gaia-help` returns the context-sensitive help menu, AND
+   (b) `/gaia-help` appears **exactly once** in Claude Code's slash-command palette (not twice).
+
+   Two `/gaia-help` entries mean legacy `.claude/commands/gaia-*.md` stubs were not removed by Step 4.4 of the migration script — either the user ran an older `gaia-migrate.sh` (pre-E28-S186) or has GAIA v1 installed globally at `~/.claude/commands/` which the project-local script cannot reach. For the global case, instruct the user to run `rm ~/.claude/commands/gaia-*.md` manually (the migration summary prints this reminder automatically). If `/gaia-help` does not respond at all, direct the user to §Troubleshooting of the migration guide.
+
+   The script's filesystem-only validation cannot exercise skill invocation, so only a live `/gaia-help` run proves slash-command routing, plugin discovery, and skill loading survived the migration — and only a live palette inspection proves there is no dual registration.
 
 ## Authoritative source
 

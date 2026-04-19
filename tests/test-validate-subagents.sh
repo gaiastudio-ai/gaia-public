@@ -62,7 +62,7 @@ name: $id
 model: claude-opus-4-6
 description: $persona — fixture agent for E28-S23 tests.
 context: main
-allowed-tools: [Read]
+tools: [Read]
 ---
 
 ## Memory

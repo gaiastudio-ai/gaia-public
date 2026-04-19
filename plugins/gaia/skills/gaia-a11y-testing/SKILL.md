@@ -3,7 +3,7 @@ name: gaia-a11y-testing
 description: Create accessibility test plan with WCAG 2.1 compliance checks, assistive technology compatibility, and keyboard navigation. Use when "accessibility testing" or /gaia-a11y-testing.
 argument-hint: "[story-key]"
 context: main
-allowed-tools: [Read, Write, Edit, Grep, Glob, Bash]
+tools: Read, Write, Edit, Grep, Glob, Bash
 ---
 
 ## Setup

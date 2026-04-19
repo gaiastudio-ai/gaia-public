@@ -150,10 +150,17 @@ resolve_checkpoint_path() {
   if [ -n "${CHECKPOINT_PATH:-}" ]; then
     return 0
   fi
-  # Try sibling resolve-config.sh — but ONLY if CLAUDE_SKILL_DIR is set so the
-  # resolver has a config to read. Without it, EC5 demands we fail hard.
+  # Try sibling resolve-config.sh. Post-E28-S191 the resolver owns its own
+  # 6-level precedence ladder (--shared / --config / $GAIA_SHARED_CONFIG /
+  # $CLAUDE_PROJECT_ROOT/config / $PWD/config / $CLAUDE_SKILL_DIR/config),
+  # so we no longer pre-check ${CLAUDE_SKILL_DIR:-}: gating on it here would
+  # short-circuit every caller that now resolves via CLAUDE_PROJECT_ROOT
+  # (i.e. every Claude Code skill invocation — see E28-S202). If the
+  # resolver cannot locate a usable config it exits non-zero and emits no
+  # 'checkpoint_path=' line, so the loop below falls through to die 1 and
+  # the fail-hard contract is preserved.
   local resolver="$SCRIPT_DIR/resolve-config.sh"
-  if [ -x "$resolver" ] && [ -n "${CLAUDE_SKILL_DIR:-}" ]; then
+  if [ -x "$resolver" ]; then
     local line
     # shellcheck disable=SC2016
     while IFS= read -r line; do

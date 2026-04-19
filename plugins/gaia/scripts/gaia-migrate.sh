@@ -318,8 +318,14 @@ _derive_required_fields() {
   [ -f "$v1" ] || { echo "ERROR: v1 source missing: $v1" >&2; return 1; }
   [ -f "$v2" ] || { echo "ERROR: v2 target missing: $v2" >&2; return 1; }
 
+  # E28-S200 — artifact-dir keys joined the resolver's required-fields list.
+  # The 3 paths (test_artifacts, planning_artifacts, implementation_artifacts)
+  # must be preserved across migration alongside the original 7 required
+  # fields — otherwise the v2 project fails resolver's required-field check
+  # on first skill invocation after v1 deletion.
   local required=(project_root project_path memory_path checkpoint_path
-                  installed_path framework_version date)
+                  installed_path framework_version date
+                  test_artifacts planning_artifacts implementation_artifacts)
   local field value missing=""
 
   # Use a deterministic extractor identical to resolve-config.sh's parse_yaml_key:

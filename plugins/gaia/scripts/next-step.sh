@@ -105,9 +105,16 @@ resolve_paths() {
     fi
   fi
 
-  # Search strategy — canonical first, then plugin-local fallbacks.
+  # Search strategy — plugin knowledge/ first (E28-S196 — ADR-041 canonical
+  # location for framework reference data), then installed_path-resolved
+  # fallbacks, then plugin-local fallbacks, then the legacy v1 path last.
   local candidates_seq=()
   local candidates_man=()
+
+  # E28-S196 — plugin knowledge/ is the canonical location for
+  # lifecycle-sequence.yaml and workflow-manifest.csv under ADR-041.
+  candidates_seq+=("$here/../knowledge/lifecycle-sequence.yaml")
+  candidates_man+=("$here/../knowledge/workflow-manifest.csv")
 
   if [ -n "$installed_path" ]; then
     candidates_seq+=("$installed_path/_config/lifecycle-sequence.yaml")

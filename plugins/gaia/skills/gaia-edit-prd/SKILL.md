@@ -58,7 +58,7 @@ Write the updated PRD to `docs/planning-artifacts/prd.md` with the version note 
 
 ### Step 5 — Adversarial Review
 
-- Read `_gaia/_config/adversarial-triggers.yaml` to evaluate trigger rules. Determine the current `change_type`: if invoked with a change_type context (e.g., from add-feature triage), use that value. If no context is available, infer from the change scope: minor edits map to "low-risk-enhancement", significant feature additions map to "feature".
+- Read `${CLAUDE_PLUGIN_ROOT}/knowledge/adversarial-triggers.yaml` to evaluate trigger rules. (This policy table ships inside the plugin under ADR-041's `knowledge/` convention; the legacy v1 location `_gaia/_config/adversarial-triggers.yaml` is retired and no longer used.) Determine the current `change_type`: if invoked with a change_type context (e.g., from add-feature triage), use that value. If no context is available, infer from the change scope: minor edits map to "low-risk-enhancement", significant feature additions map to "feature".
 - Look up the trigger rule for `change_type` + artifact "prd". If adversarial is false for this combination: skip adversarial review — mark "Review Findings Incorporated" as "Adversarial review not triggered — change type: {change_type} per adversarial-triggers.yaml". Proceed to Step 7.
 - If adversarial is true: spawn a subagent to run the adversarial review task against `docs/planning-artifacts/prd.md`.
 - When subagent returns: verify `adversarial-review-prd-*.md` exists in `docs/planning-artifacts/`.

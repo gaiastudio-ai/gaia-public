@@ -1,0 +1,91 @@
+# Adversarial Review Trigger Rules
+# Declarative config governing when adversarial reviews are triggered.
+# Change types: feature, high-risk-enhancement, low-risk-enhancement, bug-fix, documentation, patch
+# Artifacts: prd, architecture, ux-design, test-plan
+# When no change_type context is available (standalone creation), default to "feature".
+
+high_risk_enhancement_criteria:
+  description: "A high-risk enhancement is any enhancement where the story risk field is 'high'"
+  matches:
+    - field: risk
+      value: high
+    - field: change_type
+      value: enhancement
+
+trigger_rules:
+  # --- PRD artifact ---
+  - change_type: feature
+    artifact: prd
+    adversarial: true
+  - change_type: high-risk-enhancement
+    artifact: prd
+    adversarial: true
+  - change_type: low-risk-enhancement
+    artifact: prd
+    adversarial: false
+  - change_type: bug-fix
+    artifact: prd
+    adversarial: false
+  - change_type: documentation
+    artifact: prd
+    adversarial: false
+  - change_type: patch
+    artifact: prd
+    adversarial: false
+
+  # --- Architecture artifact ---
+  # Architecture adversarial requires BOTH a triggering change type AND magnitude >= SIGNIFICANT
+  - change_type: feature
+    artifact: architecture
+    adversarial: true
+    magnitude_threshold: SIGNIFICANT
+  - change_type: high-risk-enhancement
+    artifact: architecture
+    adversarial: true
+    magnitude_threshold: SIGNIFICANT
+  - change_type: low-risk-enhancement
+    artifact: architecture
+    adversarial: false
+  - change_type: bug-fix
+    artifact: architecture
+    adversarial: false
+  - change_type: documentation
+    artifact: architecture
+    adversarial: false
+  - change_type: patch
+    artifact: architecture
+    adversarial: false
+
+  # --- UX Design artifact --- (never triggers adversarial)
+  - change_type: feature
+    artifact: ux-design
+    adversarial: false
+  - change_type: high-risk-enhancement
+    artifact: ux-design
+    adversarial: false
+  - change_type: low-risk-enhancement
+    artifact: ux-design
+    adversarial: false
+  - change_type: bug-fix
+    artifact: ux-design
+    adversarial: false
+  - change_type: documentation
+    artifact: ux-design
+    adversarial: false
+  - change_type: patch
+    artifact: ux-design
+    adversarial: false
+
+  # --- Test Plan artifact --- (never triggers adversarial)
+  - change_type: feature
+    artifact: test-plan
+    adversarial: false
+  - change_type: high-risk-enhancement
+    artifact: test-plan
+    adversarial: false
+  - change_type: low-risk-enhancement
+    artifact: test-plan
+    adversarial: false
+  - change_type: bug-fix
+    artifact: test-plan
+    adversarial: false

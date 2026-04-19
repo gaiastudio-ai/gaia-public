@@ -142,6 +142,18 @@ Claude Code auto-discovers plugin components at install time from conventional s
 4. **Symlinks work on macOS/Linux but are a portability hazard.** `git archive` and the marketplace clone step do not always preserve symlink targets cleanly. This plugin deliberately avoids symlinks.
 5. **Post-install `/reload-plugins` is mandatory** before newly installed components become callable in the current session. See the "Install" section above.
 
+## CI regression gate: `audit-v2-migration`
+
+Every pull request targeting `main` or `staging` runs the `audit-v2-migration` job in [.github/workflows/plugin-ci.yml](./.github/workflows/plugin-ci.yml). The job exercises every plugin skill's `setup.sh` and `finalize.sh` scripts through [scripts/audit-v2-migration.sh](./scripts/audit-v2-migration.sh) in `--fixture-mode enriched`, then gates the build on zero B1–B5 regressions:
+
+- **Exit 0** — every skill lands in `OK` or `NO-SCRIPTS`; CI passes.
+- **Exit 1** — one or more skills regressed (B1 path contract, B2 checkpoint target, B3 SKILL.md literal paths, B4 global.yaml overlay, B5 skill-contract). This is a **plugin regression** and the PR must be fixed before merge.
+- **Exit 2** — the harness itself erred (misconfig, fixture prep failure). Diagnose the harness, not the plugin.
+
+The machine-readable summary line `audit-v2-migration: result=<PASS|FAIL> total=<N> ok=<N> no_scripts=<N> failed=<N>` is written to stderr at end-of-run so you can grep for the outcome without parsing the CSV. The per-skill CSV is uploaded as the `audit-v2-migration-csv` workflow artifact on every run — download it from the Actions UI for failure diagnostics.
+
+Contributors: your PR will be audited automatically. If the job fails, open the run page, download the `audit-v2-migration-csv` artifact, and inspect the bucket column to identify which regression class was hit.
+
 ## Documentation
 
 For a discovery entry point into the GAIA artifact directories

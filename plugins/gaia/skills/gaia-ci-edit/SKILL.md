@@ -17,7 +17,7 @@ This skill is the native Claude Code conversion of the legacy `_gaia/testing/wor
 
 **Write context:** This skill uses `allowed-tools: Read Grep Glob Bash Write Edit` because it modifies `global.yaml` and cascades changes to CI config files and test-environment.yaml.
 
-**Foundation script integration (ADR-042):** This skill invokes `validate-gate.sh` from `plugins/gaia/scripts/` for post-edit CI gate verification. Deterministic operations (config resolution, gate verification, YAML manipulation) belong in bash scripts, not LLM prompts.
+**Foundation script integration (ADR-042):** This skill invokes `validate-gate.sh` from `plugins/gaia/scripts/` for conditional post-edit CI gate verification. Per E28-S199, `finalize.sh` runs the `ci_setup_exists` gate only when `setup.sh` observed a prior `docs/test-artifacts/ci-setup.md` at invocation time (tracked via a runtime marker at `.gaia/run-state/ci-edit-had-prior-setup`). On fresh fixtures with no prior setup, the gate is skipped so the finalize exits 0 cleanly; when a prior setup was observed the gate runs as a regression guard against edits that erase the setup file. Deterministic operations (config resolution, gate verification, YAML manipulation) belong in bash scripts, not LLM prompts.
 
 **Schema reference (ADR-033):** The promotion chain uses the multi-environment format defined in `global.yaml`. Each entry has: id, name, branch, ci_provider, merge_strategy, ci_checks. The canonical field order MUST be preserved on every write-back operation to ensure round-trip fidelity through YAML parsers.
 

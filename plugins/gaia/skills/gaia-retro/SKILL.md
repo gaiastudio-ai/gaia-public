@@ -2,7 +2,7 @@
 name: gaia-retro
 description: "Facilitate a post-sprint retrospective capturing went-well, didn't-go-well, and action-items sections. Writes a retro artifact to docs/implementation-artifacts/. GAIA-native replacement for the legacy retrospective XML engine workflow."
 argument-hint: "[sprint-id?]"
-allowed-tools: [Read, Write, Bash]
+tools: Read, Write, Bash
 version: "1.0.0"
 ---
 

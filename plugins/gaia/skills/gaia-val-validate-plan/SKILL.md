@@ -3,7 +3,7 @@ name: gaia-val-validate-plan
 description: Validate an implementation plan before execution -- catches incorrect file targets, inconsistent version bumps, and missing scope. Use when "validate plan" or /gaia-val-validate-plan.
 argument-hint: "[plan-artifact-path]"
 context: fork
-allowed-tools: [Read, Grep, Glob, Bash]
+tools: Read, Grep, Glob, Bash
 ---
 
 ## Setup

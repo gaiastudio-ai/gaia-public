@@ -50,13 +50,13 @@ teardown() {
   grep -q "sprint-id" "$SKILL_DIR/SKILL.md"
 }
 
-@test "AC1: SKILL.md frontmatter has allowed-tools field" {
-  grep -q "^allowed-tools:" "$SKILL_DIR/SKILL.md"
+@test "AC1: SKILL.md frontmatter has tools field" {
+  grep -q "^tools:" "$SKILL_DIR/SKILL.md"
 }
 
-@test "AC1: SKILL.md allowed-tools includes Read Write and Bash" {
+@test "AC1: SKILL.md tools includes Read Write and Bash" {
   local line
-  line=$(grep "^allowed-tools:" "$SKILL_DIR/SKILL.md")
+  line=$(grep "^tools:" "$SKILL_DIR/SKILL.md")
   echo "$line" | grep -q "Read"
   echo "$line" | grep -q "Write"
   echo "$line" | grep -q "Bash"
@@ -144,9 +144,9 @@ teardown() {
   sed -n '2,10p' "$SKILL_DIR/SKILL.md" | grep -q "^---$"
 }
 
-@test "AC4: SKILL.md has no Edit in allowed-tools (write-once skill)" {
+@test "AC4: SKILL.md has no Edit in tools (write-once skill)" {
   local line
-  line=$(grep "^allowed-tools:" "$SKILL_DIR/SKILL.md")
+  line=$(grep "^tools:" "$SKILL_DIR/SKILL.md")
   ! echo "$line" | grep -q "Edit"
 }
 

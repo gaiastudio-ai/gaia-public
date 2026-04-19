@@ -3,7 +3,7 @@ name: gaia-party
 description: Multi-agent group discussion with dynamic participant selection. Use when "party mode".
 argument-hint: "[discussion topic]"
 context: fork
-allowed-tools: [Read, Grep, Glob, Bash]
+tools: Read, Grep, Glob, Bash
 ---
 
 # gaia-party

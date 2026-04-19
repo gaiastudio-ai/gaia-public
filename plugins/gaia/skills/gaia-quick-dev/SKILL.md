@@ -2,7 +2,7 @@
 name: gaia-quick-dev
 description: Implement a quick spec with auto-detected stack developer. Use when "dev this quick spec" or /gaia-quick-dev. Runs a five-step flow (Load Spec -> Resolve WIP -> Delegate to stack-dev subagent -> Verify -> Complete) against docs/implementation-artifacts/quick-spec-{spec-name}.md. Native Claude Code conversion of the legacy quick-dev workflow (E28-S117, Cluster 16).
 argument-hint: "[spec-name]"
-allowed-tools: [Read, Write, Edit, Bash, Grep, Glob]
+tools: Read, Write, Edit, Bash, Grep, Glob
 ---
 
 <!--

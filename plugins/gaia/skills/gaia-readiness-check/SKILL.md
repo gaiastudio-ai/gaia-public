@@ -2,7 +2,7 @@
 name: gaia-readiness-check
 description: Validate implementation readiness by checking all planning and testing artifacts for completeness, consistency, and cross-artifact contradictions — Cluster 6 architecture skill. Enforces two mandatory quality gates (traceability-matrix.md and ci-setup.md must exist) per ADR-042, then delegates readiness assessment to the architect and devops subagents.
 context: fork
-allowed-tools: [Read, Write, Edit, Grep, Glob, Bash, Agent]
+tools: Read, Write, Edit, Grep, Glob, Bash, Agent
 ---
 
 ## Setup

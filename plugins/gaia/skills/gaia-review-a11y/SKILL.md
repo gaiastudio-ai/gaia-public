@@ -2,7 +2,7 @@
 name: gaia-review-a11y
 description: Review code and UI for WCAG 2.1 accessibility compliance — semantic HTML, ARIA, keyboard navigation, color contrast, screen reader support. Produces a markdown findings report with per-finding WCAG criterion ID, conformance level (A/AA/AAA), severity, and remediation guidance. Use when "review accessibility" or /gaia-review-a11y.
 argument-hint: "[target — file, directory, or component name]"
-allowed-tools: [Read, Write, Edit, Bash, Grep]
+tools: Read, Write, Edit, Bash, Grep
 ---
 
 ## Mission

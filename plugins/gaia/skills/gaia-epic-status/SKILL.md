@@ -2,7 +2,7 @@
 name: gaia-epic-status
 description: "Display an epic completion dashboard showing per-epic completion percentages and per-status story counts. Reads epics-and-stories.md and sprint-status.yaml (read-only). Falls back to scanning individual story files when sprint-status.yaml is missing. GAIA-native replacement for the legacy epic-status XML engine workflow."
 argument-hint: "[epic-key?]"
-allowed-tools: [Read, Bash]
+tools: Read, Bash
 version: "1.0.0"
 ---
 

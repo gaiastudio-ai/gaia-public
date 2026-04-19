@@ -49,6 +49,7 @@ memory_path: "./_memory"
 checkpoint_path: "./_memory/checkpoints"
 installed_path: "./_gaia"
 config_path: "./_gaia/_config"
+date: "2026-04-19"
 val_integration:
   template_output_review: true
 EOF
@@ -458,4 +459,52 @@ EOF
     printf 'runtime summary did not include /gaia:gaia-help:\n%s\n' "$summary" >&2
     return 1
   fi
+}
+
+# ---------------------------------------------------------------------------
+# E28-S191 / B4 — preserve 7 required fields in config/project-config.yaml
+# ---------------------------------------------------------------------------
+# The resolver validates 7 required fields: project_root, project_path,
+# memory_path, checkpoint_path, installed_path, framework_version, date.
+# These live in v1 _gaia/_config/global.yaml which subtask 4.5 deletes. The
+# split step must preserve all 7 in the v2 team-shared file BEFORE the
+# destructive delete runs. Missing any field → abort before delete.
+
+@test "B4 AC4: apply writes all 7 required fields into config/project-config.yaml" {
+  # The shared setup already seeds `date:` into v1 global.yaml alongside the
+  # rest of the required fields, so apply should complete cleanly.
+  run "$SCRIPT" apply --project-root "$PROJECT" --yes
+  [ "$status" -eq 0 ]
+
+  local v2="$PROJECT/config/project-config.yaml"
+  [ -f "$v2" ]
+
+  # Every one of the 7 required fields must be present in the post-split v2 file.
+  for key in project_root project_path memory_path checkpoint_path installed_path framework_version date; do
+    if ! grep -qE "^${key}:" "$v2"; then
+      printf 'required field missing from %s: %s\n' "$v2" "$key" >&2
+      cat "$v2" >&2
+      return 1
+    fi
+  done
+}
+
+@test "B4 AC5: missing required field in v1 config → abort BEFORE delete, exit 3" {
+  # Strip the 'date' field from the v1 global.yaml and ensure the setup one
+  # already lacks it too — defensive: remove any 'date:' line if present.
+  sed -i.bak '/^date:/d' "$PROJECT/_gaia/_config/global.yaml"
+  rm -f "$PROJECT/_gaia/_config/global.yaml.bak"
+
+  run "$SCRIPT" apply --project-root "$PROJECT" --yes
+  # Apply must NOT succeed.
+  [ "$status" -ne 0 ]
+  # Error message must name the missing field.
+  [[ "$output" == *"required field missing"* ]]
+  [[ "$output" == *"date"* ]]
+
+  # CRITICAL: v1 directories MUST still be present — the abort happened
+  # BEFORE the destructive delete step.
+  [ -d "$PROJECT/_gaia" ]
+  [ -d "$PROJECT/_memory" ]
+  [ -d "$PROJECT/custom" ]
 }

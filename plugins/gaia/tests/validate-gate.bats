@@ -152,3 +152,55 @@ teardown() { common_teardown; }
   [ "$status" -eq 0 ]
   [[ "$output" == *"epics_and_stories_exists"* ]]
 }
+
+# --- E28-S198: prd_exists gate type ---
+
+@test "validate-gate.sh: prd_exists happy path returns 0" {
+  export PLANNING_ARTIFACTS="$TEST_TMP/planning-artifacts"
+  mkdir -p "$PLANNING_ARTIFACTS"
+  printf '# PRD\n' > "$PLANNING_ARTIFACTS/prd.md"
+  run "$SCRIPT" prd_exists
+  [ "$status" -eq 0 ]
+}
+
+@test "validate-gate.sh: prd_exists fails when file missing with stable error format" {
+  export PLANNING_ARTIFACTS="$TEST_TMP/planning-artifacts"
+  mkdir -p "$PLANNING_ARTIFACTS"
+  run "$SCRIPT" prd_exists
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"validate-gate: prd_exists failed"* ]]
+  [[ "$output" == *"expected:"* ]]
+  local abs
+  abs="$(cd "$PLANNING_ARTIFACTS" && pwd)"
+  [[ "$output" == *"$abs/prd.md"* ]]
+}
+
+@test "validate-gate.sh: prd_exists fails when file is zero bytes" {
+  export PLANNING_ARTIFACTS="$TEST_TMP/planning-artifacts"
+  mkdir -p "$PLANNING_ARTIFACTS"
+  : > "$PLANNING_ARTIFACTS/prd.md"
+  run "$SCRIPT" prd_exists
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"prd_exists failed"* ]]
+}
+
+@test "validate-gate.sh: prd_exists honors PLANNING_ARTIFACTS env var override" {
+  export PLANNING_ARTIFACTS="$TEST_TMP/custom-planning"
+  mkdir -p "$PLANNING_ARTIFACTS"
+  printf '# PRD\n' > "$PLANNING_ARTIFACTS/prd.md"
+  run "$SCRIPT" prd_exists
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"failed"* ]]
+}
+
+@test "validate-gate.sh: --list includes prd_exists" {
+  run "$SCRIPT" --list
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"prd_exists"* ]]
+}
+
+@test "validate-gate.sh: --help includes prd_exists in enumeration" {
+  run "$SCRIPT" --help
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"prd_exists"* ]]
+}

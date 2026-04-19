@@ -6,21 +6,26 @@
 # when_to_use prose. After /gaia-migrate apply, users need to manually run
 # /gaia-help to confirm the post-migration plugin install is wired up —
 # filesystem-only validation cannot exercise skill invocation.
+#
+# Updated in E28-S189: the canonical smoke-test command is now the
+# plugin-namespaced /gaia:gaia-help, so regex patterns accept either
+# /gaia-help or /gaia:gaia-help to avoid a false regression.
 
 PLUGIN_DIR="$(cd "$(dirname "$BATS_TEST_FILENAME")/../.." && pwd)"
 SKILL="$PLUGIN_DIR/skills/gaia-migrate/SKILL.md"
 
 @test "E28-S169: AC1 gaia-migrate SKILL.md references /gaia-help as a manual smoke-test" {
   [ -f "$SKILL" ]
-  grep -qE '/gaia-help' "$SKILL"
+  grep -qE '/(gaia:)?gaia-help' "$SKILL"
 }
 
 @test "E28-S169: AC1 prose instructs user to run /gaia-help AFTER /gaia-migrate apply" {
   [ -f "$SKILL" ]
   # Expect the instruction to live near the apply step context, pairing the
   # two commands in close proximity (on the same line or within the same
-  # sentence).
-  grep -qiE '(after|once).{0,80}(apply|migrat).{0,160}/gaia-help|/gaia-help.{0,160}(after|once).{0,80}(apply|migrat)' "$SKILL"
+  # sentence). Accept either the legacy /gaia-help form or the E28-S189
+  # namespaced /gaia:gaia-help form.
+  grep -qiE '(after|once).{0,80}(apply|migrat).{0,160}/(gaia:)?gaia-help|/(gaia:)?gaia-help.{0,160}(after|once).{0,80}(apply|migrat)' "$SKILL"
 }
 
 @test "E28-S169: AC2 prose explains why (filesystem-only validation cannot exercise skill invocation)" {
@@ -35,18 +40,18 @@ SKILL="$PLUGIN_DIR/skills/gaia-migrate/SKILL.md"
   [ -f "$SKILL" ]
   # The when_to_use field is either (a) a single line in frontmatter, or (b)
   # expanded into a body section — the story title specifies when_to_use
-  # prose, so /gaia-help MUST appear in the when_to_use block (frontmatter
-  # line OR "## When to use" section).
+  # prose, so /gaia-help (or /gaia:gaia-help after E28-S189) MUST appear in
+  # the when_to_use block (frontmatter line OR "## When to use" section).
   awk '
     BEGIN { in_fm=0; fm_done=0; in_wtu_section=0; found=0 }
     /^---[[:space:]]*$/ {
       if (in_fm==0 && fm_done==0) { in_fm=1; next }
       else if (in_fm==1) { in_fm=0; fm_done=1; next }
     }
-    in_fm==1 && /^when_to_use:/ { if ($0 ~ /\/gaia-help/) found=1 }
+    in_fm==1 && /^when_to_use:/ { if ($0 ~ /\/(gaia:)?gaia-help/) found=1 }
     /^##[[:space:]]+[Ww]hen to use/ { in_wtu_section=1; next }
     in_wtu_section==1 && /^##[[:space:]]/ { in_wtu_section=0 }
-    in_wtu_section==1 && /\/gaia-help/ { found=1 }
+    in_wtu_section==1 && /\/(gaia:)?gaia-help/ { found=1 }
     END { exit (found==1 ? 0 : 1) }
   ' "$SKILL"
 }

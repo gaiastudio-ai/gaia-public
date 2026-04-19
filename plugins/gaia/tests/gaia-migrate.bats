@@ -384,3 +384,78 @@ EOF
   # Must mention size expectation (50-100 MB or similar).
   grep -qE '50.*100.*MB|50–100 MB|50-100 MB' "$skill"
 }
+
+# ---------------------------------------------------------------------------
+# E28-S189 — smoke-test prose uses namespaced /gaia:gaia-help
+#
+# Legacy .claude/commands/gaia-help.md stubs can intercept an unnamespaced
+# /gaia-help, masking whether the plugin is actually wired up. The smoke-test
+# prose must tell the user to run /gaia:gaia-help (plugin-namespaced) so that
+# the command unambiguously exercises the plugin's gaia-help skill.
+# ---------------------------------------------------------------------------
+
+@test "E28-S189 AC1: SKILL.md Step 6 smoke-test prose uses namespaced /gaia:gaia-help" {
+  skill="$SCRIPTS_DIR/../skills/gaia-migrate/SKILL.md"
+  [ -f "$skill" ]
+  # Extract Step 6 body: everything from the "6. **Manual post-migration"
+  # marker up to the next "## " section header.
+  step6=$(awk '
+    /^6\. \*\*Manual post-migration smoke-test/ { capture=1 }
+    capture==1 && /^## / { capture=0 }
+    capture==1 { print }
+  ' "$skill")
+  [ -n "$step6" ]
+  # The namespaced form MUST be present.
+  if ! printf '%s\n' "$step6" | grep -qF '/gaia:gaia-help'; then
+    printf 'Step 6 body missing /gaia:gaia-help:\n%s\n' "$step6" >&2
+    return 1
+  fi
+  # The bare unnamespaced form MUST NOT appear as a typed-command in Step 6's
+  # smoke-test prose. Typed-command references use backtick-fencing — `/gaia-help`.
+  # File-path references (.claude/commands/gaia-help.md) are NOT typed commands
+  # and are excluded from this check. The regex requires a literal opening
+  # backtick immediately before the slash, and rejects when the form after the
+  # backtick is the namespaced `/gaia:gaia-help`.
+  bare_hits=$(printf '%s\n' "$step6" | grep -oE '`/gaia-help[` ]' || true)
+  if [ -n "$bare_hits" ]; then
+    printf 'Step 6 body still contains bare `/gaia-help` typed-command (must use `/gaia:gaia-help`):\n%s\n' "$bare_hits" >&2
+    return 1
+  fi
+}
+
+@test "E28-S189 AC2: SKILL.md smoke-test prose explains the namespace rationale" {
+  skill="$SCRIPTS_DIR/../skills/gaia-migrate/SKILL.md"
+  [ -f "$skill" ]
+  # The prose must explain WHY the gaia: prefix matters — reference the legacy
+  # stub interception scenario so future maintainers do not revert the change.
+  grep -qiE 'gaia:[^[:space:]]*prefix|namespace|legacy.{0,40}stub|plugin.{0,20}(skill|gaia-help).{0,40}(invoked|exercised|routed)' "$skill"
+}
+
+@test "E28-S189 AC3: gaia-migrate.sh success summary points users to /gaia:gaia-help" {
+  script="$SCRIPTS_DIR/gaia-migrate.sh"
+  [ -f "$script" ]
+  # The script must include the namespaced smoke-test hint somewhere in its
+  # success-summary block (after the 'SUCCESS — v1 → v2 migration complete.'
+  # banner). A bare /gaia-help reference is not sufficient.
+  summary=$(awk '
+    /SUCCESS — v1/ { capture=1 }
+    capture==1 { print }
+  ' "$script")
+  [ -n "$summary" ]
+  if ! printf '%s\n' "$summary" | grep -qF '/gaia:gaia-help'; then
+    printf 'Success summary in gaia-migrate.sh missing /gaia:gaia-help hint.\n' >&2
+    return 1
+  fi
+}
+
+@test "E28-S189 AC3 runtime: apply summary prints /gaia:gaia-help smoke-test hint" {
+  run "$SCRIPT" apply --project-root "$PROJECT" --yes
+  [ "$status" -eq 0 ]
+  # The user-facing summary block printed to stdout must mention the
+  # namespaced command so users can copy-paste it directly.
+  summary=$(printf '%s\n' "$output" | sed -n '/SUCCESS /,$p')
+  if ! printf '%s\n' "$summary" | grep -qF '/gaia:gaia-help'; then
+    printf 'runtime summary did not include /gaia:gaia-help:\n%s\n' "$summary" >&2
+    return 1
+  fi
+}

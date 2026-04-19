@@ -226,8 +226,7 @@ into the repository.
 
 - Run `/gaia` to activate the orchestrator.
 - Run `/gaia:gaia-help` for context-sensitive guidance. The `gaia:` prefix
-  targets the plugin's `gaia-help` skill and avoids any legacy
-  `.claude/commands/gaia-help.md` stub that might still be present.
+  targets the plugin's `gaia-help` skill directly.
 
 ## Directory Layout
 

@@ -51,7 +51,7 @@ This skill is the native Claude Code conversion of the legacy validate-story wor
 
 - Call `review-gate.sh` to update the Review Gate table in the story file:
   ```bash
-  ${CLAUDE_PLUGIN_ROOT}/../scripts/review-gate.sh update \
+  ${CLAUDE_PLUGIN_ROOT}/scripts/review-gate.sh update \
     --story "{story_key}" \
     --gate "Code Review" \
     --verdict "{verdict}"
@@ -60,7 +60,7 @@ This skill is the native Claude Code conversion of the legacy validate-story wor
 - The `review-gate.sh` script enforces canonical vocabulary (`PASSED`/`FAILED`/`UNVERIFIED`) and handles atomic file writes.
 - Verify the written value by running:
   ```bash
-  ${CLAUDE_PLUGIN_ROOT}/../scripts/review-gate.sh status --story "{story_key}"
+  ${CLAUDE_PLUGIN_ROOT}/scripts/review-gate.sh status --story "{story_key}"
   ```
 
 ### Step 4 -- Report Results

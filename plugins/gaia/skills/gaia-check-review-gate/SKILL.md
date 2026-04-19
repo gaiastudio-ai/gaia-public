@@ -38,7 +38,7 @@ This skill is the native Claude Code conversion of the legacy check-review-gate 
 
 - Run the shared `review-gate.sh` script to read all gate statuses:
   ```bash
-  ${CLAUDE_PLUGIN_ROOT}/../scripts/review-gate.sh status --story "{story_key}"
+  ${CLAUDE_PLUGIN_ROOT}/scripts/review-gate.sh status --story "{story_key}"
   ```
 - Parse the JSON output. The response contains a `gates` object with six canonical review names and their status values.
 - If `review-gate.sh` exits non-zero, report the error and fail.

@@ -11,7 +11,7 @@
 #
 # Validates (map to story ACs):
 #   AC1: gaia-quick-spec SKILL.md is installed under plugins/gaia/skills/
-#        with valid native-skill frontmatter (name, description, allowed-tools,
+#        with valid native-skill frontmatter (name, description, tools,
 #        argument-hint) — NOT a legacy workflow YAML descriptor.
 #   AC2: gaia-quick-dev SKILL.md is installed AND all 7 stack-dev subagents
 #        are present under plugins/gaia/agents/ so the subagent-delegation
@@ -64,12 +64,12 @@ setup() {
 }
 
 @test "AC1: gaia-quick-spec SKILL.md has native Claude Code frontmatter fields" {
-  # name, description, argument-hint, allowed-tools are the native fields;
+  # name, description, argument-hint, tools are the native fields;
   # legacy workflow YAML would have `module:`, `agent:`, `instructions:`.
   grep -qE "^name: gaia-quick-spec$" "$QUICK_SPEC_SKILL"
   grep -qE "^description:" "$QUICK_SPEC_SKILL"
   grep -qE "^argument-hint:" "$QUICK_SPEC_SKILL"
-  grep -qE "^allowed-tools:" "$QUICK_SPEC_SKILL"
+  grep -qE "^tools:" "$QUICK_SPEC_SKILL"
 }
 
 @test "AC1: gaia-quick-spec SKILL.md does NOT carry legacy workflow fields" {
@@ -90,7 +90,7 @@ setup() {
   grep -qE "^name: gaia-quick-dev$" "$QUICK_DEV_SKILL"
   grep -qE "^description:" "$QUICK_DEV_SKILL"
   grep -qE "^argument-hint:" "$QUICK_DEV_SKILL"
-  grep -qE "^allowed-tools:" "$QUICK_DEV_SKILL"
+  grep -qE "^tools:" "$QUICK_DEV_SKILL"
 }
 
 @test "AC2: all 7 stack-dev subagents are present under plugins/gaia/agents/" {

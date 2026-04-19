@@ -3,7 +3,7 @@
 #
 # Asserts that gaia-add-stories and gaia-add-feature skill directories are
 # correctly scaffolded per the E28 conversion pattern:
-#   AC1: SKILL.md exists with valid frontmatter (name, description, allowed-tools)
+#   AC1: SKILL.md exists with valid frontmatter (name, description, tools)
 #   AC2: add-feature preserves patch/enhancement/feature classification and cascade matrix
 #   AC3: Shared setup.sh / finalize.sh pattern applied
 #   AC4: Frontmatter linter compatibility (structural check — deferred to E28-S59)
@@ -48,7 +48,7 @@ AS_FINALIZE="$AS_DIR/scripts/finalize.sh"
 assert "SKILL.md exists" "[ -f '$AS_SKILL' ]"
 assert "frontmatter has name field" "grep -q '^name: gaia-add-stories' '$AS_SKILL' 2>/dev/null"
 assert "frontmatter has description field" "grep -q '^description:' '$AS_SKILL' 2>/dev/null"
-assert "frontmatter has allowed-tools field" "grep -q '^allowed-tools:' '$AS_SKILL' 2>/dev/null"
+assert "frontmatter has tools field" "grep -q '^tools:' '$AS_SKILL' 2>/dev/null"
 
 # AC3: Shared setup.sh / finalize.sh
 assert "scripts/setup.sh exists" "[ -f '$AS_SETUP' ]"
@@ -80,7 +80,7 @@ AF_FINALIZE="$AF_DIR/scripts/finalize.sh"
 assert "SKILL.md exists" "[ -f '$AF_SKILL' ]"
 assert "frontmatter has name field" "grep -q '^name: gaia-add-feature' '$AF_SKILL' 2>/dev/null"
 assert "frontmatter has description field" "grep -q '^description:' '$AF_SKILL' 2>/dev/null"
-assert "frontmatter has allowed-tools field" "grep -q '^allowed-tools:' '$AF_SKILL' 2>/dev/null"
+assert "frontmatter has tools field" "grep -q '^tools:' '$AF_SKILL' 2>/dev/null"
 
 # AC2: Classification vocabulary preserved
 assert "SKILL.md contains 'patch' classification" "grep -q 'patch' '$AF_SKILL' 2>/dev/null"

@@ -37,9 +37,9 @@ teardown() { common_teardown; }
   [[ "$output" == *"context: fork"* ]]
 }
 
-@test "AC1: frontmatter contains allowed-tools" {
+@test "AC1: frontmatter contains tools" {
   run head -20 "$SKILL_DIR/SKILL.md"
-  [[ "$output" == *"allowed-tools:"* ]]
+  [[ "$output" == *"tools:"* ]]
 }
 
 # ---------- AC3: Shared scripts exist ----------

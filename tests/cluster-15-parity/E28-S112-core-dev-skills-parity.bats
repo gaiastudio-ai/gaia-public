@@ -5,7 +5,7 @@
 #
 # Validates:
 #   AC1: Each of the 8 core dev SKILL.md files exists under plugins/gaia/skills/
-#        with valid YAML frontmatter (name, description, allowed-tools) and
+#        with valid YAML frontmatter (name, description, tools) and
 #        passes the frontmatter linter with zero errors.
 #   AC2: Every legacy "<!-- SECTION: xxx -->" marker from _gaia/dev/skills/_skill-index.yaml
 #        is preserved verbatim in the converted SKILL.md (same IDs, same order).
@@ -107,10 +107,10 @@ _frontmatter() {
   done
 }
 
-@test "E28-S112: each SKILL.md declares an allowed-tools field" {
+@test "E28-S112: each SKILL.md declares an tools field" {
   for skill in "${SKILLS[@]}"; do
     local f="$SKILLS_DIR/$skill/SKILL.md"
-    head -30 "$f" | grep -qE '^allowed-tools:' || { echo "missing allowed-tools in $f"; return 1; }
+    head -30 "$f" | grep -qE '^tools:' || { echo "missing tools in $f"; return 1; }
   done
 }
 

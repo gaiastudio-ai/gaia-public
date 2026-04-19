@@ -27,9 +27,9 @@ FIXTURES_DIR="$(cd "$(dirname "$BATS_TEST_FILENAME")/fixtures/ci-setup-ci-edit" 
   [[ "$output" == *"name: gaia-ci-setup"* ]]
 }
 
-@test "gaia-ci-setup SKILL.md has allowed-tools in frontmatter" {
+@test "gaia-ci-setup SKILL.md has tools in frontmatter" {
   run head -10 "$SKILLS_DIR/gaia-ci-setup/SKILL.md"
-  [[ "$output" == *"allowed-tools:"* ]]
+  [[ "$output" == *"tools:"* ]]
 }
 
 @test "gaia-ci-setup SKILL.md contains Setup section" {
@@ -103,9 +103,9 @@ FIXTURES_DIR="$(cd "$(dirname "$BATS_TEST_FILENAME")/fixtures/ci-setup-ci-edit" 
   [[ "$output" == *"name: gaia-ci-edit"* ]]
 }
 
-@test "gaia-ci-edit SKILL.md has allowed-tools in frontmatter" {
+@test "gaia-ci-edit SKILL.md has tools in frontmatter" {
   run head -10 "$SKILLS_DIR/gaia-ci-edit/SKILL.md"
-  [[ "$output" == *"allowed-tools:"* ]]
+  [[ "$output" == *"tools:"* ]]
 }
 
 @test "gaia-ci-edit SKILL.md contains Setup section" {

@@ -42,8 +42,8 @@ setup() {
   head -20 "$SKILL_FILE" | grep -q '^context: fork'
 }
 
-@test "E28-S104: slide-deck frontmatter allowed-tools present" {
-  head -20 "$SKILL_FILE" | grep -q '^allowed-tools:'
+@test "E28-S104: slide-deck frontmatter tools present" {
+  head -20 "$SKILL_FILE" | grep -q '^tools:'
 }
 
 # ---------- AC2: Narrative-arc slide structure preserved ----------

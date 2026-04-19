@@ -2,7 +2,7 @@
 # gaia-sprint-plan.bats — E28-S60 tests for the gaia-sprint-plan native skill
 #
 # Validates:
-#   AC1: SKILL.md exists with Cluster 8 frontmatter (name, description, argument-hint, allowed-tools)
+#   AC1: SKILL.md exists with Cluster 8 frontmatter (name, description, argument-hint, tools)
 #        and sm subagent wired as planning persona
 #   AC2: Sprint commit via sprint-state.sh — no direct YAML writes
 #   AC3: Cluster 8 shared setup.sh / finalize.sh exist and source foundation scripts
@@ -39,9 +39,9 @@ teardown() { common_teardown; }
   [[ "$output" == *'sprint-scope'* ]]
 }
 
-@test "AC1: frontmatter contains allowed-tools" {
+@test "AC1: frontmatter contains tools" {
   run head -20 "$SKILL_DIR/SKILL.md"
-  [[ "$output" == *"allowed-tools:"* ]]
+  [[ "$output" == *"tools:"* ]]
 }
 
 @test "AC1: frontmatter does NOT contain context: fork (sprint planning is synchronous)" {

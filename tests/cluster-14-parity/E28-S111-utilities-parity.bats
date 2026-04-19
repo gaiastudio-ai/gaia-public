@@ -16,7 +16,7 @@
 #
 # ACs covered here:
 #   AC1:  All 7 SKILL.md files exist at canonical paths with valid
-#         frontmatter (name, description, allowed-tools) and pass the
+#         frontmatter (name, description, tools) and pass the
 #         frontmatter linter with zero errors.
 #   AC2..AC8: Each converted SKILL.md preserves every `<critical><mandate>`
 #         (or Instructions step) from its source as explicit prose.
@@ -142,12 +142,12 @@ setup() {
   done
 }
 
-# ---------- AC1: allowed-tools declared ----------
+# ---------- AC1: tools declared ----------
 
-@test "E28-S111: all 7 new SKILL.md files declare allowed-tools" {
+@test "E28-S111: all 7 new SKILL.md files declare tools" {
   for skill in "${NEW_SKILLS[@]}"; do
     file="$SKILLS_DIR/$skill/SKILL.md"
-    head -30 "$file" | grep -qE '^allowed-tools:.+'
+    head -30 "$file" | grep -qE '^tools:.+'
   done
 }
 
@@ -385,24 +385,24 @@ setup() {
   done
 }
 
-# ---------- allowed-tools is per-skill-appropriate ----------
+# ---------- tools is per-skill-appropriate ----------
 
 @test "E28-S111: gaia-validate-framework includes Bash + Read + Grep (manifest walk)" {
   file="$SKILLS_DIR/gaia-validate-framework/SKILL.md"
-  grep -qE '^allowed-tools:.*Bash' "$file"
-  grep -qE '^allowed-tools:.*Read' "$file"
-  grep -qE '^allowed-tools:.*Grep' "$file"
+  grep -qE '^tools:.*Bash' "$file"
+  grep -qE '^tools:.*Read' "$file"
+  grep -qE '^tools:.*Grep' "$file"
 }
 
 @test "E28-S111: gaia-bridge-toggle includes Read + Edit + Bash (yaml edit + build-configs rerun)" {
   file="$SKILLS_DIR/gaia-bridge-toggle/SKILL.md"
-  grep -qE '^allowed-tools:.*Read' "$file"
-  grep -qE '^allowed-tools:.*Edit' "$file"
-  grep -qE '^allowed-tools:.*Bash' "$file"
+  grep -qE '^tools:.*Read' "$file"
+  grep -qE '^tools:.*Edit' "$file"
+  grep -qE '^tools:.*Bash' "$file"
 }
 
 @test "E28-S111: gaia-create-stakeholder includes Write (scaffold) and Bash (mkdir sidecar)" {
   file="$SKILLS_DIR/gaia-create-stakeholder/SKILL.md"
-  grep -qE '^allowed-tools:.*Write' "$file"
-  grep -qE '^allowed-tools:.*Bash' "$file"
+  grep -qE '^tools:.*Write' "$file"
+  grep -qE '^tools:.*Bash' "$file"
 }

@@ -55,13 +55,27 @@ export LC_ALL
 #
 # Required fields (checked on the merged, post-env map):
 #   project_root, project_path, memory_path, checkpoint_path,
-#   installed_path, framework_version, date
+#   installed_path, framework_version, date,
+#   test_artifacts, planning_artifacts, implementation_artifacts
+#
+# Artifact-dir keys (E28-S200 — unblocks E28-S195):
+#   test_artifacts, planning_artifacts, implementation_artifacts are the
+#   canonical docs/ subdirectory paths the audit harness + skill setup.sh
+#   scripts expect. Defaults resolve relative to project_root:
+#     test_artifacts           = {project_root}/docs/test-artifacts
+#     planning_artifacts       = {project_root}/docs/planning-artifacts
+#     implementation_artifacts = {project_root}/docs/implementation-artifacts
+#   project-config.yaml may override each; GAIA_* env vars win over both.
+#   See E28-S197 triage §2a for the systemic-defect context.
 #
 # Environment overrides (env wins over file values):
-#   GAIA_PROJECT_ROOT    → project_root
-#   GAIA_PROJECT_PATH    → project_path
-#   GAIA_MEMORY_PATH     → memory_path
-#   GAIA_CHECKPOINT_PATH → checkpoint_path
+#   GAIA_PROJECT_ROOT              → project_root
+#   GAIA_PROJECT_PATH              → project_path
+#   GAIA_MEMORY_PATH               → memory_path
+#   GAIA_CHECKPOINT_PATH           → checkpoint_path
+#   GAIA_TEST_ARTIFACTS            → test_artifacts
+#   GAIA_PLANNING_ARTIFACTS        → planning_artifacts
+#   GAIA_IMPLEMENTATION_ARTIFACTS  → implementation_artifacts
 #
 # Exit codes:
 #   0 — success, all required fields resolved
@@ -239,7 +253,7 @@ while [ $# -gt 0 ]; do
     --format=*)
       FORMAT="${1#--format=}"; shift ;;
     -h|--help)
-      sed -n '1,73p' "$0" >&2; exit 0 ;;
+      sed -n '1,87p' "$0" >&2; exit 0 ;;
     *)
       die "unknown argument: $1" ;;
   esac
@@ -384,6 +398,13 @@ v_memory_path=$(merge_key memory_path)
 v_project_path=$(merge_key project_path)
 v_project_root=$(merge_key project_root)
 
+# E28-S200 — artifact-dir keys (unblocks E28-S195 audit-harness gating).
+# These must be resolved after project_root so the default-relative-to-root
+# resolution below has a value to work with.
+v_test_artifacts=$(merge_key test_artifacts)
+v_planning_artifacts=$(merge_key planning_artifacts)
+v_implementation_artifacts=$(merge_key implementation_artifacts)
+
 # Flattened nested keys — emitted as dotted keys so shell eval-friendly.
 # Only val_integration.template_output_review is surfaced today; adding
 # more flattened keys is a one-liner (future-proof).
@@ -396,15 +417,38 @@ v_val_integration_template_output_review=$(merge_nested_key val_integration temp
 [ -n "${GAIA_MEMORY_PATH:-}" ]     && v_memory_path="$GAIA_MEMORY_PATH"
 [ -n "${GAIA_CHECKPOINT_PATH:-}" ] && v_checkpoint_path="$GAIA_CHECKPOINT_PATH"
 
+# E28-S200 — artifact-dir env overrides. Applied BEFORE default resolution
+# so an env-provided value wins over the generated {project_root}/docs/…
+# fallback below.
+[ -n "${GAIA_TEST_ARTIFACTS:-}" ]            && v_test_artifacts="$GAIA_TEST_ARTIFACTS"
+[ -n "${GAIA_PLANNING_ARTIFACTS:-}" ]        && v_planning_artifacts="$GAIA_PLANNING_ARTIFACTS"
+[ -n "${GAIA_IMPLEMENTATION_ARTIFACTS:-}" ]  && v_implementation_artifacts="$GAIA_IMPLEMENTATION_ARTIFACTS"
+
+# E28-S200 — default each artifact-dir key to {project_root}/docs/<dir>
+# when neither a config file value nor a GAIA_* env override supplied one.
+# Runs AFTER env overrides so an explicit empty value from env never falls
+# through to the default (env overrides use -n so only non-empty wins).
+[ -z "$v_test_artifacts" ]           && v_test_artifacts="${v_project_root}/docs/test-artifacts"
+[ -z "$v_planning_artifacts" ]       && v_planning_artifacts="${v_project_root}/docs/planning-artifacts"
+[ -z "$v_implementation_artifacts" ] && v_implementation_artifacts="${v_project_root}/docs/implementation-artifacts"
+
 # ---------- Required-field check (post-merge, post-env) ----------
 
-[ -z "$v_checkpoint_path" ]   && die "missing required field: checkpoint_path"
-[ -z "$v_date" ]              && die "missing required field: date"
-[ -z "$v_framework_version" ] && die "missing required field: framework_version"
-[ -z "$v_installed_path" ]    && die "missing required field: installed_path"
-[ -z "$v_memory_path" ]       && die "missing required field: memory_path"
-[ -z "$v_project_path" ]      && die "missing required field: project_path"
-[ -z "$v_project_root" ]      && die "missing required field: project_root"
+[ -z "$v_checkpoint_path" ]          && die "missing required field: checkpoint_path"
+[ -z "$v_date" ]                     && die "missing required field: date"
+[ -z "$v_framework_version" ]        && die "missing required field: framework_version"
+[ -z "$v_installed_path" ]           && die "missing required field: installed_path"
+[ -z "$v_memory_path" ]              && die "missing required field: memory_path"
+[ -z "$v_project_path" ]             && die "missing required field: project_path"
+[ -z "$v_project_root" ]             && die "missing required field: project_root"
+# E28-S200 — artifact-dir required fields. These always resolve because the
+# default block above populates them from {project_root}/docs/… when nothing
+# else supplied a value. The explicit checks stay for parity with the rest
+# of the required-field surface and to catch any future regression where
+# the default block is bypassed (e.g., someone sets them to empty string).
+[ -z "$v_test_artifacts" ]           && die "missing required field: test_artifacts"
+[ -z "$v_planning_artifacts" ]       && die "missing required field: planning_artifacts"
+[ -z "$v_implementation_artifacts" ] && die "missing required field: implementation_artifacts"
 
 # ---------- Path-traversal guard on project_path ----------
 
@@ -422,13 +466,16 @@ if [ "$FORMAT" = "shell" ]; then
   # Alphabetical order, hard-coded to guarantee determinism. Flattened keys
   # are emitted only when they have a value so absent nested blocks do not
   # pollute the output surface.
-  emit_pair_shell checkpoint_path   "$v_checkpoint_path"
-  emit_pair_shell date              "$v_date"
-  emit_pair_shell framework_version "$v_framework_version"
-  emit_pair_shell installed_path    "$v_installed_path"
-  emit_pair_shell memory_path       "$v_memory_path"
-  emit_pair_shell project_path      "$v_project_path"
-  emit_pair_shell project_root      "$v_project_root"
+  emit_pair_shell checkpoint_path          "$v_checkpoint_path"
+  emit_pair_shell date                     "$v_date"
+  emit_pair_shell framework_version        "$v_framework_version"
+  emit_pair_shell implementation_artifacts "$v_implementation_artifacts"
+  emit_pair_shell installed_path           "$v_installed_path"
+  emit_pair_shell memory_path              "$v_memory_path"
+  emit_pair_shell planning_artifacts       "$v_planning_artifacts"
+  emit_pair_shell project_path             "$v_project_path"
+  emit_pair_shell project_root             "$v_project_root"
+  emit_pair_shell test_artifacts           "$v_test_artifacts"
   if [ -n "$v_val_integration_template_output_review" ]; then
     emit_pair_shell val_integration.template_output_review \
       "$v_val_integration_template_output_review"
@@ -437,34 +484,43 @@ else
   if command -v jq >/dev/null 2>&1; then
     if [ -n "$v_val_integration_template_output_review" ]; then
       jq -n \
-        --arg checkpoint_path   "$v_checkpoint_path" \
-        --arg date              "$v_date" \
-        --arg framework_version "$v_framework_version" \
-        --arg installed_path    "$v_installed_path" \
-        --arg memory_path       "$v_memory_path" \
-        --arg project_path      "$v_project_path" \
-        --arg project_root      "$v_project_root" \
+        --arg checkpoint_path          "$v_checkpoint_path" \
+        --arg date                     "$v_date" \
+        --arg framework_version        "$v_framework_version" \
+        --arg implementation_artifacts "$v_implementation_artifacts" \
+        --arg installed_path           "$v_installed_path" \
+        --arg memory_path              "$v_memory_path" \
+        --arg planning_artifacts       "$v_planning_artifacts" \
+        --arg project_path             "$v_project_path" \
+        --arg project_root             "$v_project_root" \
+        --arg test_artifacts           "$v_test_artifacts" \
         --arg val_template_output_review "$v_val_integration_template_output_review" \
-        '{checkpoint_path: $checkpoint_path, date: $date, framework_version: $framework_version, installed_path: $installed_path, memory_path: $memory_path, project_path: $project_path, project_root: $project_root, "val_integration.template_output_review": $val_template_output_review}'
+        '{checkpoint_path: $checkpoint_path, date: $date, framework_version: $framework_version, implementation_artifacts: $implementation_artifacts, installed_path: $installed_path, memory_path: $memory_path, planning_artifacts: $planning_artifacts, project_path: $project_path, project_root: $project_root, test_artifacts: $test_artifacts, "val_integration.template_output_review": $val_template_output_review}'
     else
       jq -n \
-        --arg checkpoint_path   "$v_checkpoint_path" \
-        --arg date              "$v_date" \
-        --arg framework_version "$v_framework_version" \
-        --arg installed_path    "$v_installed_path" \
-        --arg memory_path       "$v_memory_path" \
-        --arg project_path      "$v_project_path" \
-        --arg project_root      "$v_project_root" \
-        '{checkpoint_path: $checkpoint_path, date: $date, framework_version: $framework_version, installed_path: $installed_path, memory_path: $memory_path, project_path: $project_path, project_root: $project_root}'
+        --arg checkpoint_path          "$v_checkpoint_path" \
+        --arg date                     "$v_date" \
+        --arg framework_version        "$v_framework_version" \
+        --arg implementation_artifacts "$v_implementation_artifacts" \
+        --arg installed_path           "$v_installed_path" \
+        --arg memory_path              "$v_memory_path" \
+        --arg planning_artifacts       "$v_planning_artifacts" \
+        --arg project_path             "$v_project_path" \
+        --arg project_root             "$v_project_root" \
+        --arg test_artifacts           "$v_test_artifacts" \
+        '{checkpoint_path: $checkpoint_path, date: $date, framework_version: $framework_version, implementation_artifacts: $implementation_artifacts, installed_path: $installed_path, memory_path: $memory_path, planning_artifacts: $planning_artifacts, project_path: $project_path, project_root: $project_root, test_artifacts: $test_artifacts}'
     fi
   else
-    printf '{"checkpoint_path": "%s", "date": "%s", "framework_version": "%s", "installed_path": "%s", "memory_path": "%s", "project_path": "%s", "project_root": "%s"}\n' \
+    printf '{"checkpoint_path": "%s", "date": "%s", "framework_version": "%s", "implementation_artifacts": "%s", "installed_path": "%s", "memory_path": "%s", "planning_artifacts": "%s", "project_path": "%s", "project_root": "%s", "test_artifacts": "%s"}\n' \
       "$(json_escape "$v_checkpoint_path")" \
       "$(json_escape "$v_date")" \
       "$(json_escape "$v_framework_version")" \
+      "$(json_escape "$v_implementation_artifacts")" \
       "$(json_escape "$v_installed_path")" \
       "$(json_escape "$v_memory_path")" \
+      "$(json_escape "$v_planning_artifacts")" \
       "$(json_escape "$v_project_path")" \
-      "$(json_escape "$v_project_root")"
+      "$(json_escape "$v_project_root")" \
+      "$(json_escape "$v_test_artifacts")"
   fi
 fi

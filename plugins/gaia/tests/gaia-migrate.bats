@@ -508,3 +508,47 @@ EOF
   [ -d "$PROJECT/_memory" ]
   [ -d "$PROJECT/custom" ]
 }
+
+# ---------------------------------------------------------------------------
+# E28-S200 — _derive_required_fields extends to the 3 artifact-dir keys
+# ---------------------------------------------------------------------------
+# Per E28-S197 triage §2a: the resolver's required-fields list gains
+# test_artifacts, planning_artifacts, implementation_artifacts. The migration
+# helper must copy these keys from v1 global.yaml into v2 project-config.yaml
+# during the split BEFORE the destructive delete runs — otherwise the v2
+# project fails resolver's required-field check on first skill invocation.
+
+@test "E28-S200 AC3: apply writes the 3 new artifact-dir keys into project-config.yaml" {
+  # The setup already seeds planning_artifacts/test_artifacts/creative_artifacts/
+  # implementation_artifacts into v1 global.yaml (lines 44-47 in this file).
+  run "$SCRIPT" apply --project-root "$PROJECT" --yes
+  [ "$status" -eq 0 ]
+
+  local v2="$PROJECT/config/project-config.yaml"
+  [ -f "$v2" ]
+
+  # The 3 new required fields must be present in the post-split v2 file.
+  for key in test_artifacts planning_artifacts implementation_artifacts; do
+    if ! grep -qE "^${key}:" "$v2"; then
+      printf 'E28-S200: required artifact-dir key missing from %s: %s\n' "$v2" "$key" >&2
+      cat "$v2" >&2
+      return 1
+    fi
+  done
+}
+
+@test "E28-S200 AC3: missing test_artifacts in v1 config → abort BEFORE delete" {
+  # Remove test_artifacts from the v1 config; migration must refuse to delete.
+  sed -i.bak '/^test_artifacts:/d' "$PROJECT/_gaia/_config/global.yaml"
+  rm -f "$PROJECT/_gaia/_config/global.yaml.bak"
+
+  run "$SCRIPT" apply --project-root "$PROJECT" --yes
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"required field missing"* ]]
+  [[ "$output" == *"test_artifacts"* ]]
+
+  # v1 dirs remain intact — abort happened pre-delete.
+  [ -d "$PROJECT/_gaia" ]
+  [ -d "$PROJECT/_memory" ]
+  [ -d "$PROJECT/custom" ]
+}

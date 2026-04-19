@@ -96,6 +96,24 @@ fields:
     default: null
     description: "ISO-8601 date stamp for the config revision."
 
+  test_artifacts:
+    type: path
+    required: false
+    default: null
+    description: "Absolute (or project-root-relative) path to the docs/test-artifacts directory. Defaults to {project_root}/docs/test-artifacts when absent. Added under E28-S200 so skill setup.sh scripts no longer fall back to PWD-relative resolution when the audit harness runs from /tmp. See ADR-044."
+
+  planning_artifacts:
+    type: path
+    required: false
+    default: null
+    description: "Absolute (or project-root-relative) path to the docs/planning-artifacts directory. Defaults to {project_root}/docs/planning-artifacts when absent. Added under E28-S200 (see test_artifacts)."
+
+  implementation_artifacts:
+    type: path
+    required: false
+    default: null
+    description: "Absolute (or project-root-relative) path to the docs/implementation-artifacts directory. Defaults to {project_root}/docs/implementation-artifacts when absent. Added under E28-S200 (see test_artifacts)."
+
   val_integration:
     type: map
     required: false

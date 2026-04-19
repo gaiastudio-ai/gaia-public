@@ -805,6 +805,14 @@ else
   echo "SUCCESS — v1 → v2 migration complete."
   echo "Backup: $BACKUP_DIR"
   echo "Restore command (if needed): cp -a \"$BACKUP_DIR/.\" \"$PROJECT_ROOT/\""
+  # E28-S189 — tell the user to smoke-test with the plugin-namespaced form.
+  # The unnamespaced /gaia-help can be intercepted by a legacy
+  # .claude/commands/gaia-help.md stub, so /gaia:gaia-help is the only form
+  # that unambiguously exercises the plugin's gaia-help skill.
+  echo
+  echo "Next step: run /gaia:gaia-help in Claude Code to smoke-test the plugin install."
+  echo "  (The gaia: prefix targets the plugin's gaia-help skill and avoids any legacy"
+  echo "   .claude/commands/gaia-help.md stub that might still be registered.)"
   # E28-S186 — legacy command stubs rollback path
   if [[ -d "$BACKUP_DIR/.claude/commands" ]]; then
     echo

@@ -11,11 +11,13 @@ on:
     paths:
       - 'plugins/gaia/**'
       - '.github/workflows/plugin-ci.yml'
+      - 'scripts/audit-v2-migration.sh'
   push:
     branches: [main, staging]
     paths:
       - 'plugins/gaia/**'
       - '.github/workflows/plugin-ci.yml'
+      - 'scripts/audit-v2-migration.sh'
 
 jobs:
   frontmatter-lint:
@@ -230,6 +232,50 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.2.2
       - name: Validate plugin structure
         run: .github/scripts/structure-validate.sh
+
+  audit-v2-migration:
+    name: audit-v2-migration
+    runs-on: ubuntu-latest
+    timeout-minutes: 5  # E28-S195 AC1 — harness takes ~20s warm; 5min is safe budget
+    # E28-S195 — required regression gate for the B1/B2/B3/B4/B5 fixes shipped
+    # in E28-S190/S191/S194/S196/S197/S198/S199/S200. Runs the audit harness
+    # in --fixture-mode enriched (CI=true, set automatically by Actions, also
+    # defaults to enriched per AC7). Exit 0 = all skills OK; exit 1 = plugin
+    # regression (this job fails); exit 2 = harness bug (also fails, but CI
+    # diagnostics distinguish the two — see scripts/audit-v2-migration.sh
+    # header).
+    #
+    # Admins — add the job name `audit-v2-migration` to the GitHub branch-
+    # protection required-status-checks list for both `main` and `staging`
+    # via Settings → Branches → Branch protection rules. The toggle is a
+    # manual UI step and cannot be scripted from this workflow.
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.2.2
+      - name: Prepare fixture project-root and plugin-cache
+        run: |
+          set -euo pipefail
+          # Fixture project-root — a bare /tmp directory the harness populates
+          # via --fixture-mode enriched. Keeps the repo checkout untouched.
+          mkdir -p /tmp/audit-fixture/project-root
+          # Plugin-cache — point at the in-repo plugin skills directory. The
+          # harness iterates every subdir as a skill candidate.
+          echo "PLUGIN_CACHE=$PWD/plugins/gaia/skills" >> "$GITHUB_ENV"
+          echo "PROJECT_ROOT=/tmp/audit-fixture/project-root" >> "$GITHUB_ENV"
+          echo "AUDIT_CSV=/tmp/audit-fixture/audit-result.csv" >> "$GITHUB_ENV"
+      - name: Run audit-v2-migration harness (--fixture-mode enriched)
+        run: |
+          bash scripts/audit-v2-migration.sh \
+            --plugin-cache "$PLUGIN_CACHE" \
+            --project-root "$PROJECT_ROOT" \
+            --fixture-mode enriched \
+            --out "$AUDIT_CSV"
+      - name: Upload audit CSV artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: audit-v2-migration-csv
+          path: /tmp/audit-fixture/audit-result.csv
+          if-no-files-found: warn
 
   claudemd-drift-guard:
     name: claudemd-drift-guard

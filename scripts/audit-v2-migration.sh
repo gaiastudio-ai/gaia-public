@@ -32,11 +32,31 @@
 #                         up the paths instead of PWD-relative defaults.
 #                         Designed for CI regression gating (E28-S195).
 #
-# Exit codes:
-#   0 — audit completed (individual skill failures are reported in the CSV,
-#       not as process exit codes)
-#   2 — harness misconfiguration (missing flags, unreadable plugin cache,
-#       unknown --fixture-mode value)
+# Exit codes (E28-S195 AC8 — split 1 vs 2):
+#   0 — audit completed and every skill landed in OK or NO-SCRIPTS bucket
+#       (no B1-B5 failures). The CSV is still the authoritative per-skill
+#       detail surface.
+#   1 — audit completed but ONE OR MORE skills landed in a failure bucket
+#       (B1, B2, B3, B4, or B5). This is a PLUGIN REGRESSION — the CI gate
+#       on this exit code is the whole point of E28-S195. Pre-E28-S195 the
+#       harness conflated this with harness-bug exit code; downstream CI
+#       diagnostics now distinguish "plugin regressed" from "harness bug".
+#   2 — harness misconfiguration or runtime error (missing flags, unreadable
+#       plugin cache, unknown --fixture-mode value, fixture pre-creation
+#       failed). This is a HARNESS BUG — the audit did not run meaningfully
+#       and CI should surface the problem loudly but distinctly from exit 1.
+#
+# CI integration (E28-S195 AC6, AC7):
+#   - When $CI is truthy (GitHub Actions sets CI=true) and no --fixture-mode
+#     flag is given, the harness defaults to --fixture-mode enriched. Local
+#     invocations still default to minimal for backwards compat.
+#   - At end-of-run the harness emits a machine-readable summary line to
+#     stderr:
+#       audit-v2-migration: result=<PASS|FAIL> total=<N> ok=<N> \
+#         no_scripts=<N> failed=<N>
+#   - When $GITHUB_STEP_SUMMARY points at a file, the harness appends a
+#     short markdown block (header + totals table) so the GitHub Actions
+#     run page surfaces a human-readable summary.
 #
 # Output schema (CSV header):
 #   skill_name,has_setup,setup_exit,setup_stderr_head,has_finalize,
@@ -59,7 +79,14 @@ die() { printf 'audit-v2-migration: %s\n' "$1" >&2; exit 2; }
 PLUGIN_CACHE=""
 PROJECT_ROOT=""
 OUT=""
-FIXTURE_MODE="minimal"
+# E28-S195 AC7 — default to enriched under CI (GitHub Actions sets CI=true),
+# minimal otherwise for local backward compatibility. Explicit --fixture-mode
+# on the command line always wins over this default.
+FIXTURE_MODE_DEFAULT="minimal"
+if [ -n "${CI:-}" ] && [ "${CI:-}" != "false" ] && [ "${CI:-}" != "0" ]; then
+  FIXTURE_MODE_DEFAULT="enriched"
+fi
+FIXTURE_MODE=""
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -68,10 +95,15 @@ while [ $# -gt 0 ]; do
     --out)          OUT="$2"; shift 2 ;;
     --fixture-mode) FIXTURE_MODE="$2"; shift 2 ;;
     -h|--help)
-      sed -n '1,54p' "$0" >&2; exit 0 ;;
+      sed -n '1,78p' "$0" >&2; exit 0 ;;
     *) die "unknown argument: $1" ;;
   esac
 done
+
+# Resolve default when --fixture-mode was not passed (E28-S195 AC7).
+if [ -z "$FIXTURE_MODE" ]; then
+  FIXTURE_MODE="$FIXTURE_MODE_DEFAULT"
+fi
 
 [ -n "$PLUGIN_CACHE" ] || die "--plugin-cache <path> is required"
 [ -n "$PROJECT_ROOT" ] || die "--project-root <path> is required"
@@ -206,6 +238,8 @@ printf 'skill_name,has_setup,setup_exit,setup_stderr_head,has_finalize,finalize_
 
 total=0
 failed=0
+ok_count=0
+no_scripts_count=0
 b1=0; b2=0; b3=0; b4=0; b5=0
 
 for skill_dir in "$PLUGIN_CACHE"/*/; do
@@ -239,8 +273,10 @@ for skill_dir in "$PLUGIN_CACHE"/*/; do
   combined="${setup_err}"$'\n'"${finalize_err}"
   if [ "$has_setup" -eq 0 ] && [ "$has_finalize" -eq 0 ]; then
     bucket="NO-SCRIPTS"
+    no_scripts_count=$((no_scripts_count + 1))
   elif [ "${setup_exit:-0}" = "0" ] && [ "${finalize_exit:-0}" = "0" ]; then
     bucket="OK"
+    ok_count=$((ok_count + 1))
   else
     bucket=$(classify "$combined")
     failed=$((failed + 1))
@@ -271,3 +307,48 @@ printf 'bucket_B3_skill_md_literal_paths: %d\n' "$b3" >&2
 printf 'bucket_B4_global_yaml_overlay: %d\n' "$b4" >&2
 printf 'bucket_B5_other: %d\n' "$b5" >&2
 printf 'output_csv: %s\n' "$OUT" >&2
+
+# ---------- Machine-readable summary line (E28-S195 AC6) ----------
+# CI parses this single line to produce a step-level status string. Format
+# is contract-stable: `result=<PASS|FAIL>` key first, then counts in fixed
+# order. Keep on ONE line — downstream greppers rely on this.
+if [ "$failed" -gt 0 ]; then
+  summary_result="FAIL"
+else
+  summary_result="PASS"
+fi
+printf 'audit-v2-migration: result=%s total=%d ok=%d no_scripts=%d failed=%d\n' \
+  "$summary_result" "$total" "$ok_count" "$no_scripts_count" "$failed" >&2
+
+# ---------- GitHub Actions step summary (E28-S195 AC7) ----------
+# When GITHUB_STEP_SUMMARY is set (it is on every GitHub Actions runner),
+# append a markdown block rendering the audit outcome as a table. This
+# surfaces on the Actions run page under the "Summary" pane without the
+# developer needing to open the job log. Silent no-op when the var is
+# empty (local runs).
+if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+  {
+    printf '### audit-v2-migration (%s)\n\n' "$summary_result"
+    printf '**Fixture mode:** `%s`  \n' "$FIXTURE_MODE"
+    printf '**CSV artifact:** `%s`  \n\n' "$OUT"
+    printf '| Bucket | Count |\n'
+    printf '| --- | ---: |\n'
+    printf '| OK | %d |\n' "$ok_count"
+    printf '| NO-SCRIPTS | %d |\n' "$no_scripts_count"
+    printf '| B1 path-contract | %d |\n' "$b1"
+    printf '| B2 checkpoint-deleted | %d |\n' "$b2"
+    printf '| B3 SKILL.md literal paths | %d |\n' "$b3"
+    printf '| B4 global.yaml overlay | %d |\n' "$b4"
+    printf '| B5 other | %d |\n' "$b5"
+    printf '| **Total** | **%d** |\n' "$total"
+  } >> "$GITHUB_STEP_SUMMARY"
+fi
+
+# ---------- Exit code (E28-S195 AC8) ----------
+# 0 — all skills OK or NO-SCRIPTS
+# 1 — one or more B1-B5 failures (plugin regression — the CI gate signal)
+# 2 — harness misconfig (already handled earlier via `die`)
+if [ "$failed" -gt 0 ]; then
+  exit 1
+fi
+exit 0

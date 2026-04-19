@@ -110,3 +110,71 @@ teardown() { common_teardown; }
   [ -d "$fresh" ]
   [ -f "$fresh/w-b2.yaml" ]
 }
+
+# ---------------------------------------------------------------------------
+# E28-S202 / AC5 — CLAUDE_SKILL_DIR pre-check removed; resolver is authoritative
+# ---------------------------------------------------------------------------
+# Post-E28-S191 the resolver has its own 6-level precedence ladder. checkpoint.sh
+# must NOT short-circuit on ${CLAUDE_SKILL_DIR:-} before calling the resolver:
+# without this change setup.sh and finalize.sh on any workspace that doesn't
+# export CLAUDE_SKILL_DIR (i.e. every Claude Code skill invocation) will die
+# before the resolver gets a chance to look at CLAUDE_PROJECT_ROOT/config/…
+# See the story file at docs/implementation-artifacts/E28-S202-*.md.
+
+@test "E28-S202 / AC5.a: CHECKPOINT_PATH set → existing happy path still works" {
+  # Early-exit branch of resolve_checkpoint_path must be untouched by the fix.
+  # CLAUDE_SKILL_DIR is deliberately absent to prove the gate isn't load-bearing
+  # on this path either.
+  unset CLAUDE_SKILL_DIR
+  run "$SCRIPT" write --workflow w-ac5a --step 1
+  [ "$status" -eq 0 ]
+  [ -f "$CHECKPOINT_PATH/w-ac5a.yaml" ]
+}
+
+@test "E28-S202 / AC5.b: CHECKPOINT_PATH unset + CLAUDE_PROJECT_ROOT config → resolver succeeds" {
+  # Build a minimal project-config.yaml at CLAUDE_PROJECT_ROOT/config/ with
+  # every required field so resolve-config.sh emits a usable checkpoint_path
+  # line. CLAUDE_SKILL_DIR is deliberately unset — the old pre-check would
+  # skip the resolver entirely and die 1 before touching the file system.
+  local proj="$TEST_TMP/proj"
+  mkdir -p "$proj/config"
+  local ck="$proj/_memory/checkpoints"
+  cat >"$proj/config/project-config.yaml" <<YAML
+project_root: "$proj"
+project_path: "."
+memory_path: "$proj/_memory"
+checkpoint_path: "$ck"
+installed_path: "$proj/_gaia"
+framework_version: "test"
+date: "2026-04-19"
+YAML
+
+  unset CHECKPOINT_PATH
+  unset CLAUDE_SKILL_DIR
+  CLAUDE_PROJECT_ROOT="$proj" run "$SCRIPT" write --workflow w-ac5b --step 1
+  [ "$status" -eq 0 ]
+  [ -f "$ck/w-ac5b.yaml" ]
+}
+
+@test "E28-S202 / AC5.c: resolver output missing checkpoint_path key → die 1" {
+  # AC2 fail-hard preservation: if the resolver succeeds but its output never
+  # contains a 'checkpoint_path=' line, checkpoint.sh must still die 1 with
+  # the canonical "CHECKPOINT_PATH not resolved" message. Shim the sibling
+  # resolver with a stub that emits only an unrelated key and invoke via a
+  # copy of checkpoint.sh so SCRIPT_DIR points at the stub directory.
+  local stubdir="$TEST_TMP/stub-scripts"
+  mkdir -p "$stubdir"
+  cp "$SCRIPT" "$stubdir/checkpoint.sh"
+  cat >"$stubdir/resolve-config.sh" <<'RESOLVER'
+#!/usr/bin/env bash
+printf "project_root='/nope'\n"
+RESOLVER
+  chmod +x "$stubdir/resolve-config.sh"
+
+  unset CHECKPOINT_PATH
+  unset CLAUDE_SKILL_DIR
+  run "$stubdir/checkpoint.sh" write --workflow w-ac5c --step 1
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"CHECKPOINT_PATH not resolved"* ]] \
+    || [[ "$stderr" == *"CHECKPOINT_PATH not resolved"* ]]
+}

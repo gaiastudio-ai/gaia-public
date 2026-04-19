@@ -61,17 +61,19 @@ EOF
 #!/usr/bin/env bash
 do_something() { echo "hi"; }
 EOF
-  # Prefix heredoc @test lines with a leading space so bats' static counter
-  # in the parent suite does not double-count heredoc fixture content as real
-  # test blocks. Bats 1.10.0 counts any line matching `^@test` across the
-  # whole file at parse time — including content inside heredocs — and then
-  # fails the job with "Executed N instead of expected M tests" when those
-  # phantom tests never execute. Indenting by one space is enough to dodge
-  # the `^@test` anchor while still being a valid test declaration inside
-  # the rendered fixture file.
+  # IMPORTANT: do NOT write `@test "..."` inside heredocs in this file.
+  # The parent bats parser scans for `^\s*@test` across every file in the
+  # tests directory during its static pre-count phase, including content
+  # embedded in heredocs. Any `@test` line in these fixtures — even
+  # indented — inflates the parent suite's expected test count and fails
+  # the job with "Executed N instead of expected M tests".
+  # The wrapper's Step 3 coverage check is a plain `grep` for the function
+  # name across every *.bats file, so a comment-only fixture containing
+  # the function name is sufficient to mark the function as covered.
   cat > "$FIXTURE_TESTS/one-func.bats" <<'EOF'
 #!/usr/bin/env bats
- @test "do_something is invoked" { :; }
+# Fixture references do_something so the wrapper's grep-based coverage
+# check sees the public function as covered.
 EOF
 
   run bash "$WRAPPER"
@@ -92,7 +94,7 @@ _private_two() { :; }
 EOF
   cat > "$FIXTURE_TESTS/mixed.bats" <<'EOF'
 #!/usr/bin/env bats
- @test "public_one" { :; }
+# Fixture references public_one so the wrapper's coverage check passes.
 EOF
 
   run bash "$WRAPPER"
@@ -138,7 +140,7 @@ only_public_fn() { :; }
 EOF
   cat > "$FIXTURE_TESTS/single.bats" <<'EOF'
 #!/usr/bin/env bats
- @test "only_public_fn referenced" { :; }
+# Fixture references only_public_fn so the wrapper's coverage check passes.
 EOF
 
   run bash "$WRAPPER"

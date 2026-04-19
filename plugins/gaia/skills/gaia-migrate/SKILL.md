@@ -55,6 +55,8 @@ The mechanical migration steps are documented in `gaia-public/docs/migration-gui
 - **Dry-run is idempotent.** Running dry-run twice produces identical plans (AC5).
 - **Restore command is always printed.** Both `SUCCESS` and `FAILED` summaries echo the exact `cp -a "{backup}" "{project-root}"` command for manual rollback (AC-EC8).
 - **Script does NOT auto-restore on failure.** Explicit user action is required (per §safety doctrine — automatic restoration could mask real issues).
+- **v1 directories are deleted after successful migration (E28-S188).** `/gaia-migrate apply` backs up `_gaia/`, `_memory/`, and `custom/` into `$BACKUP_ROOT/` and then removes them from the project root. Expect 50-100 MB of disk freed on a mature project. The final summary prints a `cp -a` rollback command that restores the v1 directories from the backup if you need to revert. The destructive step is gated by three safety rails: (a) `config/project-config.yaml` must exist with a non-empty `framework_version:` or `version:` field; (b) a sha256 manifest of the live source must match the backup snapshot (excluding `_gaia/_config/global.yaml`, which is intentionally rewritten in place by the config-split step — the pre-split copy is preserved in the backup); and (c) an interactive `yes/no` confirmation prompt (bypass with `--yes` or `--force`). In non-interactive contexts (CI, bats), you MUST pass `--yes` or the script exits 7 rather than hanging on the prompt.
+- **Idempotent re-run (E28-S188).** `/gaia-migrate dry-run` on a project that is already on v2 (no v1 dirs present, `config/project-config.yaml` present) exits 0 with "Nothing to migrate — already on v2." This is a success, not a HALT.
 
 ## References
 

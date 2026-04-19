@@ -61,9 +61,17 @@ EOF
 #!/usr/bin/env bash
 do_something() { echo "hi"; }
 EOF
+  # Prefix heredoc @test lines with a leading space so bats' static counter
+  # in the parent suite does not double-count heredoc fixture content as real
+  # test blocks. Bats 1.10.0 counts any line matching `^@test` across the
+  # whole file at parse time — including content inside heredocs — and then
+  # fails the job with "Executed N instead of expected M tests" when those
+  # phantom tests never execute. Indenting by one space is enough to dodge
+  # the `^@test` anchor while still being a valid test declaration inside
+  # the rendered fixture file.
   cat > "$FIXTURE_TESTS/one-func.bats" <<'EOF'
 #!/usr/bin/env bats
-@test "do_something is invoked" { :; }
+ @test "do_something is invoked" { :; }
 EOF
 
   run bash "$WRAPPER"
@@ -84,7 +92,7 @@ _private_two() { :; }
 EOF
   cat > "$FIXTURE_TESTS/mixed.bats" <<'EOF'
 #!/usr/bin/env bats
-@test "public_one" { :; }
+ @test "public_one" { :; }
 EOF
 
   run bash "$WRAPPER"
@@ -130,7 +138,7 @@ only_public_fn() { :; }
 EOF
   cat > "$FIXTURE_TESTS/single.bats" <<'EOF'
 #!/usr/bin/env bats
-@test "only_public_fn referenced" { :; }
+ @test "only_public_fn referenced" { :; }
 EOF
 
   run bash "$WRAPPER"

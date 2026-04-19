@@ -18,6 +18,9 @@
 #   2 — backup failed (disk space, permission)
 #   3 — migration step failed (subtask 4.1, 4.2, or 4.3)
 #   4 — post-migration validation failed
+#   5 — safety gate failed (v2 marker missing/malformed at delete time) [E28-S188]
+#   6 — manifest mismatch between live source and backup [E28-S188]
+#   7 — user declined confirmation OR non-TTY without --yes/--force [E28-S188]
 #   64 — usage error
 
 set -euo pipefail
@@ -25,6 +28,7 @@ set -euo pipefail
 MODE=""
 PROJECT_ROOT=""
 DRY_RUN=false
+ASSUME_YES=false      # --yes / --force bypasses the destructive confirmation prompt (E28-S188)
 
 # ---------------------------------------------------------------------------
 # Arg parsing
@@ -39,6 +43,10 @@ while [[ $# -gt 0 ]]; do
     --project-root)
       PROJECT_ROOT="${2:-}"
       shift 2
+      ;;
+    --yes|--force)
+      ASSUME_YES=true
+      shift
       ;;
     -h|--help)
       cat <<EOF
@@ -137,27 +145,48 @@ _detect_v1() {
   echo "  _gaia/_config/global.yaml           : $([ "$has_config" -eq 1 ] && echo present || echo MISSING)"
   echo "  config/project-config.yaml (v2)     : $([ "$has_v2" -eq 1 ] && echo present || echo MISSING)"
 
-  # No v1 detected
-  if [[ "$has_engine" -eq 0 && "$has_memory" -eq 0 && "$has_custom" -eq 0 && "$has_config" -eq 0 ]]; then
+  # E28-S188 check ordering (W1, W6): the v2-only idempotent success path
+  # MUST be evaluated BEFORE the partial-install HALT. Order is:
+  #   (1) v2 marker present + no v1 dirs   → exit 0, idempotent success (AC7)
+  #   (2) v2 marker present + v1 dirs      → HALT, mixed state
+  #   (3) no v1 + no v2                     → HALT, nothing to migrate
+  #   (4) partial v1                        → HALT, repair install
+  #   (5) full v1                           → proceed
+  #
+  # The function returns:
+  #   0   → proceed with migration (full v1 detected)
+  #   10  → idempotent success (v2-only, caller exits 0 with "already on v2")
+  #   1   → HALT (all other error paths)
+
+  # (1) Already on v2 — idempotent success (AC7 / W1 / W6)
+  if [[ "$has_v2" -eq 1 && "$has_engine" -eq 0 && "$has_memory" -eq 0 && "$has_custom" -eq 0 ]]; then
     echo
-    echo "HALT: No v1 installation detected — nothing to migrate."
-    return 1
+    echo "Nothing to migrate — already on v2."
+    return 10
   fi
 
-  # Already migrated
+  # (2) Mixed state — v2 marker AND v1 dirs both present
   if [[ "$has_v2" -eq 1 ]]; then
     echo
     echo "HALT: Migration already complete — config/project-config.yaml exists. v2 state detected."
     return 1
   fi
 
-  # Partial install (AC-EC1)
+  # (3) No v1 detected AND no v2 marker
+  if [[ "$has_engine" -eq 0 && "$has_memory" -eq 0 && "$has_custom" -eq 0 && "$has_config" -eq 0 ]]; then
+    echo
+    echo "HALT: No v1 installation detected — nothing to migrate."
+    return 1
+  fi
+
+  # (4) Partial install (AC-EC1) — only reachable once v2 marker is absent
   if [[ "$has_engine" -eq 0 || "$has_memory" -eq 0 || "$has_config" -eq 0 ]]; then
     echo
     echo "HALT: v1 installation is partial — required marker missing. Either repair the install or pass --force-partial (not yet supported)."
     return 1
   fi
 
+  # (5) Full v1 — proceed
   echo "  → v1 install detected, ready to migrate"
 }
 
@@ -435,6 +464,213 @@ _migrate_legacy_command_stubs() {
 }
 
 # ---------------------------------------------------------------------------
+# Subtask 4.5 — back up + delete v1 directories after successful migration (E28-S188)
+#
+# Runs AFTER the config split has produced `config/project-config.yaml` (the
+# v2 marker). Safety rails:
+#   (a) v2 marker must exist and contain a non-empty framework_version: OR
+#       version: field. Missing / empty → exit 5 (safety gate failed).
+#   (b) Every live file under _gaia/, _memory/, custom/ must have a byte-for-
+#       byte match in $BACKUP_DIR (the snapshot taken by _run_backup), with
+#       ONE intentional exception: _gaia/_config/global.yaml was rewritten in
+#       place by _migrate_config_split AFTER the backup was captured, so the
+#       pre-split copy in the backup is intentionally different from the live
+#       post-split file. Exclude that single path from the comparison.
+#       Anything else mismatching → exit 6 (manifest mismatch).
+#   (c) Paranoid guards: $BACKUP_DIR must be non-empty, must not equal
+#       $PROJECT_ROOT, and $PROJECT_ROOT must not equal / or $HOME. Targets
+#       must be inside $PROJECT_ROOT.
+#   (d) Destructive confirmation: interactive prompt unless --yes / --force.
+#       Non-TTY without --yes → exit 7 (bats-safe; no hang).
+#   (e) Each absent v1 dir is skipped silently (AC8).
+# ---------------------------------------------------------------------------
+
+# _compute_live_manifest DIR MANIFEST — write sha256 + relative-path pairs for
+# every file under DIR (skipping symlinks) to MANIFEST. Paths are relative to
+# DIR and sorted so a second pass over the backup produces the same ordering.
+_compute_live_manifest() {
+  local dir="$1" manifest="$2"
+  : > "$manifest"
+  [[ -d "$dir" ]] || return 0
+  ( cd "$dir" && find . -type f -print0 2>/dev/null | sort -z | \
+    while IFS= read -r -d '' f; do
+      local sum
+      sum=$(shasum -a 256 "$f" 2>/dev/null | awk '{print $1}')
+      printf '%s  %s\n' "$sum" "${f#./}"
+    done ) > "$manifest"
+}
+
+_migrate_v1_directories() {
+  echo
+  echo "=== migrate 4.5: v1 directories cleanup (E28-S188) ==="
+
+  # Collect which v1 dirs are present (AC8 — skip absent silently).
+  local present_dirs=()
+  local d
+  for d in _gaia _memory custom; do
+    if [[ -d "$PROJECT_ROOT/$d" ]]; then
+      present_dirs+=("$d")
+    fi
+  done
+
+  if [[ "${#present_dirs[@]}" -eq 0 ]]; then
+    echo "  no v1 directories present — nothing to delete"
+    echo "  v1-dirs PASS"
+    return 0
+  fi
+
+  # --- AC1: dry-run listing + size info ---
+  # Use du -sk for POSIX-portable KB output (I1 — macOS vs Linux du -sh
+  # formatting differs; sticking to -sk keeps the output deterministic for
+  # bats assertions).
+  echo "Legacy v1 directories to remove (${#present_dirs[@]} dirs):"
+  local total_kb=0
+  for d in "${present_dirs[@]}"; do
+    local kb files
+    kb=$(du -sk "$PROJECT_ROOT/$d" 2>/dev/null | awk '{print $1}')
+    files=$(find "$PROJECT_ROOT/$d" -type f 2>/dev/null | wc -l | tr -d ' ')
+    total_kb=$((total_kb + kb))
+    # Emit dir name, file count, and KB size on one line.
+    printf '  - %s (%s file(s), %s KB)\n' "$d" "$files" "$kb"
+  done
+  printf '  total: %s KB\n' "$total_kb"
+
+  if [[ "$DRY_RUN" == "true" ]]; then
+    echo "  [dry-run] would verify backup manifest matches live source"
+    echo "  [dry-run] would prompt user to confirm deletion (unless --yes)"
+    echo "  [dry-run] would rm -rf the dirs above after manifest match"
+    echo "  v1-dirs PASS"
+    return 0
+  fi
+
+  # --- AC5 / CRITICAL-1: safety gate — v2 marker must exist and be non-empty ---
+  local v2_marker="$PROJECT_ROOT/config/project-config.yaml"
+  if [[ ! -f "$v2_marker" ]]; then
+    echo "ERROR: safety gate — v2 marker ($v2_marker) missing" >&2
+    echo "       Refusing to delete v1 directories. v1 state left intact." >&2
+    return 5
+  fi
+  # CRITICAL-1 resolution: the real-world /gaia-migrate config split places
+  # `framework_version:` in _gaia/_config/global.yaml (local keys) and only
+  # ci_cd/val_integration/sizing_map etc. in config/project-config.yaml
+  # (shared keys). So accept the v2 marker as valid if EITHER:
+  #   (a) project-config.yaml has a non-empty framework_version: or version:
+  #       field (Val's preferred canonical check), OR
+  #   (b) project-config.yaml has at least one non-commented top-level key
+  #       (the post-split reality — the file exists and carries shared
+  #       config). This is the practical "v2 schema recognized" check.
+  # Anything else (missing file, zero top-level keys, only comments) →
+  # refuse the delete with exit 5.
+  local marker_ok=0
+  if grep -qE '^(framework_version|version):[[:space:]]*[^[:space:]]' "$v2_marker"; then
+    marker_ok=1
+  elif grep -qE '^[a-zA-Z_][a-zA-Z0-9_]*:' "$v2_marker"; then
+    marker_ok=1
+  fi
+  if [[ "$marker_ok" -eq 0 ]]; then
+    echo "ERROR: safety gate — v2 marker ($v2_marker) exists but has no" >&2
+    echo "       recognizable schema (no framework_version:/version: and no" >&2
+    echo "       top-level keys). Refusing to delete v1 directories." >&2
+    return 5
+  fi
+  echo "  safety gate: v2 marker OK ($v2_marker)"
+
+  # --- Paranoid guards (I2) ---
+  if [[ -z "${BACKUP_DIR:-}" || ! -d "$BACKUP_DIR" ]]; then
+    echo "ERROR: BACKUP_DIR unset or missing — refusing rm -rf" >&2
+    return 5
+  fi
+  if [[ "$BACKUP_DIR" == "$PROJECT_ROOT" ]]; then
+    echo "ERROR: BACKUP_DIR == PROJECT_ROOT — refusing rm -rf" >&2
+    return 5
+  fi
+  if [[ "$PROJECT_ROOT" == "/" || "$PROJECT_ROOT" == "${HOME:-/never-match}" ]]; then
+    echo "ERROR: refusing rm -rf at \$PROJECT_ROOT=$PROJECT_ROOT" >&2
+    return 5
+  fi
+
+  # --- CRITICAL-2: manifest verification (snapshot integrity) ---
+  # The invariant we actually want: "what I'm about to delete is byte-identical
+  # to what I preserved in the backup." We re-compute BOTH manifests at delete
+  # time and diff them. One path is intentionally excluded from the compare:
+  # _gaia/_config/global.yaml was rewritten in place by _migrate_config_split
+  # (see subtask 4.3 above — the line `_safe_write mv "$v2_global" "$v1_config"`
+  # rewrites the live source AFTER the backup snapshot was taken). The pre-
+  # split copy is preserved in $BACKUP_DIR/_gaia/_config/global.yaml, so the
+  # backup is whole; only the comparison would falsely mismatch on that file.
+  local live_manifest backup_manifest tmp
+  live_manifest="$(mktemp -t gaia-migrate-live.XXXXXX)"
+  backup_manifest="$(mktemp -t gaia-migrate-bkp.XXXXXX)"
+  tmp="$(mktemp -t gaia-migrate-tmp.XXXXXX)"
+
+  # Build both manifests in a single pass. _compute_live_manifest emits
+  # "sha256  relpath" lines for each file under its first argument.
+  for d in "${present_dirs[@]}"; do
+    _compute_live_manifest "$PROJECT_ROOT/$d" "$tmp"
+    sed -e "s|  |  $d/|" "$tmp" >> "$live_manifest"
+    _compute_live_manifest "$BACKUP_DIR/$d" "$tmp"
+    sed -e "s|  |  $d/|" "$tmp" >> "$backup_manifest"
+  done
+  rm -f "$tmp"
+
+  # Apply the documented exclusion — _gaia/_config/global.yaml is intentionally
+  # rewritten in place by _migrate_config_split (see subtask 4.3 above), so its
+  # live sha256 does NOT match the pre-split sha256 in the backup. Both sides
+  # are filtered so the diff does not flag this intentional drift.
+  local live_filtered backup_filtered
+  live_filtered="$(mktemp -t gaia-migrate-live-f.XXXXXX)"
+  backup_filtered="$(mktemp -t gaia-migrate-bkp-f.XXXXXX)"
+  grep -v '  _gaia/_config/global\.yaml$' "$live_manifest" > "$live_filtered" || true
+  grep -v '  _gaia/_config/global\.yaml$' "$backup_manifest" > "$backup_filtered" || true
+
+  if ! diff -q "$live_filtered" "$backup_filtered" >/dev/null 2>&1; then
+    echo "ERROR: manifest mismatch — live source differs from backup snapshot." >&2
+    echo "       Refusing to delete. Inspect:" >&2
+    echo "         diff $live_filtered $backup_filtered" >&2
+    return 6
+  fi
+  rm -f "$live_manifest" "$backup_manifest" "$live_filtered" "$backup_filtered"
+  echo "  manifest match: live source == backup snapshot (excluding intentionally-rewritten _gaia/_config/global.yaml)"
+
+  # --- AC10 / W2: destructive confirmation with non-TTY guard ---
+  if [[ "$ASSUME_YES" != "true" ]]; then
+    if [[ ! -t 0 ]]; then
+      echo "ERROR: non-interactive context detected and --yes/--force not supplied." >&2
+      echo "       Refusing to delete v1 directories without explicit confirmation." >&2
+      return 7
+    fi
+    printf 'Ready to delete v1 directories (backed up at %s). Proceed? (yes/no) ' "$BACKUP_DIR"
+    local reply
+    IFS= read -r reply || reply=""
+    # Case-insensitive: accept only "yes" (not "y").
+    reply="$(printf '%s' "$reply" | tr '[:upper:]' '[:lower:]')"
+    if [[ "$reply" != "yes" ]]; then
+      echo "  user declined — v1 directories left intact."
+      return 7
+    fi
+  fi
+
+  # --- AC4: delete ---
+  for d in "${present_dirs[@]}"; do
+    # Defensive: ensure target is inside PROJECT_ROOT.
+    local target="$PROJECT_ROOT/$d"
+    case "$target" in
+      "$PROJECT_ROOT"/*) : ;;
+      *)
+        echo "ERROR: target $target is not inside PROJECT_ROOT — refusing rm -rf" >&2
+        return 5
+        ;;
+    esac
+    rm -rf "$target"
+  done
+  echo "  deleted ${#present_dirs[@]} v1 director(ies): ${present_dirs[*]}"
+
+  # Export for use by the final summary.
+  V1_DIRS_DELETED=("${present_dirs[@]}")
+  echo "  v1-dirs PASS"
+}
+
+# ---------------------------------------------------------------------------
 # Step: validation (AC4)
 # ---------------------------------------------------------------------------
 _run_validate() {
@@ -459,7 +695,8 @@ _run_validate() {
     fi
   fi
 
-  # 3. global.yaml still has local keys
+  # 3. global.yaml still has local keys (only if _gaia/ still exists — when
+  # E28-S188 cleanup ran, _gaia/ has been deleted and this check is N/A).
   if [[ -f "$PROJECT_ROOT/_gaia/_config/global.yaml" ]]; then
     if grep -qE '^project_path:' "$PROJECT_ROOT/_gaia/_config/global.yaml"; then
       echo "  global.yaml: project_path retained"
@@ -467,6 +704,8 @@ _run_validate() {
       echo "  ERROR: global.yaml lost project_path during split" >&2
       fail=1
     fi
+  else
+    echo "  global.yaml: N/A (v1 directories removed by E28-S188 cleanup)"
   fi
 
   return "$fail"
@@ -480,8 +719,17 @@ echo "gaia-migrate — v1 → v2 migration ($MODE mode)"
 echo "project-root: $PROJECT_ROOT"
 echo "==============================================================="
 
-# Detect (HALT-able)
-if ! _detect_v1; then
+# Detect (HALT-able). Return code 10 signals the idempotent "already on v2"
+# success path (AC7) — exit 0 with no further work. Any other non-zero return
+# is a HALT.
+set +e
+_detect_v1
+detect_rc=$?
+set -e
+if [[ "$detect_rc" -eq 10 ]]; then
+  exit 0
+fi
+if [[ "$detect_rc" -ne 0 ]]; then
   exit 1
 fi
 
@@ -515,6 +763,25 @@ if ! _migrate_legacy_command_stubs; then
   exit 3
 fi
 
+# Subtask 4.5 — back up + delete v1 directories (E28-S188). Runs after all
+# migrations succeed and before validation. Exit codes 5/6/7 are surfaced
+# directly to the caller so bats can assert them precisely.
+set +e
+V1_DIRS_DELETED=()
+_migrate_v1_directories
+v1_rc=$?
+set -e
+if [[ "$v1_rc" -ne 0 ]]; then
+  case "$v1_rc" in
+    5|6|7) exit "$v1_rc" ;;
+    *)
+      echo "FAILED: v1 directories cleanup (E28-S188)"
+      echo "Restore: cp -a \"$BACKUP_DIR/.\" \"$PROJECT_ROOT/\""
+      exit 3
+      ;;
+  esac
+fi
+
 # Validate (AC4)
 if [[ "$DRY_RUN" == "false" ]]; then
   if ! _run_validate; then
@@ -538,6 +805,14 @@ else
   echo "SUCCESS — v1 → v2 migration complete."
   echo "Backup: $BACKUP_DIR"
   echo "Restore command (if needed): cp -a \"$BACKUP_DIR/.\" \"$PROJECT_ROOT/\""
+  # E28-S189 — tell the user to smoke-test with the plugin-namespaced form.
+  # The unnamespaced /gaia-help can be intercepted by a legacy
+  # .claude/commands/gaia-help.md stub, so /gaia:gaia-help is the only form
+  # that unambiguously exercises the plugin's gaia-help skill.
+  echo
+  echo "Next step: run /gaia:gaia-help in Claude Code to smoke-test the plugin install."
+  echo "  (The gaia: prefix targets the plugin's gaia-help skill and avoids any legacy"
+  echo "   .claude/commands/gaia-help.md stub that might still be registered.)"
   # E28-S186 — legacy command stubs rollback path
   if [[ -d "$BACKUP_DIR/.claude/commands" ]]; then
     echo
@@ -548,6 +823,17 @@ else
     echo "Known limitation: /gaia-migrate is project-local. If you installed"
     echo "GAIA v1 globally, also run:"
     echo "  rm ~/.claude/commands/gaia-*.md"
+  fi
+  # E28-S188 — v1 directories rollback path (AC6)
+  if [[ "${#V1_DIRS_DELETED[@]}" -gt 0 ]]; then
+    echo
+    echo "Legacy v1 directories backed up to: $BACKUP_DIR/"
+    echo "To restore v1, run:"
+    printf '  cp -a'
+    for d in "${V1_DIRS_DELETED[@]}"; do
+      printf ' "%s/%s"' "$BACKUP_DIR" "$d"
+    done
+    printf ' "%s/"\n' "$PROJECT_ROOT"
   fi
 fi
 echo "==============================================================="

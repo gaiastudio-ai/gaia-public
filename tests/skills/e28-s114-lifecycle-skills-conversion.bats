@@ -69,9 +69,9 @@ setup() {
   done
 }
 
-@test "AC1: all 5 SKILL.md files carry an tools field" {
+@test "AC1: all 5 SKILL.md files carry an allowed-tools field" {
   for f in "$DR_SKILL" "$GT_SKILL" "$MM_SKILL" "$MMX_SKILL" "$VP_SKILL"; do
-    grep -qE '^tools:' "$f" || { echo "missing tools in $f"; return 1; }
+    grep -qE '^allowed-tools:' "$f" || { echo "missing allowed-tools in $f"; return 1; }
   done
 }
 

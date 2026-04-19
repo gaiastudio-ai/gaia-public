@@ -2,7 +2,7 @@
 name: gaia-summarize
 description: Generate an executive summary of a long document. Extracts key decisions, action items, and open questions; writes a 1-2 page markdown summary that preserves critical nuances without oversimplifying. Use when "summarize document" or /gaia-summarize.
 argument-hint: "[target-doc-path]"
-tools: Read, Write
+allowed-tools: [Read, Write]
 ---
 
 ## Mission

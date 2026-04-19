@@ -3,7 +3,7 @@ name: gaia-creative-sprint
 description: Multi-agent creative sprint pipeline — empathize → solve → innovate. Use when "creative sprint" or /gaia-creative-sprint. Delegates three sequential phases to design-thinking-coach (Lyra), problem-solver (Nova), and innovation-strategist (Orion), then synthesizes a unified creative brief.
 argument-hint: "[creative challenge]"
 context: fork
-tools: Read, Write, Edit, Grep, Glob, Bash, Agent
+allowed-tools: [Read, Write, Edit, Grep, Glob, Bash, Agent]
 ---
 
 # gaia-creative-sprint

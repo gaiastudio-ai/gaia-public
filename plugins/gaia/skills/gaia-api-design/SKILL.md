@@ -1,7 +1,7 @@
 ---
 name: gaia-api-design
 description: REST conventions, GraphQL schema patterns, OpenAPI specification, API versioning, and RFC 7807 error standards. Shared dev skill JIT-loaded by dev-story and stack dev agents.
-tools: Read, Grep
+allowed-tools: [Read, Grep]
 ---
 
 ## About

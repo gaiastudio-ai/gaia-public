@@ -12,7 +12,7 @@
 # overwrite the existing skill.
 #
 #   AC1: 6 new SKILL.md files exist at canonical paths with valid
-#        frontmatter (name, description, tools) and pass the
+#        frontmatter (name, description, allowed-tools) and pass the
 #        frontmatter linter with zero errors.
 #   AC2: Each converted SKILL.md preserves every `<critical><mandate>`
 #        from its source XML as an explicit bullet in a `## Critical Rules`
@@ -121,12 +121,12 @@ setup() {
   done
 }
 
-# ---------- AC1: tools declared ----------
+# ---------- AC1: allowed-tools declared ----------
 
-@test "E28-S109: all 6 new SKILL.md files declare tools" {
+@test "E28-S109: all 6 new SKILL.md files declare allowed-tools" {
   for skill in "${NEW_SKILLS[@]}"; do
     file="$SKILLS_DIR/$skill/SKILL.md"
-    head -30 "$file" | grep -qE '^tools:.+Read'
+    head -30 "$file" | grep -qE '^allowed-tools:.+Read'
   done
 }
 

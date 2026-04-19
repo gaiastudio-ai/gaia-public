@@ -53,21 +53,21 @@ teardown() {
   echo "$line" | grep -q "change-type"
 }
 
-@test "AC1: SKILL.md frontmatter has tools field" {
-  grep -q "^tools:" "$SKILL_DIR/SKILL.md"
+@test "AC1: SKILL.md frontmatter has allowed-tools field" {
+  grep -q "^allowed-tools:" "$SKILL_DIR/SKILL.md"
 }
 
-@test "AC1: SKILL.md tools includes Read Edit Bash" {
+@test "AC1: SKILL.md allowed-tools includes Read Edit Bash" {
   local line
-  line=$(grep "^tools:" "$SKILL_DIR/SKILL.md")
+  line=$(grep "^allowed-tools:" "$SKILL_DIR/SKILL.md")
   echo "$line" | grep -q "Read"
   echo "$line" | grep -q "Edit"
   echo "$line" | grep -q "Bash"
 }
 
-@test "AC1: SKILL.md tools does NOT include Write" {
+@test "AC1: SKILL.md allowed-tools does NOT include Write" {
   local line
-  line=$(grep "^tools:" "$SKILL_DIR/SKILL.md")
+  line=$(grep "^allowed-tools:" "$SKILL_DIR/SKILL.md")
   ! echo "$line" | grep -q "Write"
 }
 

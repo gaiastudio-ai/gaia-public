@@ -1,8 +1,8 @@
 ---
 name: gaia-migrate
 description: Automate the upgrade from GAIA v1 (workflow.xml engine) to v2 (Claude Code native plugin) — backup, migrate templates/memory/config, validate. Use after the v2 plugins have been installed via /plugin marketplace add.
-when_to_use: When a user has an existing GAIA v1 installation (presence of _gaia/, _memory/, custom/) and wants to migrate to the v2 plugin layout. Run with `dry-run` first to see the planned operations. After `/gaia-migrate apply` completes, manually run `/gaia-help` to smoke-test the post-migration install — filesystem-only validation cannot exercise skill invocation, so a live `/gaia-help` run is the only way to confirm slash-command routing, plugin discovery, and skill loading are wired up end-to-end.
-tools: Read, Bash
+when_to_use: When a user has an existing GAIA v1 installation (presence of _gaia/, _memory/, custom/) and wants to migrate to the v2 plugin layout. Run with `dry-run` first to see the planned operations. After `/gaia-migrate apply` completes, manually run `/gaia:gaia-help` (namespaced form) to smoke-test the post-migration install — filesystem-only validation cannot exercise skill invocation, so a live `/gaia:gaia-help` run is the only way to confirm slash-command routing, plugin discovery, and skill loading are wired up end-to-end. The `gaia:` prefix ensures the plugin's `gaia-help` skill is invoked, not any legacy `.claude/commands/gaia-help.md` stub that might still be present on older installs.
+allowed-tools: [Read, Bash]
 ---
 
 ## Mission
@@ -37,13 +37,15 @@ If the user has NOT installed the v2 plugins yet, point them to §1 Prerequisite
 
 5. **Manual follow-up items.** If the script printed any `manual follow-up:` lines, list them to the user with §-references back to the migration guide.
 
-6. **Manual post-migration smoke-test.** Instruct the user to run `/gaia-help` in the migrated project and confirm two things:
-   (a) `/gaia-help` returns the context-sensitive help menu, AND
-   (b) `/gaia-help` appears **exactly once** in Claude Code's slash-command palette (not twice).
+6. **Manual post-migration smoke-test.** Instruct the user to run `/gaia:gaia-help` (plugin-namespaced form) in the migrated project and confirm two things:
+   (a) `/gaia:gaia-help` returns the context-sensitive help menu, AND
+   (b) `/gaia:gaia-help` appears **exactly once** in Claude Code's slash-command palette (not twice).
 
-   Two `/gaia-help` entries mean legacy `.claude/commands/gaia-*.md` stubs were not removed by Step 4.4 of the migration script — either the user ran an older `gaia-migrate.sh` (pre-E28-S186) or has GAIA v1 installed globally at `~/.claude/commands/` which the project-local script cannot reach. For the global case, instruct the user to run `rm ~/.claude/commands/gaia-*.md` manually (the migration summary prints this reminder automatically). If `/gaia-help` does not respond at all, direct the user to §Troubleshooting of the migration guide.
+   The `gaia:` prefix ensures the plugin's `gaia-help` skill is invoked, not any legacy `.claude/commands/gaia-help.md` stub that might still be present on older installs. Telling the user to run the unnamespaced form is ambiguous — it can be intercepted by a legacy stub, and the user cannot tell whether "plugin loaded correctly" or "legacy stub still working" from the output.
 
-   The script's filesystem-only validation cannot exercise skill invocation, so only a live `/gaia-help` run proves slash-command routing, plugin discovery, and skill loading survived the migration — and only a live palette inspection proves there is no dual registration.
+   Two `/gaia:gaia-help` entries mean legacy `.claude/commands/gaia-*.md` stubs were not removed by Step 4.4 of the migration script — either the user ran an older `gaia-migrate.sh` (pre-E28-S186) or has GAIA v1 installed globally at `~/.claude/commands/` which the project-local script cannot reach. For the global case, instruct the user to run `rm ~/.claude/commands/gaia-*.md` manually (the migration summary prints this reminder automatically). If `/gaia:gaia-help` does not respond at all, direct the user to §Troubleshooting of the migration guide.
+
+   The script's filesystem-only validation cannot exercise skill invocation, so only a live `/gaia:gaia-help` run proves slash-command routing, plugin discovery, and skill loading survived the migration — and only a live palette inspection proves there is no dual registration.
 
 ## Authoritative source
 
@@ -55,6 +57,8 @@ The mechanical migration steps are documented in `gaia-public/docs/migration-gui
 - **Dry-run is idempotent.** Running dry-run twice produces identical plans (AC5).
 - **Restore command is always printed.** Both `SUCCESS` and `FAILED` summaries echo the exact `cp -a "{backup}" "{project-root}"` command for manual rollback (AC-EC8).
 - **Script does NOT auto-restore on failure.** Explicit user action is required (per §safety doctrine — automatic restoration could mask real issues).
+- **v1 directories are deleted after successful migration (E28-S188).** `/gaia-migrate apply` backs up `_gaia/`, `_memory/`, and `custom/` into `$BACKUP_ROOT/` and then removes them from the project root. Expect 50-100 MB of disk freed on a mature project. The final summary prints a `cp -a` rollback command that restores the v1 directories from the backup if you need to revert. The destructive step is gated by three safety rails: (a) `config/project-config.yaml` must exist with a non-empty `framework_version:` or `version:` field; (b) a sha256 manifest of the live source must match the backup snapshot (excluding `_gaia/_config/global.yaml`, which is intentionally rewritten in place by the config-split step — the pre-split copy is preserved in the backup); and (c) an interactive `yes/no` confirmation prompt (bypass with `--yes` or `--force`). In non-interactive contexts (CI, bats), you MUST pass `--yes` or the script exits 7 rather than hanging on the prompt.
+- **Idempotent re-run (E28-S188).** `/gaia-migrate dry-run` on a project that is already on v2 (no v1 dirs present, `config/project-config.yaml` present) exits 0 with "Nothing to migrate — already on v2." This is a success, not a HALT.
 
 ## References
 

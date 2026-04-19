@@ -2,7 +2,7 @@
 name: gaia-atdd
 description: Generate failing acceptance tests using TDD methodology from a story's acceptance criteria. Converts each AC into a Given/When/Then test skeleton following the red phase of TDD.
 argument-hint: [story-key]
-tools: Read, Write, Edit, Bash
+allowed-tools: [Read, Write, Edit, Bash]
 ---
 
 ## Setup

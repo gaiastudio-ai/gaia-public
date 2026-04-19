@@ -1,7 +1,7 @@
 ---
 name: gaia-bridge-enable
 description: Enable the Test Execution Bridge by delegating to gaia-bridge-toggle with mode=enable. Thin wrapper that preserves the user-visible /gaia-bridge-enable slash command (AC11, FR-323). Edits test_execution_bridge.bridge_enabled = true in _gaia/_config/global.yaml. Flag takes effect immediately under the native plugin. Idempotent — no write when already enabled.
-tools: Read, Edit, Bash
+allowed-tools: [Read, Edit, Bash]
 ---
 
 ## Mission

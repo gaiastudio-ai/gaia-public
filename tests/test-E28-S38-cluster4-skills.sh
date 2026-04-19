@@ -54,7 +54,7 @@ assert "finalize.sh is executable" "[ -x '$TR_FINALIZE' ]"
 assert "frontmatter has name field" "grep -q '^name:' '$TR_SKILL' 2>/dev/null"
 assert "frontmatter name is gaia-tech-research" "grep -q '^name: gaia-tech-research' '$TR_SKILL' 2>/dev/null"
 assert "frontmatter has description field" "grep -q '^description:' '$TR_SKILL' 2>/dev/null"
-assert "frontmatter has tools field" "grep -q '^tools:' '$TR_SKILL' 2>/dev/null"
+assert "frontmatter has allowed-tools field" "grep -q '^allowed-tools:' '$TR_SKILL' 2>/dev/null"
 assert "frontmatter has context: fork" "grep -q '^context: fork' '$TR_SKILL' 2>/dev/null"
 
 # AC2: Scripts match Cluster 4 pattern
@@ -92,7 +92,7 @@ assert "finalize.sh is executable" "[ -x '$AE_FINALIZE' ]"
 assert "frontmatter has name field" "grep -q '^name:' '$AE_SKILL' 2>/dev/null"
 assert "frontmatter name is gaia-advanced-elicitation" "grep -q '^name: gaia-advanced-elicitation' '$AE_SKILL' 2>/dev/null"
 assert "frontmatter has description field" "grep -q '^description:' '$AE_SKILL' 2>/dev/null"
-assert "frontmatter has tools field" "grep -q '^tools:' '$AE_SKILL' 2>/dev/null"
+assert "frontmatter has allowed-tools field" "grep -q '^allowed-tools:' '$AE_SKILL' 2>/dev/null"
 assert "frontmatter has context: fork" "grep -q '^context: fork' '$AE_SKILL' 2>/dev/null"
 
 # AC2: Scripts match Cluster 4 pattern

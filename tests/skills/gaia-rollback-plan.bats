@@ -46,8 +46,8 @@ setup() {
   awk '/^---$/{n++; next} n==1{print}' "$SKILL_FILE" | grep -q "^description:"
 }
 
-@test "AC2: SKILL.md frontmatter contains tools field" {
-  awk '/^---$/{n++; next} n==1{print}' "$SKILL_FILE" | grep -q "^tools:"
+@test "AC2: SKILL.md frontmatter contains allowed-tools field" {
+  awk '/^---$/{n++; next} n==1{print}' "$SKILL_FILE" | grep -q "^allowed-tools:"
 }
 
 @test "AC2: SKILL.md covers rollback trigger criteria" {

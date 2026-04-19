@@ -364,7 +364,7 @@ test_frontmatter_conventions() {
   # Check for required frontmatter fields
   assert_contains "has name field" "name: gaia-refresh-ground-truth" "$content"
   assert_contains "has description field" "description:" "$content"
-  assert_contains "has tools" "tools:" "$content"
+  assert_contains "has allowed-tools" "allowed-tools:" "$content"
   assert_contains "allows Read tool" "Read" "$content"
   assert_contains "allows Grep tool" "Grep" "$content"
   assert_contains "allows Glob tool" "Glob" "$content"

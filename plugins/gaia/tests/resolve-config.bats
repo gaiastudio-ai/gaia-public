@@ -251,3 +251,97 @@ YAML
   eval "$out"
   [ "$project_root" = "/tmp/my project" ]
 }
+
+# ---------------------------------------------------------------------------
+# E28-S200 — artifact-dir keys (test_artifacts, planning_artifacts,
+# implementation_artifacts) added to the emit surface (AC1, AC2, AC4, AC11)
+# ---------------------------------------------------------------------------
+# The resolver must emit the three artifact-dir keys with default values
+# relative to project_root. Project-config.yaml values override the defaults;
+# GAIA_* env vars win over both. Required by E28-S197 triage §2a to let
+# skill setup.sh pick up the paths instead of falling back to PWD defaults.
+
+mk_cfg_no_artifacts() {
+  # Writes a config without the 3 new artifact-dir keys so we can exercise
+  # the default-resolution path.
+  local dir="$1"
+  mkdir -p "$dir/config"
+  cat > "$dir/config/project-config.yaml" <<'YAML'
+project_root: /tmp/gaia-art
+project_path: /tmp/gaia-art/app
+memory_path: /tmp/gaia-art/_memory
+checkpoint_path: /tmp/gaia-art/_memory/checkpoints
+installed_path: /tmp/gaia-art/_gaia
+framework_version: 1.127.2-rc.1
+date: 2026-04-19
+YAML
+}
+
+mk_cfg_with_artifacts() {
+  # Writes a config WITH custom artifact-dir overrides.
+  local dir="$1"
+  mkdir -p "$dir/config"
+  cat > "$dir/config/project-config.yaml" <<'YAML'
+project_root: /tmp/gaia-art
+project_path: /tmp/gaia-art/app
+memory_path: /tmp/gaia-art/_memory
+checkpoint_path: /tmp/gaia-art/_memory/checkpoints
+installed_path: /tmp/gaia-art/_gaia
+framework_version: 1.127.2-rc.1
+date: 2026-04-19
+test_artifacts: /custom/docs/test
+planning_artifacts: /custom/docs/planning
+implementation_artifacts: /custom/docs/impl
+YAML
+}
+
+@test "E28-S200 AC1/AC2: default artifact-dir keys emitted relative to project_root" {
+  mk_cfg_no_artifacts "$TEST_TMP/skill"
+  CLAUDE_SKILL_DIR="$TEST_TMP/skill" run "$SCRIPT"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"test_artifacts='/tmp/gaia-art/docs/test-artifacts'"* ]]
+  [[ "$output" == *"planning_artifacts='/tmp/gaia-art/docs/planning-artifacts'"* ]]
+  [[ "$output" == *"implementation_artifacts='/tmp/gaia-art/docs/implementation-artifacts'"* ]]
+}
+
+@test "E28-S200 AC11: project-config.yaml values override the defaults" {
+  mk_cfg_with_artifacts "$TEST_TMP/skill"
+  CLAUDE_SKILL_DIR="$TEST_TMP/skill" run "$SCRIPT"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"test_artifacts='/custom/docs/test'"* ]]
+  [[ "$output" == *"planning_artifacts='/custom/docs/planning'"* ]]
+  [[ "$output" == *"implementation_artifacts='/custom/docs/impl'"* ]]
+}
+
+@test "E28-S200 AC11: GAIA_TEST_ARTIFACTS env var wins over project-config.yaml" {
+  mk_cfg_with_artifacts "$TEST_TMP/skill"
+  CLAUDE_SKILL_DIR="$TEST_TMP/skill" \
+    GAIA_TEST_ARTIFACTS=/env/test \
+    GAIA_PLANNING_ARTIFACTS=/env/plan \
+    GAIA_IMPLEMENTATION_ARTIFACTS=/env/impl \
+    run "$SCRIPT"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"test_artifacts='/env/test'"* ]]
+  [[ "$output" == *"planning_artifacts='/env/plan'"* ]]
+  [[ "$output" == *"implementation_artifacts='/env/impl'"* ]]
+}
+
+@test "E28-S200 AC1: --format json includes the 3 artifact-dir keys" {
+  mk_cfg_no_artifacts "$TEST_TMP/skill"
+  CLAUDE_SKILL_DIR="$TEST_TMP/skill" run "$SCRIPT" --format json
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'"test_artifacts"'* ]]
+  [[ "$output" == *'"planning_artifacts"'* ]]
+  [[ "$output" == *'"implementation_artifacts"'* ]]
+  [[ "$output" == *'/tmp/gaia-art/docs/test-artifacts'* ]]
+  [[ "$output" == *'/tmp/gaia-art/docs/planning-artifacts'* ]]
+  [[ "$output" == *'/tmp/gaia-art/docs/implementation-artifacts'* ]]
+}
+
+@test "E28-S200 AC4: --help documents the 3 new artifact-dir keys" {
+  run "$SCRIPT" --help
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"test_artifacts"* ]]
+  [[ "$output" == *"planning_artifacts"* ]]
+  [[ "$output" == *"implementation_artifacts"* ]]
+}

@@ -13,12 +13,30 @@
 #   audit-v2-migration.sh \
 #     --plugin-cache <path-to-cache/gaia/VERSION/skills> \
 #     --project-root <path-to-pre-migrated-project> \
-#     [--out <output-csv-path>]
+#     [--out <output-csv-path>] \
+#     [--fixture-mode minimal|enriched]
+#
+# Fixture modes (E28-S200 — unblocks E28-S195):
+#   minimal   (default) — no prereq artifacts pre-created; harness run
+#                         surfaces FixtureGap residuals intentionally so
+#                         skills that depend on prereq artifacts expose
+#                         the bug. This is the bug-detection mode.
+#   enriched            — opt-in. Pre-creates prereq artifacts
+#                         (prd.md, epics-and-stories.md, test-plan.md,
+#                         traceability-matrix.md, ci-setup.md) under
+#                         $PROJECT_ROOT/docs/{planning,test}-artifacts/
+#                         and EXPORTS uppercase env vars
+#                         ($TEST_ARTIFACTS, $PLANNING_ARTIFACTS,
+#                         $IMPLEMENTATION_ARTIFACTS) before each skill run,
+#                         so skill setup.sh scripts + validate-gate.sh pick
+#                         up the paths instead of PWD-relative defaults.
+#                         Designed for CI regression gating (E28-S195).
 #
 # Exit codes:
 #   0 — audit completed (individual skill failures are reported in the CSV,
 #       not as process exit codes)
-#   2 — harness misconfiguration (missing flags, unreadable plugin cache)
+#   2 — harness misconfiguration (missing flags, unreadable plugin cache,
+#       unknown --fixture-mode value)
 #
 # Output schema (CSV header):
 #   skill_name,has_setup,setup_exit,setup_stderr_head,has_finalize,
@@ -41,14 +59,16 @@ die() { printf 'audit-v2-migration: %s\n' "$1" >&2; exit 2; }
 PLUGIN_CACHE=""
 PROJECT_ROOT=""
 OUT=""
+FIXTURE_MODE="minimal"
 
 while [ $# -gt 0 ]; do
   case "$1" in
     --plugin-cache) PLUGIN_CACHE="$2"; shift 2 ;;
     --project-root) PROJECT_ROOT="$2"; shift 2 ;;
     --out)          OUT="$2"; shift 2 ;;
+    --fixture-mode) FIXTURE_MODE="$2"; shift 2 ;;
     -h|--help)
-      sed -n '1,36p' "$0" >&2; exit 0 ;;
+      sed -n '1,54p' "$0" >&2; exit 0 ;;
     *) die "unknown argument: $1" ;;
   esac
 done
@@ -57,6 +77,11 @@ done
 [ -n "$PROJECT_ROOT" ] || die "--project-root <path> is required"
 [ -d "$PLUGIN_CACHE" ] || die "plugin-cache dir not found: $PLUGIN_CACHE"
 [ -d "$PROJECT_ROOT" ] || die "project-root dir not found: $PROJECT_ROOT"
+
+case "$FIXTURE_MODE" in
+  minimal|enriched) ;;
+  *) die "unsupported --fixture-mode '$FIXTURE_MODE' (expected minimal|enriched)" ;;
+esac
 
 if [ -z "$OUT" ]; then
   OUT="$(mktemp -t gaia-audit-v2.XXXXXX.csv)"
@@ -98,18 +123,82 @@ classify() {
 run_script() {
   # run_script <absolute-script-path> <skill-dir>
   # Echoes "<exit_code>\t<stderr text>" (tab-separated).
-  local script="$1" skill_dir="$2"
-  local stderr_txt exit_code
+  #
   # CLAUDE_SKILL_DIR emulates Claude Code's plugin harness convention:
   # it points at the skill directory, NOT the project root.
+  #
+  # E28-S200 / AC8 — enriched fixture mode exports the uppercase
+  # artifact-dir env vars before each skill run. Skill setup.sh scripts
+  # use the pattern `${TEST_ARTIFACTS:-docs/test-artifacts}` so without
+  # these exports the fallback points at /tmp/fixture/docs/… which does
+  # not exist (the minimal fixture intentionally omits those files). We
+  # export ONLY in enriched mode so minimal mode continues to surface
+  # FixtureGap residuals (AC10). FIXTURE_ENV_EXPORTS is populated once,
+  # at the top of the main loop, and consumed here via env's positional
+  # VAR=VALUE syntax — no duplicated subshell blocks.
+  local script="$1" skill_dir="$2"
+  local stderr_txt exit_code
   stderr_txt=$(
-    CLAUDE_SKILL_DIR="$skill_dir" \
-    CLAUDE_PROJECT_ROOT="$PROJECT_ROOT" \
+    env \
+      CLAUDE_SKILL_DIR="$skill_dir" \
+      CLAUDE_PROJECT_ROOT="$PROJECT_ROOT" \
+      "${FIXTURE_ENV_EXPORTS[@]}" \
       bash "$script" 2>&1 1>/dev/null
   )
   exit_code=$?
   printf '%s\t%s' "$exit_code" "$stderr_txt"
 }
+
+# ---------- Fixture env exports (E28-S200 / AC8) ----------
+# Declared at module scope so run_script's env invocation can expand it
+# without an empty-array safety dance on macOS bash 3.2.
+FIXTURE_ENV_EXPORTS=()
+if [ "$FIXTURE_MODE" = "enriched" ]; then
+  FIXTURE_ENV_EXPORTS=(
+    "TEST_ARTIFACTS=$PROJECT_ROOT/docs/test-artifacts"
+    "PLANNING_ARTIFACTS=$PROJECT_ROOT/docs/planning-artifacts"
+    "IMPLEMENTATION_ARTIFACTS=$PROJECT_ROOT/docs/implementation-artifacts"
+  )
+fi
+
+# ---------- Enriched fixture pre-creation (E28-S200 / AC6) ----------
+#
+# Creates the 5 prereq artifacts multiple skills expect (validate-gate.sh
+# gate list: prd_exists, epics_and_stories_exists, test_plan_exists,
+# traceability_exists, ci_setup_exists). Content is a minimal non-empty
+# placeholder — the audit harness only cares that files exist and are
+# non-empty, not that they are semantically valid.
+#
+# Runs exactly once BEFORE the main loop so every skill's setup.sh sees
+# the same enriched state. Minimal mode does NOT call this — that's what
+# keeps the bug-detection signal intact (AC10).
+prepare_enriched_fixture() {
+  local planning_dir="$PROJECT_ROOT/docs/planning-artifacts"
+  local test_dir="$PROJECT_ROOT/docs/test-artifacts"
+  local impl_dir="$PROJECT_ROOT/docs/implementation-artifacts"
+  mkdir -p "$planning_dir" "$test_dir" "$impl_dir"
+
+  # Write only if absent so re-running the harness is idempotent. The file
+  # set covers every validate-gate.sh gate the installed skills invoke
+  # under setup.sh or finalize.sh (audited against the full plugin cache):
+  #   - prd.md + epics-and-stories.md    (planning_artifacts)
+  #   - test-plan.md + traceability-matrix.md + ci-setup.md (test_artifacts)
+  #   - readiness-report.md              (planning_artifacts — deploy-checklist
+  #                                       finalize needs this)
+  local f
+  for f in "$planning_dir/prd.md" "$planning_dir/epics-and-stories.md" \
+           "$planning_dir/readiness-report.md" \
+           "$test_dir/test-plan.md" "$test_dir/traceability-matrix.md" \
+           "$test_dir/ci-setup.md"; do
+    if [ ! -s "$f" ]; then
+      printf '# placeholder — audit-v2-migration.sh --fixture-mode enriched\n' > "$f"
+    fi
+  done
+}
+
+if [ "$FIXTURE_MODE" = "enriched" ]; then
+  prepare_enriched_fixture
+fi
 
 # ---------- Main loop ----------
 
@@ -173,6 +262,7 @@ done
 
 # ---------- Summary ----------
 printf '\n=== audit-v2-migration summary ===\n' >&2
+printf 'fixture_mode: %s\n' "$FIXTURE_MODE" >&2
 printf 'total_skills: %d\n' "$total" >&2
 printf 'failed_skills: %d\n' "$failed" >&2
 printf 'bucket_B1_path_contract: %d\n' "$b1" >&2

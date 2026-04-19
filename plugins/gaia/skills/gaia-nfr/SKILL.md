@@ -3,7 +3,7 @@ name: gaia-nfr
 description: Assess non-functional requirements covering performance, scalability, reliability, and security. Use when "assess NFRs" or /gaia-nfr.
 argument-hint: "[story-key]"
 context: main
-tools: Read, Write, Edit, Grep, Glob, Bash
+allowed-tools: [Read, Write, Edit, Grep, Glob, Bash]
 ---
 
 ## Setup

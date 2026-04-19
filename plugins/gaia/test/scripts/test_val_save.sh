@@ -114,7 +114,7 @@ if [ -f "$SKILL_MD" ]; then
   # Frontmatter checks
   assert_contains "AC1: frontmatter has name: gaia-val-save" "name: gaia-val-save" "$skill_content"
   assert_contains "AC1: frontmatter has context: fork" "context: fork" "$skill_content"
-  assert_contains "AC1: frontmatter has tools" "tools:" "$skill_content"
+  assert_contains "AC1: frontmatter has allowed-tools" "allowed-tools:" "$skill_content"
 
   # Memory loader inline call (AC4 — ADR-046)
   assert_contains "AC4: memory-loader.sh inline call present" "memory-loader.sh" "$skill_content"

@@ -108,7 +108,7 @@ test_ac1_skill_frontmatter() {
   # Check frontmatter fields
   assert_contains "has context: fork" "context: fork" "$content"
   assert_contains "has name field" "name: gaia-val-validate" "$content"
-  assert_contains "has tools" "tools:" "$content"
+  assert_contains "has allowed-tools" "allowed-tools:" "$content"
   assert_contains "allows Read tool" "Read" "$content"
   assert_contains "allows Grep tool" "Grep" "$content"
   assert_contains "allows Glob tool" "Glob" "$content"

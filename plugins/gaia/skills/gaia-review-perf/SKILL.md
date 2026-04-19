@@ -3,7 +3,7 @@ name: gaia-review-perf
 description: Review code for performance issues. Use when "review performance" or /gaia-review-perf.
 argument-hint: "[story-key]"
 context: fork
-tools: Read, Grep, Glob, Bash
+allowed-tools: [Read, Grep, Glob, Bash]
 ---
 
 > **Premium upgrade available.** The `gaia-enterprise` marketplace ships a `performance-review-advanced` SKILL.md (E28-S124) that layers real profiling-tool integration (py-spy, `node --prof`, jfr, pprof) and hot-path summaries on top of this OSS heuristic skill, gated behind the `perf-advanced` feature flag. Install via `/plugin marketplace add gaiastudio-ai/gaia-enterprise` and `/plugin install gaia-enterprise`. Without the enterprise plugin, this OSS skill serves unaffected.

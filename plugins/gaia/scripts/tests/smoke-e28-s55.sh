@@ -45,7 +45,7 @@ if [ -f "$SKILL_MD" ]; then
     }
     in_fm == 1 { print }
   ' "$SKILL_MD")
-  for field in name description argument-hint tools; do
+  for field in name description argument-hint allowed-tools; do
     if grep -qE "^${field}:" <<<"$fm"; then
       ok "frontmatter has $field"
     else
@@ -67,12 +67,12 @@ if [ -f "$SKILL_MD" ]; then
     fail "argument-hint includes story-key" "expected [story-key] in argument-hint"
   fi
 
-  # AC1: tools includes required tools
+  # AC1: allowed-tools includes required tools
   for tool in Read Write Edit Bash Grep; do
-    if grep -qE "tools:.*$tool" <<<"$fm"; then
-      ok "tools includes $tool"
+    if grep -qE "allowed-tools:.*$tool" <<<"$fm"; then
+      ok "allowed-tools includes $tool"
     else
-      fail "tools includes $tool" "$tool not in tools"
+      fail "allowed-tools includes $tool" "$tool not in allowed-tools"
     fi
   done
 else

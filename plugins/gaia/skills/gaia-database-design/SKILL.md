@@ -1,7 +1,7 @@
 ---
 name: gaia-database-design
 description: Schema design conventions, forward-only migrations, index optimization, and ORM patterns including N+1 prevention. Shared dev skill JIT-loaded by dev-story and stack dev agents.
-tools: Read, Grep
+allowed-tools: [Read, Grep]
 ---
 
 ## About

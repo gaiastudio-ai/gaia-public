@@ -45,7 +45,7 @@ if [ -f "$SKILL_MD" ]; then
     }
     in_fm == 1 { print }
   ' "$SKILL_MD")
-  for field in name description argument-hint tools; do
+  for field in name description argument-hint allowed-tools; do
     if grep -qE "^${field}:" <<<"$fm"; then
       ok "frontmatter has $field"
     else

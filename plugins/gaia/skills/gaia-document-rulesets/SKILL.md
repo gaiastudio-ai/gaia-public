@@ -4,7 +4,7 @@ description: Document-specific validation rulesets for artifact type detection (
 version: '1.2'
 applicable_agents: [validator]
 sections: [type-detection, prd-rules, infra-prd-rules, platform-prd-rules, arch-rules, ux-rules, test-plan-rules, epics-rules, gap-analysis-rules, two-pass-logic]
-tools: Read, Write, Edit, Grep
+allowed-tools: [Read, Write, Edit, Grep]
 ---
 
 <!-- Converted under ADR-041 (Native Execution Model). Source: _gaia/lifecycle/skills/document-rulesets.md. -->

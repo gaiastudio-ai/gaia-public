@@ -37,9 +37,9 @@ teardown() { common_teardown; }
   [[ "$output" == *"description:"* ]]
 }
 
-@test "AC1: frontmatter contains tools" {
+@test "AC1: frontmatter contains allowed-tools" {
   run head -30 "$SKILL_DIR/SKILL.md"
-  [[ "$output" == *"tools:"* ]]
+  [[ "$output" == *"allowed-tools:"* ]]
 }
 
 @test "AC1: frontmatter opens and closes with ---" {

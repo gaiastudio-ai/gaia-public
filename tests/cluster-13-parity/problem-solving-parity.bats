@@ -42,8 +42,8 @@ setup() {
   head -20 "$SKILL_FILE" | grep -q '^context: fork'
 }
 
-@test "E28-S104: problem-solving frontmatter tools present" {
-  head -25 "$SKILL_FILE" | grep -q '^tools:'
+@test "E28-S104: problem-solving frontmatter allowed-tools present" {
+  head -25 "$SKILL_FILE" | grep -q '^allowed-tools:'
 }
 
 # ---------- AC4: Planning gate contract preserved ----------

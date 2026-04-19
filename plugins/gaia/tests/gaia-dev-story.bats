@@ -240,6 +240,11 @@ SCRIPT
 @test "AC-EC4: git-branch.sh detects existing branch and does not force-overwrite" {
   cd "$TEST_TMP"
   git init -q test-repo && cd test-repo
+  # Set a repo-scoped identity so CI runners without a global user.email
+  # can still create the init commit (no --global here — we do not want to
+  # mutate the runner's git config).
+  git config user.email "ci@example.com"
+  git config user.name "CI Test"
   git commit --allow-empty -m "init" -q
   git checkout -b feat/E99-S1-test -q
   git checkout -b main -q 2>/dev/null || git checkout main -q 2>/dev/null || true

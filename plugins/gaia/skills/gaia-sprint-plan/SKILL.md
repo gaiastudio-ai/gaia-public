@@ -87,7 +87,7 @@ This skill is the native Claude Code conversion of the legacy `_gaia/lifecycle/w
   ```
 - Write `sprint-status.yaml` to `docs/implementation-artifacts/sprint-status.yaml` EXCLUSIVELY via `sprint-state.sh`:
   ```bash
-  ${CLAUDE_PLUGIN_ROOT}/../scripts/sprint-state.sh transition \
+  ${CLAUDE_PLUGIN_ROOT}/scripts/sprint-state.sh transition \
     --story "{story_key}" --to "ready-for-dev"
   ```
   Invoke once per selected story to register it in the sprint. If `sprint-state.sh` exits non-zero, abort cleanly and surface the error to the user. Do NOT fall back to direct YAML writes.

@@ -102,7 +102,7 @@ This skill is the native Claude Code conversion of the legacy `_gaia/lifecycle/w
   - REQUEST_CHANGES maps to FAILED
 - Invoke the shared `review-gate.sh` script to update the story's Review Gate table:
   ```bash
-  ${CLAUDE_PLUGIN_ROOT}/../scripts/review-gate.sh update --story "{story_key}" --gate "Code Review" --verdict "{PASSED|FAILED}"
+  ${CLAUDE_PLUGIN_ROOT}/scripts/review-gate.sh update --story "{story_key}" --gate "Code Review" --verdict "{PASSED|FAILED}"
   ```
 - Confirm the update succeeded (exit code 0).
 - Report the final status to the user.

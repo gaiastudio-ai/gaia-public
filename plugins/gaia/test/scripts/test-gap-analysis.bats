@@ -34,9 +34,9 @@ FIXTURES_DIR="$(cd "$(dirname "$BATS_TEST_FILENAME")/fixtures/test-gap-analysis"
   [[ "$output" == *"context: fork"* ]]
 }
 
-@test "gaia-test-gap-analysis SKILL.md has allowed-tools: Read Grep Glob Bash" {
+@test "gaia-test-gap-analysis SKILL.md has tools: Read Grep Glob Bash" {
   run head -10 "$SKILLS_DIR/gaia-test-gap-analysis/SKILL.md"
-  [[ "$output" == *"allowed-tools: Read Grep Glob Bash"* ]]
+  [[ "$output" == *"tools: Read Grep Glob Bash"* ]]
 }
 
 @test "gaia-test-gap-analysis SKILL.md contains Setup section" {
@@ -121,7 +121,7 @@ FIXTURES_DIR="$(cd "$(dirname "$BATS_TEST_FILENAME")/fixtures/test-gap-analysis"
   [[ "$output" != *"context: fork"* ]]
 }
 
-@test "gaia-fill-test-gaps SKILL.md has Write and Edit in allowed-tools" {
+@test "gaia-fill-test-gaps SKILL.md has Write and Edit in tools" {
   run head -10 "$SKILLS_DIR/gaia-fill-test-gaps/SKILL.md"
   [[ "$output" == *"Write"* ]]
   [[ "$output" == *"Edit"* ]]

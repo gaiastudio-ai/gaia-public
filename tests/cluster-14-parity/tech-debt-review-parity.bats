@@ -5,7 +5,7 @@
 # to a native SKILL.md at plugins/gaia/skills/gaia-tech-debt-review/SKILL.md.
 #
 #   AC1: SKILL.md exists at the native-conversion target path with valid
-#        frontmatter (name, description, allowed-tools) and passes the
+#        frontmatter (name, description, tools) and passes the
 #        frontmatter linter with zero errors.
 #   AC2: Legacy 7-step instruction body is preserved as prose sections —
 #        scan debt sources, classify debt, score and prioritize,
@@ -55,12 +55,12 @@ setup() {
   head -30 "$SKILL_FILE" | grep -qE '^description: .+'
 }
 
-@test "E28-S108: gaia-tech-debt-review SKILL.md has allowed-tools Read" {
-  head -30 "$SKILL_FILE" | grep -qE '^allowed-tools:.*Read'
+@test "E28-S108: gaia-tech-debt-review SKILL.md has tools Read" {
+  head -30 "$SKILL_FILE" | grep -qE '^tools:.*Read'
 }
 
-@test "E28-S108: gaia-tech-debt-review SKILL.md has allowed-tools Write" {
-  head -30 "$SKILL_FILE" | grep -qE '^allowed-tools:.*Write'
+@test "E28-S108: gaia-tech-debt-review SKILL.md has tools Write" {
+  head -30 "$SKILL_FILE" | grep -qE '^tools:.*Write'
 }
 
 @test "E28-S108: gaia-tech-debt-review SKILL.md passes frontmatter linter" {

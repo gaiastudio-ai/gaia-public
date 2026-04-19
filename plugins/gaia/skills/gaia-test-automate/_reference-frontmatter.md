@@ -9,6 +9,6 @@ name: gaia-test-automate
 description: Expand automated test coverage for a story. Use when "automate tests" or /gaia-test-automate.
 argument-hint: [story-key]
 context: fork
-allowed-tools: Read Grep Glob Bash
+tools: Read, Grep, Glob, Bash
 ---
 ```

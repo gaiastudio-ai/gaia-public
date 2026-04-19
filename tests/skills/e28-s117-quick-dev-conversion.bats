@@ -42,10 +42,10 @@ setup() {
   grep -qE '^argument-hint:' "$QD_SKILL"
 }
 
-@test "AC1: frontmatter allowed-tools contains Read Write Edit Bash Grep Glob" {
-  grep -qE '^allowed-tools:' "$QD_SKILL"
+@test "AC1: frontmatter tools contains Read Write Edit Bash Grep Glob" {
+  grep -qE '^tools:' "$QD_SKILL"
   local line
-  line=$(grep -E '^allowed-tools:' "$QD_SKILL")
+  line=$(grep -E '^tools:' "$QD_SKILL")
   [[ "$line" == *"Read"* ]]
   [[ "$line" == *"Write"* ]]
   [[ "$line" == *"Edit"* ]]

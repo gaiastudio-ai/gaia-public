@@ -3,7 +3,7 @@ name: gaia-code-review
 description: Pre-merge code review. Use when "run code review" or /gaia-code-review.
 argument-hint: "[story-key]"
 context: fork
-allowed-tools: [Read, Grep, Glob, Bash]
+tools: Read, Grep, Glob, Bash
 ---
 
 ## Setup

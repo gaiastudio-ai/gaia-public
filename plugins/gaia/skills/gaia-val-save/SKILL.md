@@ -3,7 +3,7 @@ name: gaia-val-save
 description: Persist Val session decisions and findings to validator-sidecar memory files. Use when "save val session" or /gaia-val-save.
 argument-hint: "(invoked with session findings in context)"
 context: fork
-allowed-tools: [Read, Write, Edit, Bash, Glob]
+tools: Read, Write, Edit, Bash, Glob
 ---
 
 ## Setup

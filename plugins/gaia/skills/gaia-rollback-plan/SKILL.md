@@ -8,7 +8,7 @@ triggers:
   - rollback plan
   - rollback procedure
   - rollback criteria
-allowed-tools: [Read, Grep, Glob, Bash, Write, Edit]
+tools: Read, Grep, Glob, Bash, Write, Edit
 ---
 
 ## Setup

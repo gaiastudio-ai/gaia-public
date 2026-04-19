@@ -8,7 +8,7 @@ triggers:
   - post-deploy
   - deployment verification
   - health check
-allowed-tools: [Read, Grep, Glob, Bash, Write, Edit]
+tools: Read, Grep, Glob, Bash, Write, Edit
 ---
 
 ## Setup

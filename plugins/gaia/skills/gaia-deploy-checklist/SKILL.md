@@ -7,7 +7,7 @@ triggers:
   - deployment checklist
   - deploy checklist
   - pre-deployment check
-allowed-tools: [Read, Grep, Glob, Bash, Write, Edit]
+tools: Read, Grep, Glob, Bash, Write, Edit
 ---
 
 ## Setup

@@ -9,7 +9,7 @@
 # (shipped in E28-S71 / Cluster 9).
 #
 #   AC1: SKILL.md exists at the native-conversion target path with valid
-#        frontmatter (name, description, allowed-tools) and passes the
+#        frontmatter (name, description, tools) and passes the
 #        frontmatter linter with zero errors.
 #   AC2: Name disambiguation — gaia-performance-review and gaia-review-perf
 #        coexist with distinct directories and non-overlapping descriptions.
@@ -63,12 +63,12 @@ setup() {
   head -30 "$SKILL_FILE" | grep -qE '^description: .+'
 }
 
-@test "E28-S108: gaia-performance-review SKILL.md has allowed-tools Read" {
-  head -30 "$SKILL_FILE" | grep -qE '^allowed-tools:.*Read'
+@test "E28-S108: gaia-performance-review SKILL.md has tools Read" {
+  head -30 "$SKILL_FILE" | grep -qE '^tools:.*Read'
 }
 
-@test "E28-S108: gaia-performance-review SKILL.md has allowed-tools Bash" {
-  head -30 "$SKILL_FILE" | grep -qE '^allowed-tools:.*Bash'
+@test "E28-S108: gaia-performance-review SKILL.md has tools Bash" {
+  head -30 "$SKILL_FILE" | grep -qE '^tools:.*Bash'
 }
 
 @test "E28-S108: gaia-performance-review SKILL.md passes frontmatter linter" {

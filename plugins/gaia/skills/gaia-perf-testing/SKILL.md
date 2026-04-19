@@ -3,7 +3,7 @@ name: gaia-perf-testing
 description: Create performance test plan with load testing scenarios, CI gates, and Core Web Vitals targets. Use when "performance testing" or /gaia-perf-testing.
 argument-hint: "[story-key]"
 context: main
-allowed-tools: [Read, Write, Edit, Grep, Glob, Bash]
+tools: Read, Write, Edit, Grep, Glob, Bash
 ---
 
 ## Setup

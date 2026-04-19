@@ -2,7 +2,7 @@
 name: gaia-help
 description: Context-sensitive help. Analyzes the user's query and current project state (which docs/ artifacts exist) to suggest the most relevant GAIA slash command. Primary intent-to-command map is _gaia/_config/gaia-help.csv; every suggestion is cross-checked against _gaia/_config/workflow-manifest.csv so the skill never invents command names. Use when "help" or /gaia-help.
 argument-hint: "[optional — free-text description of what you want to do]"
-allowed-tools: [Read, Grep, Glob]
+tools: Read, Grep, Glob
 ---
 
 ## Mission

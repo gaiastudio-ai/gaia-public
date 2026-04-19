@@ -1,6 +1,6 @@
 ---
 name: gaia-bridge-enable
-description: Enable the Test Execution Bridge by delegating to gaia-bridge-toggle with mode=enable. Thin wrapper that preserves the user-visible /gaia-bridge-enable slash command (AC11, FR-323). Edits test_execution_bridge.bridge_enabled = true in _gaia/_config/global.yaml. Flag takes effect immediately under the native plugin. Idempotent — no write when already enabled.
+description: Enable the Test Execution Bridge by delegating to gaia-bridge-toggle with mode=enable. Thin wrapper that preserves the user-visible /gaia-bridge-enable slash command (AC11, FR-323). Edits test_execution_bridge.bridge_enabled = true in config/project-config.yaml (per ADR-044). Flag takes effect immediately under the native plugin. Idempotent — no write when already enabled.
 allowed-tools: [Read, Edit, Bash]
 ---
 
@@ -20,10 +20,10 @@ This skill is part of the native Claude Code conversion under E28-S111 (Cluster 
 
 Follow the full `gaia-bridge-toggle` skill body with `mode = enable`:
 
-1. Read `_gaia/_config/global.yaml` and extract `test_execution_bridge.bridge_enabled`.
+1. Resolve the current `test_execution_bridge.bridge_enabled` value via `scripts/resolve-config.sh` (per ADR-044 — the flag lives at `test_execution_bridge.bridge_enabled` in `config/project-config.yaml`; the legacy v1 location `_gaia/_config/global.yaml` is retired and no longer used).
 2. If the section is missing, fail fast with `test_execution_bridge block missing — run /gaia-ci-setup first`.
 3. If already `true`, report `Bridge already enabled` and exit without writing.
-4. Otherwise, perform the regex-based in-place edit to flip `bridge_enabled: false` → `bridge_enabled: true`, preserving all comments and formatting.
+4. Otherwise, perform the regex-based in-place edit to `config/project-config.yaml` to flip `bridge_enabled: false` → `bridge_enabled: true`, preserving all comments and formatting.
 5. Run the Post-Flip Checks (enable-only — stat `docs/test-artifacts/test-environment.yaml`; for absent in YOLO, auto-skip with a warning).
 6. Emit the summary. Under the native plugin (ADR-044/ADR-048) the flag change takes effect immediately — no config rebuild is required.
 
@@ -32,7 +32,7 @@ The full step-by-step procedure is documented in `plugins/gaia/skills/gaia-bridg
 ## References
 
 - Delegate: `plugins/gaia/skills/gaia-bridge-toggle/SKILL.md` (full five-step procedure).
-- Legacy source: `_gaia/core/workflows/bridge-toggle/instructions.xml` (69 lines) — parity reference for NFR-053.
 - ADR-041 — Native Execution Model via Claude Code Skills + Subagents + Plugins + Hooks.
+- ADR-044 — Two-file config split (`config/project-config.yaml` shared + `config/global.yaml` machine-local).
 - FR-323 — Native Skill Format Compliance (slash-command continuity).
 - E28-S111 AC11 — wrapper pattern for one-to-many slash-command mappings.

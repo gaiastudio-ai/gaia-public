@@ -13,9 +13,9 @@ You are producing a repeatable release for the GAIA framework. The release proce
 
 - **Release from `main` only.** Version bumps never happen on a feature branch or on `staging`. Cut a release only after the sprint PR has merged to `main`.
 - **No Claude/AI attribution** in commit messages, tag messages, or the GitHub Release body. Every artifact must read as if a human release engineer authored it.
-- **Never hand-edit the version strings.** Always invoke `scripts/version-bump.js` — it keeps `package.json` and `_gaia/_config/global.yaml` synchronized and validates drift before writing.
+- **Never hand-edit the version strings.** Always invoke `scripts/version-bump.js` — it keeps `package.json` and the GAIA `framework_version` config key synchronized and validates drift before writing.
 - **Always dry-run first.** Run the bump with `--dry-run` to preview the new version and the files that would change; only then execute the real bump.
-- **Regenerate resolved configs after the bump.** `_gaia/_config/global.yaml` is a config_source, so run `/gaia-build-configs` once the bump lands before committing downstream artifacts.
+- **Inspect the script's reported output paths.** `scripts/version-bump.js` prints the exact files it intends to touch (and re-prints them after writing). Use that output as the authoritative file list when staging the commit in Step 5 — it is resilient to the ADR-044 config-split and any future config-location changes.
 
 ## Inputs
 
@@ -30,18 +30,18 @@ You are producing a repeatable release for the GAIA framework. The release proce
 
 ## What `version-bump.js` actually does (ADR-025 Model B)
 
-Per **ADR-025 Model B**, the script is the single source of truth for the framework version, and it updates **exactly 2 global files**:
+Per **ADR-025 Model B**, the script is the single source of truth for the framework version, and it updates **exactly 2 global targets**:
 
-| File | Role |
+| Target | Role |
 | --- | --- |
 | `package.json` | npm manifest — `"version": "…"` |
-| `_gaia/_config/global.yaml` | framework source of truth — `framework_version: "…"` |
+| GAIA config (`framework_version` key) | framework source of truth — resolved via `scripts/resolve-config.sh`; the on-disk location follows the ADR-044 two-file split |
 
 Earlier drafts described a broader touch-set; that narrative no longer applies. `gaia-install.sh`, `CLAUDE.md`, and `README.md` no longer carry hardcoded versions — the installer reads from `package.json` at runtime, and the markdown files reference the version indirectly.
 
-When `--modules` is passed, the script also touches per-module `_gaia/{mod}/config.yaml` entries and the matching rows in `_gaia/_config/manifest.yaml` — these are **module**-scoped writes, separate from the 2 global files above.
+When `--modules` is passed, the script also touches per-module `config.yaml` entries and the matching rows in the plugin's `knowledge/manifest.yaml` — these are **module**-scoped writes, separate from the 2 global targets above.
 
-Before writing anything the script validates that every global file contains the expected version pattern and detects drift. If the global files disagree, the script halts unless an explicit `X.Y.Z` version is supplied.
+Before writing anything the script validates that every global target contains the expected version pattern and detects drift. If the targets disagree, the script halts unless an explicit `X.Y.Z` version is supplied.
 
 ## Instructions
 
@@ -62,7 +62,7 @@ Run the bump with `--dry-run` first to confirm the target version:
 !node scripts/version-bump.js <patch|minor|major|none|X.Y.Z> [--prerelease rc] [--strip-prerelease] [--modules mod1,mod2] --dry-run
 ```
 
-Inspect the output: the current version, the new version, the global files that will change, and the per-module files (if `--modules` was supplied). If the preview is wrong, adjust the arguments and re-run the dry-run. The script exits 0 and writes nothing.
+Inspect the output: the current version, the new version, the global targets that will change (with their resolved on-disk paths), and the per-module files (if `--modules` was supplied). If the preview is wrong, adjust the arguments and re-run the dry-run. The script exits 0 and writes nothing.
 
 ### Step 3 — Execute the bump
 
@@ -72,30 +72,20 @@ Drop `--dry-run` and run the bump for real:
 !npm run version:bump -- <patch|minor|major|none|X.Y.Z> [--prerelease rc] [--strip-prerelease] [--modules mod1,mod2]
 ```
 
-(or equivalently `!node scripts/version-bump.js <args>`). The script writes `package.json` and `_gaia/_config/global.yaml`, plus any module files covered by `--modules`, and prints a reminder to run `/gaia-build-configs`.
+(or equivalently `!node scripts/version-bump.js <args>`). The script writes `package.json` and the on-disk file backing the `framework_version` key (as reported in the script's own output), plus any module files covered by `--modules`, and prints the next-step reminder.
 
-### Step 4 — Regenerate resolved configs
+### Step 4 — Commit the bump
 
-`_gaia/_config/global.yaml` is a config_source, so every consumer's pre-resolved config needs to be refreshed:
-
-```
-/gaia-build-configs
-```
-
-Stage any regenerated resolved-config artifacts alongside the bump in the next step.
-
-### Step 5 — Commit the bump
-
-Use a conventional commit — no emoji, no Claude attribution:
+Use a conventional commit — no emoji, no Claude attribution. Stage exactly what `version-bump.js` reported as modified in Step 3; do NOT hand-enumerate the config path, read it back from the script's output so this skill stays correct across ADR-044 config-layout changes:
 
 ```
-!git add package.json _gaia/_config/global.yaml _gaia/**/.resolved [module files if any]
+!git add package.json <config-files-printed-by-version-bump.js> [module files if any]
 !git commit -m "chore(release): bump version to vX.Y.Z"
 ```
 
 For RC prereleases use `chore(release): bump version to vX.Y.Z-rc.N`.
 
-### Step 6 — Tag
+### Step 5 — Tag
 
 Annotated tags carry the release notes summary and are what `gh release create` attaches to:
 
@@ -105,16 +95,16 @@ Annotated tags carry the release notes summary and are what `gh release create` 
 
 For an RC: `git tag -a vX.Y.Z-rc.N -m "vX.Y.Z-rc.N"`.
 
-### Step 7 — Push
+### Step 6 — Push
 
-Push the bump commit and the tag together. The tag must reach the remote before Step 8:
+Push the bump commit and the tag together. The tag must reach the remote before Step 7:
 
 ```
 !git push origin main
 !git push origin vX.Y.Z
 ```
 
-### Step 8 — Create the GitHub Release
+### Step 7 — Create the GitHub Release
 
 Draft the Release notes from the changelog entry. If a changelog is missing, generate one first with `/gaia-changelog`.
 
@@ -128,7 +118,7 @@ For RC builds add `--prerelease` so the release is flagged correctly on GitHub:
 !gh release create vX.Y.Z-rc.N --prerelease --title "vX.Y.Z-rc.N" --notes-file CHANGELOG-vX.Y.Z-rc.N.md
 ```
 
-### Step 9 — Post-release verification
+### Step 8 — Post-release verification
 
 - `gh release view vX.Y.Z` — confirm the release is published (or marked prerelease for RCs).
 - `git describe --tags --abbrev=0` on a fresh clone matches the new tag.
@@ -147,7 +137,8 @@ For RC builds add `--prerelease` so the release is flagged correctly on GitHub:
 ## References
 
 - Source: `scripts/version-bump.js` (node script in the repo root — zero deps per ADR-005, file-based regex per ADR-006).
-- ADR-025 (Model B): canonical 2-file version storage — `package.json` + `_gaia/_config/global.yaml`.
+- ADR-025 (Model B): canonical 2-target version storage — `package.json` + the `framework_version` config key (resolved via `scripts/resolve-config.sh` per ADR-042/ADR-044).
+- ADR-044 — Two-file config split (`config/project-config.yaml` shared + `config/global.yaml` machine-local); the `framework_version` key lives in the shared project config.
 - FR-327 / ADR-048: CLAUDE.md slim-down — procedural detail moved to SKILL.md files.
 - Story: `docs/implementation-artifacts/E28-S167-document-version-bump-procedure-in-gaia-release-skill.md` (origin: triage finding F4 from E28-S129).
-- Related: `/gaia-changelog` for release-note generation, `/gaia-build-configs` for resolved-config refresh after the bump.
+- Related: `/gaia-changelog` for release-note generation.

@@ -1,17 +1,21 @@
 #!/usr/bin/env bats
-# knowledge-paths-guard.bats — E28-S194 regression guard for plugin-shipped CSVs.
+# knowledge-paths-guard.bats — E28-S194 + E28-S196 regression guard for
+# plugin-shipped reference data.
 #
-# Story: E28-S194 — Retire `_gaia/_config/*.csv` literal paths from 15 SKILL.md
-# files and ship CSVs inside the plugin's knowledge/ tree.
+# Stories:
+#   - E28-S194 — Retire `_gaia/_config/*.csv` literal paths from 15 SKILL.md
+#     files and ship CSVs inside the plugin's knowledge/ tree.
+#   - E28-S196 — Retire remaining `_gaia/_config/*` paths from 12 SKILL.md
+#     files, ship 4 additional files (manifest.yaml, adversarial-triggers.yaml,
+#     agent-manifest.csv, lifecycle-sequence.yaml) to plugin knowledge/, and
+#     drop the `_gaia/_config/global.yaml` reference entirely in favor of
+#     ADR-044 targets (project-config.yaml keys, resolve-config.sh output).
 #
-# After E28-S190 audit bucket B3, the two CSVs (gaia-help.csv,
-# workflow-manifest.csv) MUST live inside plugins/gaia/knowledge/ so the
-# affected skills resolve them via ${CLAUDE_PLUGIN_ROOT}/knowledge/<csv>
-# instead of the legacy v1 path _gaia/_config/<csv> — which disappears after
-# /gaia-migrate apply deletes _gaia/.
-#
-# These tests fail RED until both CSVs are placed and all 15 SKILL.md files
-# are rewritten to drop the legacy literal paths.
+# After E28-S190 audit bucket B3, every non-project/non-machine-local v1 config
+# file MUST live inside plugins/gaia/knowledge/ so the affected skills resolve
+# them via ${CLAUDE_PLUGIN_ROOT}/knowledge/<file> instead of the legacy v1
+# path _gaia/_config/<file> — which disappears after /gaia-migrate apply
+# deletes _gaia/.
 
 load test_helper
 
@@ -89,4 +93,138 @@ teardown() { common_teardown; }
     printf '  %s\n' "$bad"
     return 1
   fi
+}
+
+# =============================================================================
+# E28-S196 — 4 additional files + global.yaml drop
+# =============================================================================
+#
+# Scope:
+#   - AC1..AC4: 4 new files present and non-empty in plugins/gaia/knowledge/.
+#   - AC14: no SKILL.md contains a literal _gaia/_config/(global|manifest|
+#           adversarial-triggers|agent-manifest|lifecycle-sequence) path
+#           outside a "legacy v1"-qualified prose block.
+#   - AC15 consistency guard: every agent-id in agent-manifest.csv has a
+#           matching plugins/gaia/agents/{id}.md.
+#   - AC6..AC9: each consuming SKILL.md resolves the retargeted file via
+#           ${CLAUDE_PLUGIN_ROOT}/knowledge/<file>.
+
+# ---------- AC1..AC4: 4 new files ship inside the plugin ----------
+
+@test "S196 AC1: plugins/gaia/knowledge/manifest.yaml exists and is non-empty" {
+  [ -f "$KNOWLEDGE_DIR/manifest.yaml" ]
+  [ -s "$KNOWLEDGE_DIR/manifest.yaml" ]
+}
+
+@test "S196 AC2: plugins/gaia/knowledge/adversarial-triggers.yaml exists and is non-empty" {
+  [ -f "$KNOWLEDGE_DIR/adversarial-triggers.yaml" ]
+  [ -s "$KNOWLEDGE_DIR/adversarial-triggers.yaml" ]
+}
+
+@test "S196 AC3: plugins/gaia/knowledge/agent-manifest.csv exists and is non-empty" {
+  [ -f "$KNOWLEDGE_DIR/agent-manifest.csv" ]
+  [ -s "$KNOWLEDGE_DIR/agent-manifest.csv" ]
+}
+
+@test "S196 AC4: plugins/gaia/knowledge/lifecycle-sequence.yaml exists and is non-empty" {
+  [ -f "$KNOWLEDGE_DIR/lifecycle-sequence.yaml" ]
+  [ -s "$KNOWLEDGE_DIR/lifecycle-sequence.yaml" ]
+}
+
+# ---------- AC14: the 5 residual legacy literal paths are scrubbed ----------
+
+@test "S196 AC14: no SKILL.md references a legacy _gaia/_config/<file> path for the 5 residuals (outside legacy-qualified prose)" {
+  # Pattern covers the 5 files E28-S196 targets: global.yaml, manifest.yaml,
+  # adversarial-triggers.yaml, agent-manifest.csv, lifecycle-sequence.yaml.
+  #
+  # Carve-out: gaia-migrate/SKILL.md is the migration tool itself — it
+  # documents how v1 directories (including _gaia/_config/global.yaml) are
+  # backed up and deleted. These references are contractual descriptions of
+  # what /gaia-migrate apply does to a v1 install, NOT active reads. The
+  # dead-reference-scan.sh already allowlists gaia-migrate for the same
+  # reason; the S196 guard inherits that carve-out.
+  local hits remaining
+  hits="$(grep -rnE '_gaia/_config/(global|manifest|adversarial-triggers|agent-manifest|lifecycle-sequence)' "$SKILLS_DIR"/*/SKILL.md 2>/dev/null \
+          | grep -v '/gaia-migrate/SKILL\.md:' \
+          || true)"
+  if [ -z "$hits" ]; then
+    return 0
+  fi
+  remaining="$(printf '%s\n' "$hits" | grep -viE 'legacy v1|no longer used|historical|legacy location|pre-migration|v1 marker|retired' || true)"
+  if [ -n "$remaining" ]; then
+    echo "SKILL.md still references a legacy v1 _gaia/_config/<residual> path outside a 'legacy' qualifier:"
+    printf '  %s\n' "$remaining"
+    return 1
+  fi
+}
+
+# ---------- AC15 consistency guard: agent-id ↔ plugin agent file ----------
+
+@test "S196 AC15: every agent-id in knowledge/agent-manifest.csv has a matching plugins/gaia/agents/{id}.md" {
+  local csv="$KNOWLEDGE_DIR/agent-manifest.csv"
+  [ -f "$csv" ]
+  local missing=""
+  # Parse first column (agent-id) from non-header rows, strip quotes.
+  while IFS= read -r id; do
+    [ -n "$id" ] || continue
+    if [ ! -f "$PLUGIN_ROOT/agents/${id}.md" ]; then
+      missing+="  $id (expected $PLUGIN_ROOT/agents/${id}.md)"$'\n'
+    fi
+  done < <(awk -F',' 'NR>1 { gsub(/"/,"",$1); print $1 }' "$csv")
+  if [ -n "$missing" ]; then
+    echo "Agent-id rows in agent-manifest.csv lack a matching plugins/gaia/agents/*.md:"
+    printf '%s' "$missing"
+    return 1
+  fi
+}
+
+# ---------- AC6..AC9: SKILL.md consumers resolve via plugin knowledge path ----------
+
+@test "S196 AC6: validate-framework SKILL.md resolves manifest.yaml via \${CLAUDE_PLUGIN_ROOT}/knowledge/" {
+  run grep -q 'CLAUDE_PLUGIN_ROOT.*knowledge/manifest\.yaml' "$SKILLS_DIR/gaia-validate-framework/SKILL.md"
+  [ "$status" -eq 0 ]
+}
+
+@test "S196 AC7a: create-prd SKILL.md resolves adversarial-triggers.yaml via \${CLAUDE_PLUGIN_ROOT}/knowledge/" {
+  run grep -q 'CLAUDE_PLUGIN_ROOT.*knowledge/adversarial-triggers\.yaml' "$SKILLS_DIR/gaia-create-prd/SKILL.md"
+  [ "$status" -eq 0 ]
+}
+
+@test "S196 AC7b: edit-prd SKILL.md resolves adversarial-triggers.yaml via \${CLAUDE_PLUGIN_ROOT}/knowledge/" {
+  run grep -q 'CLAUDE_PLUGIN_ROOT.*knowledge/adversarial-triggers\.yaml' "$SKILLS_DIR/gaia-edit-prd/SKILL.md"
+  [ "$status" -eq 0 ]
+}
+
+@test "S196 AC7c: edit-arch SKILL.md resolves adversarial-triggers.yaml via \${CLAUDE_PLUGIN_ROOT}/knowledge/" {
+  run grep -q 'CLAUDE_PLUGIN_ROOT.*knowledge/adversarial-triggers\.yaml' "$SKILLS_DIR/gaia-edit-arch/SKILL.md"
+  [ "$status" -eq 0 ]
+}
+
+@test "S196 AC7d: edit-ux SKILL.md resolves adversarial-triggers.yaml via \${CLAUDE_PLUGIN_ROOT}/knowledge/" {
+  run grep -q 'CLAUDE_PLUGIN_ROOT.*knowledge/adversarial-triggers\.yaml' "$SKILLS_DIR/gaia-edit-ux/SKILL.md"
+  [ "$status" -eq 0 ]
+}
+
+@test "S196 AC8: party SKILL.md resolves agent-manifest.csv via \${CLAUDE_PLUGIN_ROOT}/knowledge/" {
+  run grep -q 'CLAUDE_PLUGIN_ROOT.*knowledge/agent-manifest\.csv' "$SKILLS_DIR/gaia-party/SKILL.md"
+  [ "$status" -eq 0 ]
+}
+
+@test "S196 AC9a: brainstorm SKILL.md resolves lifecycle-sequence.yaml via \${CLAUDE_PLUGIN_ROOT}/knowledge/" {
+  run grep -q 'CLAUDE_PLUGIN_ROOT.*knowledge/lifecycle-sequence\.yaml' "$SKILLS_DIR/gaia-brainstorm/SKILL.md"
+  [ "$status" -eq 0 ]
+}
+
+@test "S196 AC9b: product-brief SKILL.md resolves lifecycle-sequence.yaml via \${CLAUDE_PLUGIN_ROOT}/knowledge/" {
+  run grep -q 'CLAUDE_PLUGIN_ROOT.*knowledge/lifecycle-sequence\.yaml' "$SKILLS_DIR/gaia-product-brief/SKILL.md"
+  [ "$status" -eq 0 ]
+}
+
+# ---------- AC13: next-step.sh resolves lifecycle-sequence from plugin knowledge/ ----------
+
+@test "S196 AC13: next-step.sh resolves lifecycle-sequence.yaml via plugin knowledge/ path" {
+  local script="$PLUGIN_ROOT/scripts/next-step.sh"
+  [ -f "$script" ]
+  run grep -q 'knowledge/lifecycle-sequence\.yaml' "$script"
+  [ "$status" -eq 0 ]
 }

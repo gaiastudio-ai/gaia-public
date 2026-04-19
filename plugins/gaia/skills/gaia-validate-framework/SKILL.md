@@ -1,13 +1,13 @@
 ---
 name: gaia-validate-framework
-description: Scan the GAIA framework tree for consistency, broken references, and missing components. Use when "validate framework" or /gaia-validate-framework. Walks _gaia/, compares against _gaia/_config/manifest.yaml, checks workflow integrity, agent integrity, command integrity, manifest integrity, config resolution, skill index integrity, and knowledge index integrity, then emits a severity-grouped findings report. Native Claude Code conversion of the legacy validate-framework task (E28-S111, Cluster 14).
+description: Scan the GAIA framework tree for consistency, broken references, and missing components. Use when "validate framework" or /gaia-validate-framework. Walks the plugin tree, compares against ${CLAUDE_PLUGIN_ROOT}/knowledge/manifest.yaml, checks workflow integrity, agent integrity, command integrity, manifest integrity, config resolution (via resolve-config.sh), skill index integrity, and knowledge index integrity, then emits a severity-grouped findings report. Native Claude Code conversion of the legacy validate-framework task (E28-S111, Cluster 14).
 argument-hint: "[--report-path]"
 allowed-tools: [Read, Bash, Grep]
 ---
 
 ## Mission
 
-You are running a framework self-validation scan. The skill walks `_gaia/`, compares the on-disk file inventory against `_gaia/_config/manifest.yaml`, and verifies that every workflow, agent, command, skill, and knowledge reference resolves. The output is a severity-grouped findings report written to `docs/implementation-artifacts/framework-validation-{date}.md` (or a user-provided path).
+You are running a framework self-validation scan. The skill walks the plugin tree, compares the on-disk file inventory against `${CLAUDE_PLUGIN_ROOT}/knowledge/manifest.yaml` (shipped inside the plugin under ADR-041's `knowledge/` convention; the legacy v1 location `_gaia/_config/manifest.yaml` is retired and no longer used), and verifies that every workflow, agent, command, skill, and knowledge reference resolves. The output is a severity-grouped findings report written to `docs/implementation-artifacts/framework-validation-{date}.md` (or a user-provided path).
 
 This skill is the native Claude Code conversion of the legacy validate-framework task at `_gaia/core/tasks/validate-framework.xml` (brief Cluster 14, story E28-S111). The legacy 66-line XML body is preserved here as explicit prose per ADR-041. No workflow engine, no engine-specific XML step tags.
 
@@ -15,9 +15,9 @@ This skill is the native Claude Code conversion of the legacy validate-framework
 
 - **Report ALL issues found — do not stop at first error.** Every step collects findings into an aggregated list. The skill emits the full report even when critical findings are present.
 - **Check every path reference in every file.** Every `{installed_path}/...`, `{project-root}/...`, and `{project-path}/...` reference must resolve to an actual file. Dangling references are CRITICAL findings.
-- **Verify config resolution works end-to-end.** Load `global.yaml` via `scripts/resolve-config.sh` (ADR-044) and confirm it parses. Under the native model there is no `.resolved/` pre-compilation step — config is resolved at skill-invocation time. Flag `global.yaml` parse failure as CRITICAL.
+- **Verify config resolution works end-to-end.** Invoke `scripts/resolve-config.sh` and confirm it emits a parseable result — this is the authoritative resolver under ADR-044's two-file split (`config/project-config.yaml` shared + `config/global.yaml` machine-local). Under the native model there is no `.resolved/` pre-compilation step — config is resolved at skill-invocation time. Flag resolver failure or unparseable output as CRITICAL.
 - **Report format preserves the legacy output shape.** Severity column, section column, finding column, suggested-fix column. Downstream tooling (CI checks, triage workflows) consume this shape — do NOT invent a new one.
-- **Fail fast when manifest.yaml is missing (AC-EC3).** If `_gaia/_config/manifest.yaml` is absent, emit a CRITICAL finding `manifest.yaml missing — cannot validate framework` and exit non-zero. No partial report. This is the strict-mode variant of the graceful-missing-file contract documented in `plugins/gaia/scripts/lib/missing-file-fallback.sh` (E28-S162): validate-framework treats the manifest as a hard prerequisite (strict = exit non-zero with an error), whereas other callers (next-step.sh, gaia-help) treat similar retired-path files as graceful no-ops. Strictness is a per-caller policy, not a helper default.
+- **Fail fast when manifest.yaml is missing (AC-EC3).** If `${CLAUDE_PLUGIN_ROOT}/knowledge/manifest.yaml` is absent, emit a CRITICAL finding `manifest.yaml missing — cannot validate framework` and exit non-zero. No partial report. This is the strict-mode variant of the graceful-missing-file contract documented in `plugins/gaia/scripts/lib/missing-file-fallback.sh` (E28-S162): validate-framework treats the manifest as a hard prerequisite (strict = exit non-zero with an error), whereas other callers (next-step.sh, gaia-help) treat similar retired-path files as graceful no-ops. Strictness is a per-caller policy, not a helper default.
 - **Use inline `!` bash for deterministic ops (ADR-042).** Manifest reads, directory listings, and `shasum` go through inline `!` bash. Do NOT re-implement manifest parsing in LLM prose.
 
 ## Inputs
@@ -28,20 +28,20 @@ This skill is the native Claude Code conversion of the legacy validate-framework
 
 The skill runs nine steps in strict order, mirroring the legacy `validate-framework.xml`:
 
-1. **File Inventory** — scan `_gaia/`, count by type, compare against manifest.yaml
+1. **File Inventory** — scan the plugin tree, count by type, compare against manifest.yaml
 2. **Workflow Integrity** — verify every `workflow.yaml` has its companion files
 3. **Agent Integrity** — verify every agent `.md` has well-formed XML and real menu links
 4. **Command Integrity** — verify every `.claude/commands/gaia-*.md` references real framework files
 5. **Manifest Integrity** — verify surviving `agent-manifest.csv` rows match on-disk agent files and vice versa (legacy workflow/task/skill manifests retired by ADR-048)
-6. **Config Resolution** — verify `global.yaml` parses cleanly under the native resolution path (module `config.yaml` and `.resolved/` retired by ADR-044/ADR-048)
+6. **Config Resolution** — verify `scripts/resolve-config.sh` emits parseable output under the native resolution path (ADR-044 two-file split; module `config.yaml` and `.resolved/` retired by ADR-044/ADR-048)
 7. **Skill Index Integrity** — verify every entry in `_skill-index.yaml` has a real file and valid line ranges
 8. **Knowledge Index Integrity** — verify every entry in knowledge `_index.csv` has a real fragment under 200 lines
 9. **Report** — emit PASS/FAIL overall + itemized findings grouped by severity
 
 ## Step 1 — File Inventory
 
-- **AC-EC3 — manifest.yaml missing:** check `_gaia/_config/manifest.yaml`. If absent, emit CRITICAL `manifest.yaml missing — cannot validate framework` and exit non-zero. No partial report.
-- Scan the `_gaia/` directory tree via inline `!find _gaia -type f -name '*.md' -o -name '*.xml' -o -name '*.yaml' -o -name '*.csv'`. Count files by type.
+- **AC-EC3 — manifest.yaml missing:** check `${CLAUDE_PLUGIN_ROOT}/knowledge/manifest.yaml`. If absent, emit CRITICAL `manifest.yaml missing — cannot validate framework` and exit non-zero. No partial report.
+- Scan the plugin directory tree via inline `!find "${CLAUDE_PLUGIN_ROOT}" -type f \( -name '*.md' -o -name '*.xml' -o -name '*.yaml' -o -name '*.csv' \)`. Count files by type.
 - Compare counts against expected counts from `manifest.yaml` (version field and declared module counts).
 - Flag any drift as INFO (counts off by small margin) or WARNING (counts off by a large margin).
 
@@ -78,9 +78,9 @@ The skill runs nine steps in strict order, mirroring the legacy `validate-framew
 
 ## Step 6 — Config Resolution
 
-- Load `_gaia/_config/global.yaml` via the native resolution path (`scripts/resolve-config.sh`, per ADR-044) — verify it parses as valid YAML and the key project-root / project-path / memory-path fields resolve cleanly.
-- Flag YAML parse errors as CRITICAL.
-- Note: module `config.yaml` files and the `.resolved/` pre-compilation chain were retired under ADR-044 + ADR-048. The native model resolves config at skill-invocation time — there is no pre-compiled output to verify.
+- Invoke `scripts/resolve-config.sh` (per ADR-044) and verify it emits parseable output. The resolver handles the ADR-044 two-file split (shared `config/project-config.yaml` + machine-local `config/global.yaml`) transparently — this skill does NOT probe the on-disk files directly. Confirm the key `project-root` / `project-path` / `memory-path` fields resolve cleanly from the resolver output.
+- Flag resolver failure or unparseable output as CRITICAL.
+- Note: module `config.yaml` files, the `.resolved/` pre-compilation chain, and the legacy v1 location `_gaia/_config/global.yaml` were retired under ADR-044 + ADR-048. The native model resolves config at skill-invocation time via `scripts/resolve-config.sh` — there is no pre-compiled output to verify and no v1 path to probe.
 
 ## Step 7 — Skill Index Integrity
 
@@ -136,8 +136,8 @@ Grouping: CRITICAL first, then WARNING, then INFO. Within each severity, sort by
 ## References
 
 - Legacy source: `_gaia/core/tasks/validate-framework.xml` (66 lines) — parity reference for NFR-053.
-- `_gaia/_config/manifest.yaml` — authoritative file inventory source (read-only input for this skill).
-- `_gaia/_config/global.yaml` — authoritative config source (read-only input for this skill).
+- `${CLAUDE_PLUGIN_ROOT}/knowledge/manifest.yaml` — authoritative file inventory source (read-only input for this skill; ships inside the plugin under ADR-041's `knowledge/` convention, legacy v1 location `_gaia/_config/manifest.yaml` retired).
+- `scripts/resolve-config.sh` output — authoritative config source (read-only input for this skill; resolves the ADR-044 two-file split on demand, legacy v1 location `_gaia/_config/global.yaml` retired).
 - ADR-041 — Native Execution Model via Claude Code Skills + Subagents + Plugins + Hooks.
 - ADR-042 — Scripts-over-LLM for Deterministic Operations (inline `!` bash for manifest reads, `find`, `shasum`).
 - ADR-048 — Program-close deletion policy for legacy engine/workflows/tasks.

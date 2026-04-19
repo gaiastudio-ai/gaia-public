@@ -4,7 +4,7 @@ description: Core memory operations used by every GAIA agent — session load/sa
 version: '1.1'
 applicable_agents: [all]
 sections: [decision-formatting, session-load, session-save, context-summarization, stale-detection, deduplication, budget-monitoring]
-allowed-tools: [Read, Write, Edit, Grep]
+tools: Read, Write, Edit, Grep
 ---
 
 <!-- Converted under ADR-041 (Native Execution Model). Source: _gaia/lifecycle/skills/memory-management.md. -->

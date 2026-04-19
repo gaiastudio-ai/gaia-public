@@ -62,16 +62,16 @@ setup() {
   awk '/^---$/{n++; next} n==1{print}' "$SKILL_FILE" | grep -q '^context: fork'
 }
 
-@test "E28-S102: SKILL.md frontmatter has allowed-tools with Agent" {
-  awk '/^---$/{n++; next} n==1{print}' "$SKILL_FILE" | grep -q 'allowed-tools:.*Agent'
+@test "E28-S102: SKILL.md frontmatter has tools with Agent" {
+  awk '/^---$/{n++; next} n==1{print}' "$SKILL_FILE" | grep -q 'tools:.*Agent'
 }
 
-@test "E28-S102: SKILL.md frontmatter allowed-tools contains Read" {
-  awk '/^---$/{n++; next} n==1{print}' "$SKILL_FILE" | grep -q 'allowed-tools:.*Read'
+@test "E28-S102: SKILL.md frontmatter tools contains Read" {
+  awk '/^---$/{n++; next} n==1{print}' "$SKILL_FILE" | grep -q 'tools:.*Read'
 }
 
-@test "E28-S102: SKILL.md frontmatter allowed-tools contains Write" {
-  awk '/^---$/{n++; next} n==1{print}' "$SKILL_FILE" | grep -q 'allowed-tools:.*Write'
+@test "E28-S102: SKILL.md frontmatter tools contains Write" {
+  awk '/^---$/{n++; next} n==1{print}' "$SKILL_FILE" | grep -q 'tools:.*Write'
 }
 
 # ---------- AC1: Three-phase pipeline sections present in order ----------

@@ -3,7 +3,7 @@ name: gaia-storytelling
 description: Craft a compelling narrative using story frameworks and emotional design. Use when the user asks to "craft a story", write a narrative, or build emotional copy around a product/idea. Delegates narrative construction to Elara (storyteller), picks a framework from the story-types catalog, and produces a ranked, polished narrative artifact.
 argument-hint: "[story topic or core message]"
 context: fork
-allowed-tools: [Read, Write, Glob, Agent]
+tools: Read, Write, Glob, Agent
 ---
 
 # gaia-storytelling

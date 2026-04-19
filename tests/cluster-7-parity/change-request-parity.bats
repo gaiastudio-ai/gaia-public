@@ -57,13 +57,13 @@ teardown() {
   grep -q "^argument-hint:" "$SKILL_DIR/SKILL.md"
 }
 
-@test "AC1: SKILL.md frontmatter has allowed-tools field" {
-  grep -q "^allowed-tools:" "$SKILL_DIR/SKILL.md"
+@test "AC1: SKILL.md frontmatter has tools field" {
+  grep -q "^tools:" "$SKILL_DIR/SKILL.md"
 }
 
-@test "AC1: SKILL.md allowed-tools is minimal (includes Skill)" {
+@test "AC1: SKILL.md tools is minimal (includes Skill)" {
   local line
-  line=$(grep "^allowed-tools:" "$SKILL_DIR/SKILL.md")
+  line=$(grep "^tools:" "$SKILL_DIR/SKILL.md")
   # Redirect skills need minimal tools — Skill tool to invoke target
   echo "$line" | grep -q "Skill\|Read\|Glob\|Bash"
 }

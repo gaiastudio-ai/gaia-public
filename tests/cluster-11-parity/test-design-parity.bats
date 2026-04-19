@@ -47,16 +47,16 @@ setup() {
   head -20 "$SKILL_DIR/SKILL.md" | grep -q '^context: fork'
 }
 
-@test "E28-S82: SKILL.md frontmatter has allowed-tools containing Read" {
-  head -20 "$SKILL_DIR/SKILL.md" | grep -q 'allowed-tools:.*Read'
+@test "E28-S82: SKILL.md frontmatter has tools containing Read" {
+  head -20 "$SKILL_DIR/SKILL.md" | grep -q 'tools:.*Read'
 }
 
-@test "E28-S82: SKILL.md frontmatter has allowed-tools containing Write" {
-  head -20 "$SKILL_DIR/SKILL.md" | grep -q 'allowed-tools:.*Write'
+@test "E28-S82: SKILL.md frontmatter has tools containing Write" {
+  head -20 "$SKILL_DIR/SKILL.md" | grep -q 'tools:.*Write'
 }
 
-@test "E28-S82: SKILL.md frontmatter has allowed-tools containing Agent" {
-  head -20 "$SKILL_DIR/SKILL.md" | grep -q 'allowed-tools:.*Agent'
+@test "E28-S82: SKILL.md frontmatter has tools containing Agent" {
+  head -20 "$SKILL_DIR/SKILL.md" | grep -q 'tools:.*Agent'
 }
 
 # ---------- AC2: Test plan template bundled ----------

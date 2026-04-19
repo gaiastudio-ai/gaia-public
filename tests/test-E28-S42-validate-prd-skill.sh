@@ -4,7 +4,7 @@
 # Asserts that gaia-validate-prd skill directory is correctly scaffolded per
 # the Cluster 5 planning pattern (P5-S3):
 #   AC1: SKILL.md exists with Cluster 5 frontmatter (name, description,
-#        allowed-tools, Cluster 5 marker)
+#        tools, Cluster 5 marker)
 #   AC2: Body redirects to gaia-val-validate, forwarding PRD artifact path
 #   AC3: ADR-045 deprecation notice preserved
 #   AC4: scripts/setup.sh and scripts/finalize.sh conform to Cluster 4/5 shared pattern
@@ -51,7 +51,7 @@ assert "SKILL.md exists" "[ -f '$VP_SKILL' ]"
 assert "frontmatter has name field" "grep -q '^name:' '$VP_SKILL' 2>/dev/null"
 assert "frontmatter name is gaia-validate-prd" "grep -q '^name: gaia-validate-prd' '$VP_SKILL' 2>/dev/null"
 assert "frontmatter has description field" "grep -q '^description:' '$VP_SKILL' 2>/dev/null"
-assert "frontmatter has allowed-tools field" "grep -q '^allowed-tools:' '$VP_SKILL' 2>/dev/null"
+assert "frontmatter has tools field" "grep -q '^tools:' '$VP_SKILL' 2>/dev/null"
 assert "frontmatter has context: fork" "grep -q '^context: fork' '$VP_SKILL' 2>/dev/null"
 
 echo ""

@@ -6,7 +6,7 @@
 #
 #   AC1: SKILL.md frontmatter conforms to canonical skill pattern
 #        (name: gaia-party, description with "party mode" trigger, argument-hint,
-#        context: fork, allowed-tools)
+#        context: fork, tools)
 #   AC2: Five invitation modes preserved (Option A: All agents, Option B: By
 #        module, Option C: Specific agents, Option D: Stakeholders only,
 #        Option E: By tag) with identical selection semantics to
@@ -62,20 +62,20 @@ setup() {
   head -20 "$SKILL_FILE" | grep -q '^context: fork'
 }
 
-@test "E28-S101: SKILL.md frontmatter has allowed-tools with Read" {
-  head -20 "$SKILL_FILE" | grep -q 'allowed-tools:.*Read'
+@test "E28-S101: SKILL.md frontmatter has tools with Read" {
+  head -20 "$SKILL_FILE" | grep -q 'tools:.*Read'
 }
 
-@test "E28-S101: SKILL.md frontmatter allowed-tools contains Grep" {
-  head -20 "$SKILL_FILE" | grep -q 'allowed-tools:.*Grep'
+@test "E28-S101: SKILL.md frontmatter tools contains Grep" {
+  head -20 "$SKILL_FILE" | grep -q 'tools:.*Grep'
 }
 
-@test "E28-S101: SKILL.md frontmatter allowed-tools contains Glob" {
-  head -20 "$SKILL_FILE" | grep -q 'allowed-tools:.*Glob'
+@test "E28-S101: SKILL.md frontmatter tools contains Glob" {
+  head -20 "$SKILL_FILE" | grep -q 'tools:.*Glob'
 }
 
-@test "E28-S101: SKILL.md frontmatter allowed-tools contains Bash" {
-  head -20 "$SKILL_FILE" | grep -q 'allowed-tools:.*Bash'
+@test "E28-S101: SKILL.md frontmatter tools contains Bash" {
+  head -20 "$SKILL_FILE" | grep -q 'tools:.*Bash'
 }
 
 # ---------- AC2: Five invitation modes preserved ----------

@@ -3,7 +3,7 @@ name: gaia-brownfield
 description: Apply GAIA to an existing project — deep discovery, multi-scan gap analysis, NFR assessment, and template-driven artifact generation. Use when "onboard existing project" or /gaia-brownfield. Runs multi-scan logic (doc-code, hardcoded, integration-seam, runtime-behavior, security) plus NFR assessment via test-architect subagent.
 argument-hint: "[project-path]"
 context: main
-allowed-tools: [Read, Write, Edit, Grep, Glob, Bash, Agent]
+tools: Read, Write, Edit, Grep, Glob, Bash, Agent
 model: inherit
 ---
 

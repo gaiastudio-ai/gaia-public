@@ -1,7 +1,7 @@
 ---
 name: gaia-document-project
 description: "Document an existing project for AI context — scans source files, detects the tech stack, maps directory structure, and produces a comprehensive project-documentation.md artifact. Use when 'document this project' or /gaia-document-project. GAIA-native replacement for the legacy document-project XML engine workflow."
-allowed-tools: [Read, Write, Bash, Grep, Glob]
+tools: Read, Write, Bash, Grep, Glob
 model: inherit
 version: "1.0.0"
 ---

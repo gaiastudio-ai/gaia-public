@@ -2,7 +2,7 @@
 name: gaia-create-arch
 description: Design system architecture through collaborative discovery with the architect subagent (Theo) — Cluster 6 architecture skill. Use when the user wants to produce a validated architecture document from an existing PRD, covering technology selection, system components, data architecture, API design, infrastructure, security architecture, and architecture decision records.
 context: fork
-allowed-tools: [Read, Write, Edit, Grep, Glob, Bash, Agent]
+tools: Read, Write, Edit, Grep, Glob, Bash, Agent
 ---
 
 ## Setup

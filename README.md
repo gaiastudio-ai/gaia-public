@@ -39,6 +39,60 @@ plugins/gaia/scripts/plugin-cache-recovery.sh --slug gaiastudio-ai-gaia-public
 
 `--detect` exits `2` on a polluted entry so CI and workflow steps can branch on it without parsing text; `--dry-run` prints the intended target without touching the filesystem. See the script header for the full exit-code table and slug-validation rules.
 
+## Migrate from GAIA v1
+
+If your project already has a GAIA v1 install (the legacy `Gaia-framework` npm installer — presence of `_gaia/`, `_memory/`, `custom/` directories in the project root, plus `.claude/commands/gaia-*.md` stubs), the `gaia-migrate` skill automates the upgrade to the v2 plugin layout.
+
+**Prerequisite:** the `gaia` plugin must be installed and loaded first (see the Install section above).
+
+### Preview the migration (read-only)
+
+```
+/gaia:gaia-migrate --dry-run
+```
+
+The dry-run prints every planned operation — template conversions, sidecar rewrites, config file splits, legacy command stubs to delete, v1 directories to back up and remove, total backup size — without touching the filesystem. Safe to run as many times as you want.
+
+### Apply the migration
+
+```
+/gaia:gaia-migrate apply
+```
+
+`apply` executes the plan. Each destructive step backs up before deleting, so a full restore to v1 state is always possible from the backup tree. In order:
+
+1. Migrate templates from `_gaia/` into plugin skills.
+2. Rewrite sidecar files under `_memory/`.
+3. Split `_gaia/_config/global.yaml` into `config/project-config.yaml` (v2 shape).
+4. Back up and delete legacy `.claude/commands/gaia-*.md` stubs (only files matching `gaia-*.md` — your own command files are untouched).
+5. Back up and delete the v1 directories `_gaia/`, `_memory/`, `custom/`. This step requires `config/project-config.yaml` to be present and valid (safety gate) and prompts for an explicit `yes` confirmation. Pass `--yes` or `--force` to skip the prompt in CI / non-interactive contexts.
+6. Print a rollback command so you can restore v1 state from the backup if anything went wrong.
+
+### Smoke-test after apply
+
+```
+/gaia:gaia-help
+```
+
+The `gaia:` prefix is important — it resolves to the plugin's `gaia-help` skill unambiguously. After a successful migration there should be exactly one `/gaia:gaia-help` registration; the legacy `.claude/commands/gaia-help.md` stub has been removed by step 4 above.
+
+If `/gaia:gaia-help` prints context-sensitive GAIA help, the migration succeeded. If it's unknown, re-run `/reload-plugins` and confirm the install (see "Install" above).
+
+### Rollback
+
+The apply command prints the exact rollback command at the end, of the form:
+
+```
+cp -a $BACKUP_ROOT/_gaia $BACKUP_ROOT/_memory $BACKUP_ROOT/custom .
+cp -a $BACKUP_ROOT/.claude/commands/ .claude/
+```
+
+The backup tree is in the project root (timestamped directory like `.gaia-migrate-backup-<timestamp>/`). Delete the backup tree manually once you're satisfied with the v2 install.
+
+### Idempotence
+
+Re-running `/gaia:gaia-migrate apply` on a project that is already on v2 (no v1 markers, `config/project-config.yaml` present) is a no-op — it prints "Nothing to migrate — already on v2." and exits 0.
+
 ## Plugin component discovery rules
 
 Claude Code auto-discovers plugin components at install time from conventional subdirectories under `plugins/gaia/`. The rules below are empirical (captured against Claude Code CLI `2.1.109` on 2026-04-15) and apply to any plugin authored in this marketplace, not just `gaia`. The full long-form writeup with source evidence lives in `docs/planning-artifacts/gaia-native-conversion-prereqs.md` §2.1.

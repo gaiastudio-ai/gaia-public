@@ -298,6 +298,81 @@ _migrate_sidecars() {
 }
 
 # ---------------------------------------------------------------------------
+# E28-S191 / B4 — required-field preservation
+# ---------------------------------------------------------------------------
+# The resolver validates 7 required fields: project_root, project_path,
+# memory_path, checkpoint_path, installed_path, framework_version, date.
+# v1 kept these in _gaia/_config/global.yaml; subtask 4.5 deletes that dir
+# post-migration. We therefore MUST copy the 7 fields into the v2 team-shared
+# file (config/project-config.yaml) BEFORE the destructive delete runs, so
+# resolve-config's required-field check keeps passing on v2 projects.
+#
+# If any required field is missing or unparseable from the v1 source, ABORT
+# before the destructive delete — the caller sees a clear "required field
+# missing: <field>" error and v1 dirs remain intact for repair.
+#
+# Returns 0 when every required field was present and appended to the v2
+# file; returns non-zero when a required field was missing (caller must abort).
+_derive_required_fields() {
+  local v1="$1" v2="$2"
+  [ -f "$v1" ] || { echo "ERROR: v1 source missing: $v1" >&2; return 1; }
+  [ -f "$v2" ] || { echo "ERROR: v2 target missing: $v2" >&2; return 1; }
+
+  local required=(project_root project_path memory_path checkpoint_path
+                  installed_path framework_version date)
+  local field value missing=""
+
+  # Use a deterministic extractor identical to resolve-config.sh's parse_yaml_key:
+  # top-level `key: value` line, surrounding quotes stripped.
+  _extract_key() {
+    local file="$1" key="$2" line v
+    line=$(grep -E "^${key}[[:space:]]*:" "$file" 2>/dev/null | head -n1 || true)
+    [ -z "$line" ] && return 0
+    v=${line#*:}
+    v=${v#"${v%%[![:space:]]*}"}
+    v=${v%"${v##*[![:space:]]}"}
+    case "$v" in
+      \"*\") v=${v#\"}; v=${v%\"} ;;
+      \'*\') v=${v#\'}; v=${v%\'} ;;
+    esac
+    printf '%s' "$v"
+  }
+
+  for field in "${required[@]}"; do
+    value=$(_extract_key "$v1" "$field")
+    if [ -z "$value" ]; then
+      missing="${missing}${field} "
+    fi
+  done
+
+  if [ -n "$missing" ]; then
+    echo "ERROR: required field missing from v1 config: ${missing% }" >&2
+    echo "       Source: $v1" >&2
+    echo "       Required: ${required[*]}" >&2
+    return 1
+  fi
+
+  # All 7 fields resolved — append them to the v2 file. Each field is emitted
+  # on its own line with a leading comment block so it's obvious where they
+  # came from.
+  {
+    echo ""
+    echo "# Required fields preserved from v1 _gaia/_config/global.yaml"
+    echo "# (resolver required-field list — see resolve-config.sh)"
+    for field in "${required[@]}"; do
+      value=$(_extract_key "$v1" "$field")
+      # Quote values containing spaces or colons to keep YAML parsers happy.
+      case "$value" in
+        *' '*|*:*|*\#*) printf '%s: "%s"\n' "$field" "$value" ;;
+        *)              printf '%s: %s\n'   "$field" "$value" ;;
+      esac
+    done
+  } >> "$v2"
+
+  return 0
+}
+
+# ---------------------------------------------------------------------------
 # Subtask 4.3 — config split (AC3, FR-326 partition)
 # ---------------------------------------------------------------------------
 _migrate_config_split() {
@@ -367,11 +442,24 @@ _migrate_config_split() {
     done
   } > "$v2_shared"
 
+  # E28-S191 / B4 — Preserve resolver's 7 required fields in the v2 shared
+  # file BEFORE subtask 4.5 deletes _gaia/_config/global.yaml. Run the
+  # derivation against the pristine v1 config (still in place) BEFORE the
+  # `mv` that rewrites v1_config to the post-split local-keys-only copy —
+  # otherwise any required field the split dropped on the floor (e.g., the
+  # `date:` sentinel) would be lost forever. If any field is missing from
+  # v1 source, abort now (well before the delete step).
+  if ! _derive_required_fields "$v1_config" "$v2_shared"; then
+    echo "  config-split FAIL — required field missing; refusing to proceed" >&2
+    return 1
+  fi
+
   # Replace v1 config with v2_global
   _safe_write mv "$v2_global" "$v1_config"
 
   echo "  local keys retained in: $v1_config"
   echo "  shared keys written to: $v2_shared"
+  echo "  required fields preserved in: $v2_shared (B4)"
   echo "  config-split PASS"
 }
 

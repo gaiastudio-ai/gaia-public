@@ -93,3 +93,20 @@ teardown() { common_teardown; }
   run "$SCRIPT"
   [ "$status" -ne 0 ]
 }
+
+# ---------------------------------------------------------------------------
+# E28-S191 / B2 — auto-create missing checkpoint directory
+# ---------------------------------------------------------------------------
+# When CHECKPOINT_PATH points at a directory that does not yet exist (fresh v2
+# project immediately after /gaia-migrate apply deletes _memory/), checkpoint.sh
+# write must create the path on demand with mkdir -p, not fail with ENOENT.
+
+@test "B2: write auto-creates missing CHECKPOINT_PATH directory" {
+  local fresh="$TEST_TMP/fresh/_memory/checkpoints"
+  # The directory does NOT exist — write must create it.
+  [ ! -d "$fresh" ]
+  CHECKPOINT_PATH="$fresh" run "$SCRIPT" write --workflow w-b2 --step 1
+  [ "$status" -eq 0 ]
+  [ -d "$fresh" ]
+  [ -f "$fresh/w-b2.yaml" ]
+}

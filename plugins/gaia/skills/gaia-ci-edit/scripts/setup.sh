@@ -54,6 +54,52 @@ done <<<"$config_output"
 # ---------- 2. Validate gate — dependency check (AC-EC3, AC-EC5) ----------
 [ -x "$VALIDATE_GATE" ] || die "validate-gate.sh not found or not executable at $VALIDATE_GATE — dependency E28-S15 must be installed first"
 
+# ---------- 2b. Record "had prior setup" marker (E28-S199) ----------
+#
+# E28-S199 introduces a conditional guard on the `ci_setup_exists` post-check
+# in finalize.sh. The guard uses a runtime marker file:
+#
+#   ${PROJECT_ROOT:-$PWD}/.gaia/run-state/ci-edit-had-prior-setup
+#
+# setup.sh probes for docs/test-artifacts/ci-setup.md at invocation time.
+# If it exists, a prior CI setup is in place and an edit is genuinely
+# editing an existing file — in that case finalize.sh MUST still invoke
+# ci_setup_exists as a regression guard (catches the "edit erased the
+# file" bug class — AC6). If the setup file is absent at invocation time,
+# no marker is written and finalize.sh skips the gate entirely (AC5:
+# fresh-fixture runs exit 0 cleanly).
+#
+# The marker is plain-filesystem state, not config: it describes "what the
+# edit observed at invocation" rather than "how the skill is configured."
+# Cleanup is finalize.sh's responsibility — see that script for the
+# companion logic. Error-path cleanup is bounded by the TEST_ARTIFACTS
+# resolution below and the run-state directory being per-project, so a
+# stale marker at worst causes the next edit run to treat an absent
+# file as "had prior setup" — which is the SAFER failure mode (gate runs,
+# catches the missing file, exits non-zero).
+
+TEST_ARTIFACTS_DIR="${TEST_ARTIFACTS:-docs/test-artifacts}"
+CI_SETUP_FILE="$TEST_ARTIFACTS_DIR/ci-setup.md"
+RUN_STATE_DIR="${PROJECT_ROOT:-$PWD}/.gaia/run-state"
+HAD_PRIOR_SETUP_MARKER="$RUN_STATE_DIR/ci-edit-had-prior-setup"
+
+if [ -f "$CI_SETUP_FILE" ]; then
+  if ! mkdir -p "$RUN_STATE_DIR" 2>/dev/null; then
+    log "could not create run-state dir at $RUN_STATE_DIR — continuing without marker (finalize will skip the regression guard)"
+  else
+    : > "$HAD_PRIOR_SETUP_MARKER"
+    log "recorded had_prior_setup marker at $HAD_PRIOR_SETUP_MARKER"
+  fi
+else
+  # Fresh fixture or first-ever run — make sure any stale marker from a
+  # previous interrupted run is cleared so finalize.sh does not
+  # mistakenly run the regression guard against an absent file.
+  if [ -f "$HAD_PRIOR_SETUP_MARKER" ]; then
+    rm -f "$HAD_PRIOR_SETUP_MARKER" 2>/dev/null || true
+    log "cleared stale had_prior_setup marker at $HAD_PRIOR_SETUP_MARKER (no prior ci-setup.md observed)"
+  fi
+fi
+
 # ---------- 3. Load checkpoint state ----------
 if [ -x "$CHECKPOINT" ]; then
   if "$CHECKPOINT" read --workflow "$WORKFLOW_NAME" >/dev/null 2>&1; then

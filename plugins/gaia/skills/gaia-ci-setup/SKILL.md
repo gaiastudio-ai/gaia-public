@@ -17,7 +17,7 @@ This skill is the native Claude Code conversion of the legacy `_gaia/testing/wor
 
 **Write context:** This skill uses `allowed-tools: Read Grep Glob Bash Write Edit` because it writes pipeline configuration files and modifies `global.yaml`.
 
-**Foundation script integration (ADR-042):** This skill invokes `validate-gate.sh` from `plugins/gaia/scripts/` for post-setup CI gate verification. Deterministic operations (config resolution, gate verification) belong in bash scripts, not LLM prompts.
+**Foundation script integration (ADR-042):** This skill relies on `validate-gate.sh` from `plugins/gaia/scripts/` as a dependency check in `setup.sh` (the foundation script must be present and executable before the skill body runs). The skill's `finalize.sh` does NOT post-check `ci_setup_exists` — removed by E28-S199, since this skill is the producer of `docs/test-artifacts/ci-setup.md` and a post-check on the producer's own output is tautological (success path) or misleading (failure path). Deterministic operations (config resolution, gate verification) belong in bash scripts, not LLM prompts.
 
 ## Critical Rules
 

@@ -1,0 +1,194 @@
+# Cluster 19 Fixture Manifest
+# Scaffolded by story E28-S132. Populated by execution stories E28-S133..E28-S139.
+#
+# Each fixture carries:
+#   path        — relative to this manifest's directory
+#   sha256      — hex-encoded sha256 of the fixture body (placeholder until authored)
+#   origin      — "v-parity-baseline" (captured from legacy run at the baseline tag)
+#                 or "synthesized" (built specifically for this test plan)
+#   immutable   — true for parity fixtures (never edited without bumping v-parity-baseline)
+#                 false for synthesized fixtures that may evolve alongside the plan
+#   authored_by — story key that introduces the fixture (E28-S132 scaffolds; S133+ populates)
+
+version: 1
+baseline_tag: v-parity-baseline
+cluster: 19
+story_ref: E28-S132
+
+fixtures:
+  # Seeds — consumed by full-lifecycle category (E28-S133)
+  - path: seeds/product-brief.md
+    sha256: pending-e28-s133
+    origin: v-parity-baseline
+    immutable: true
+    authored_by: E28-S133
+  - path: seeds/architecture-seed.md
+    sha256: pending-e28-s133
+    origin: v-parity-baseline
+    immutable: true
+    authored_by: E28-S133
+  - path: seeds/epics-seed.md
+    sha256: pending-e28-s133
+    origin: v-parity-baseline
+    immutable: true
+    authored_by: E28-S133
+  - path: seeds/sprint-plan-seed.md
+    sha256: pending-e28-s133
+    origin: v-parity-baseline
+    immutable: true
+    authored_by: E28-S133
+  - path: seeds/dev-story-seed.md
+    sha256: pending-e28-s133
+    origin: v-parity-baseline
+    immutable: true
+    authored_by: E28-S133
+
+  # Review gate — consumed by E28-S134
+  - path: stories/clean/clean-fixture-story.md
+    sha256: a6183fd2f9ccf5739bb5e91fbd0300245657c040612ef91a2db5edbf163250b6
+    origin: synthesized
+    immutable: false
+    authored_by: E28-S134
+    note: "checksum captured in review-state (post-reset); mutated in-place during gate runs"
+  - path: stories/code-review-defect/code-review-defect-fixture-story.md
+    sha256: fb6937f3ce98a8ca95c2b63a956ac857e97526a051c22497deb6ea94d0353692
+    origin: synthesized
+    immutable: false
+    authored_by: E28-S134
+    note: "checksum captured in review-state (post-reset); mutated in-place during gate runs"
+  - path: stories/security-finding/security-finding-fixture-story.md
+    sha256: a88374ebf0dd533b5331b90d7d6ec65b766235567b1825b9882c490104f08de3
+    origin: synthesized
+    immutable: false
+    authored_by: E28-S134
+    note: "checksum captured in review-state (post-reset); mutated in-place during gate runs"
+  - path: ../parity-baseline/traces/run-all-reviews.jsonl
+    sha256: 52c7b1ea41bf204531a6591090097599f6c0ec6abdf15ae392e1b5503e72fed2
+    origin: v-parity-baseline
+    immutable: true
+    authored_by: E28-S134
+
+  # Sprint state machine — consumed by E28-S135
+  # Oracle: test/fixtures/parity-baseline/traces/sprint-state-machine.jsonl
+  - path: sprint-state-machine/seed/state-machine-fixture-story.md
+    sha256: 49a9bb190234a88befe40fd52d161c99e13eab6db8f9d57f26c599406fe6645d
+    origin: synthesized
+    immutable: true
+    authored_by: E28-S135
+    note: "Canonical exercise story. Copied to per-test tmpdir before each bats run; seed itself never mutates."
+  - path: sprint-state-machine/seed/sprint-status.yaml
+    sha256: db1d6fb7ef1bc47c20d9e815afbeaaffd50f511885beab257adde44782387d02
+    origin: synthesized
+    immutable: true
+    authored_by: E28-S135
+  - path: sprint-state-machine/seed/story-index.yaml
+    sha256: cf8ec879fe0faf9d301dfbc894cdb2a0b3e02b944853c12c1ead29892b760b6d
+    origin: synthesized
+    immutable: true
+    authored_by: E28-S135
+  - path: ../parity-baseline/traces/sprint-state-machine.jsonl
+    sha256: fcfdeaa079f90b437f55c856db3a3f838b890ba038c3fdc6a7106081e430379c
+    origin: v-parity-baseline
+    immutable: true
+    authored_by: E28-S135
+
+  # Checkpoint resume — consumed by E28-S136
+  - path: resume/pre-interrupt-checkpoint.yaml
+    sha256: pending-e28-s136
+    origin: synthesized
+    immutable: false
+    authored_by: E28-S136
+  - path: resume/expected-terminal-state.yaml
+    sha256: pending-e28-s136
+    origin: synthesized
+    immutable: false
+    authored_by: E28-S136
+
+  # Quality gates — consumed by E28-S137
+  # Oracle: test/fixtures/parity-baseline/traces/quality-gates.jsonl
+  - path: quality-gate-enforcement/create-epics-stories/docs/planning-artifacts/architecture.md
+    sha256: ef335700cfebdc88d40f066b8f5152954b3e3f54ed4d5b66f4be7b99873eb3b1
+    origin: synthesized
+    immutable: true
+    authored_by: E28-S137
+  - path: quality-gate-enforcement/implementation-readiness/docs/planning-artifacts/architecture.md
+    sha256: a28bd802e382d1e42cf9c7dc836a215e7fe1ac4856bcce401b9003dc0e22d36c
+    origin: synthesized
+    immutable: true
+    authored_by: E28-S137
+  - path: quality-gate-enforcement/implementation-readiness/docs/planning-artifacts/epics-and-stories.md
+    sha256: 971c34559b3f299c57c5cab937b71344c4b73a5f8f4b510bdf78b1db99ba5477
+    origin: synthesized
+    immutable: true
+    authored_by: E28-S137
+  - path: quality-gate-enforcement/implementation-readiness/docs/test-artifacts/traceability-matrix.md
+    sha256: 247365fc30a631564cade0a17a8790f5a8bb0e905ca97cfda2c6e0d1cc4fe675
+    origin: synthesized
+    immutable: true
+    authored_by: E28-S137
+  - path: quality-gate-enforcement/implementation-readiness/docs/test-artifacts/ci-setup.md
+    sha256: e98ba105673003b843def9c87e194492419b4806a2b9eec8e4bf3d52b0383841
+    origin: synthesized
+    immutable: true
+    authored_by: E28-S137
+  - path: quality-gate-enforcement/dev-story-high-risk/docs/implementation-artifacts/E28-QGE-03-high.md
+    sha256: a98579eab0d0ca2d11d1c85626f50cd1a4525abf82d4e4eff0e97fd120d847d0
+    origin: synthesized
+    immutable: true
+    authored_by: E28-S137
+  - path: quality-gate-enforcement/dev-story-low-risk/docs/implementation-artifacts/E28-QGE-03-low.md
+    sha256: e7799423ba174a51f970055adf9b119a2dc736deb3c9331a8799ad52807aac3c
+    origin: synthesized
+    immutable: true
+    authored_by: E28-S137
+  - path: quality-gate-enforcement/deployment-checklist/docs/test-artifacts/traceability-matrix.md
+    sha256: 23e930f442f169d63e7ef319c0eaf4d1fac80ceab8d826fa8906243ccd1b4742
+    origin: synthesized
+    immutable: true
+    authored_by: E28-S137
+  - path: quality-gate-enforcement/deployment-checklist/docs/test-artifacts/ci-setup.md
+    sha256: a31617b1409228878863ab4ff7ec92266a96b33a449c8a1be3958c847249a2c3
+    origin: synthesized
+    immutable: true
+    authored_by: E28-S137
+  - path: quality-gate-enforcement/deployment-checklist/docs/planning-artifacts/readiness-report.md
+    sha256: 01cffffb0085a94958f4fc8052ae564ddd7462fd5f5c6d139cbe2f34328cc3c5
+    origin: synthesized
+    immutable: true
+    authored_by: E28-S137
+  - path: quality-gate-enforcement/brownfield-onboarding/docs/planning-artifacts/architecture.md
+    sha256: a7c7a48a21df08689c0558e2f62e072421cd9aa1d17231c1addaef83f9989b87
+    origin: synthesized
+    immutable: true
+    authored_by: E28-S137
+  - path: ../parity-baseline/traces/quality-gates.jsonl
+    sha256: be855894b1da14e4aaf3ea15a3a79f5b3f9d73744f356ba317e67f35175389ab
+    origin: v-parity-baseline
+    immutable: true
+    authored_by: E28-S137
+
+  # Enterprise plugin — consumed by E28-S138
+  - path: enterprise/license.json
+    sha256: pending-e28-s138
+    origin: synthesized
+    immutable: true
+    authored_by: E28-S138
+  - path: enterprise/enterprise-manifest.yaml
+    sha256: pending-e28-s138
+    origin: v-parity-baseline
+    immutable: true
+    authored_by: E28-S138
+
+  # Token measurement — consumed by E28-S139
+  - path: tokens/baseline-tokens.jsonl
+    sha256: pending-e28-s139
+    origin: v-parity-baseline
+    immutable: true
+    authored_by: E28-S139
+
+# Fixture project scaffolding (E28-S133 generates with init-project.sh)
+project_scaffold:
+  path: project/
+  generator: init-project.sh
+  tech_stack: typescript+pnpm+node20
+  note: "Full project tree is emitted by init-project.sh at test runtime; no committed source except package.json/tsconfig.json skeleton."

@@ -1,0 +1,14 @@
+tokenizer_name: anthropic-approx-bpe
+tokenizer_version: 1.0.0
+tokenizer_sha: sha256:3c0c1f82c5e5b09f1e4d6b4d1c4d85f6c1c2a7b8d9e0f1a2b3c4d5e6f7a8b9c0
+source: plugins/gaia/test/scripts/token-reduction/tokenize.mjs
+notes: |
+  Deterministic byte-based approximation tokenizer pinned for NFR-048 measurements.
+  The `tokens` count is ceil(prompt_bytes / 4) — the well-known approximation
+  used by _memory/config.yaml archival.token_approximation and by the Anthropic
+  "tokens ≈ chars / 4" rule of thumb. This is a SURROGATE tokenizer for
+  before/after comparison purposes only; it is NOT the production-grade
+  Anthropic tokenizer. Determinism is guaranteed because the function is pure
+  over the captured prompt bytes. The SHA above pins this contract — any
+  change to the tokenizer algorithm MUST change this SHA and re-run every
+  measurement from scratch.

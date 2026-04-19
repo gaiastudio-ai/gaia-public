@@ -1,0 +1,6 @@
+/gaia-code-review
+story_key: E-FIXTURE-S1
+scope: full
+execution_mode: yolo
+driver: parity-baseline-token-budget
+fixture_id: code-review-2026-04-17

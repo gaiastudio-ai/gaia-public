@@ -1,0 +1,6 @@
+/gaia-brownfield
+project_path: .
+scan_depth: shallow
+execution_mode: yolo
+driver: parity-baseline-token-budget
+fixture_id: brownfield-onboarding-2026-04-17

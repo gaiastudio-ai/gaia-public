@@ -1,0 +1,12 @@
+# diff-allowlist.txt — Cluster 4 e2e byte-for-byte comparison allowlist
+#
+# Lines in this file describe intentional format changes between legacy
+# workflow artifacts and skill-based artifacts. Each line is a path-glob
+# pattern followed by a description of the allowed diff.
+#
+# Format: <glob-pattern> :: <description>
+#
+# Diffs outside this allowlist cause a test failure (AC3).
+#
+# --- Allowed diffs ---
+# (none yet — initial baseline assumes byte-for-byte parity)

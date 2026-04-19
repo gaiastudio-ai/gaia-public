@@ -1,0 +1,17 @@
+# Test fixture — global.yaml with malformed ci_cd section
+framework_name: "GAIA"
+framework_version: "1.127.2-rc.1"
+
+ci_cd:
+  promotion_chain:
+    - id: staging
+      name: Staging
+      branch: staging
+      ci_provider: github_actions
+      merge_strategy: merge
+      ci_checks:
+        - lint
+        - unit
+    - id: main
+      name: [invalid yaml here
+      branch: main

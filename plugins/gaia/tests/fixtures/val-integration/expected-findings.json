@@ -1,0 +1,23 @@
+{
+  "description": "Expected findings from validate-plan run against flawed-plan.md",
+  "minimum_findings": 3,
+  "required_severities": ["CRITICAL", "WARNING"],
+  "required_fields": ["severity", "section", "claim", "finding", "evidence"],
+  "expected_patterns": [
+    {
+      "severity": "CRITICAL",
+      "claim_pattern": "nonexistent-script.sh",
+      "description": "References a file that does not exist on disk"
+    },
+    {
+      "severity": "CRITICAL",
+      "claim_pattern": "ADR-999",
+      "description": "References an ADR that does not exist in architecture"
+    },
+    {
+      "severity": "WARNING",
+      "claim_pattern": "rc.3",
+      "description": "Version bump skips rc.2 -- non-sequential"
+    }
+  ]
+}

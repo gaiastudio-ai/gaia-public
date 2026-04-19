@@ -1,0 +1,3 @@
+# Fixture B — subdir-project (project_path: "my-app")
+# Machine-local overlay — confirms local wins with the my-app path.
+project_path: /fixture/subdir-project/my-app

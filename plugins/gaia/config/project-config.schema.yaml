@@ -1,0 +1,145 @@
+# project-config.schema.yaml — GAIA Native per-project config schema
+#
+# Realizes ADR-044 (config split) — the single per-project config surface.
+# Referenced by feature brief P2-S10 / P20-S1 in:
+#   docs/creative-artifacts/gaia-native-conversion-feature-brief-2026-04-14.md
+#
+# Finalized under E28-S141 (extends the initial draft from E28-S18).
+#
+# =============================================================================
+# Precedence (ADR-044 invariant)
+# =============================================================================
+# When the same key appears in both `global.yaml` (local) and `config/project-config.yaml` (shared), the local value wins.
+#
+# This sentence appears verbatim in `MIGRATION-from-global-yaml.md` — identical
+# wording across both artifacts prevents drift. The rule is enforced by
+# `resolve-config.sh` (E28-S9 / E28-S142) as a generic two-file merge: the
+# resolver reads the shared file first, then overlays the machine-local file.
+# No schema-specific code is required in the resolver.
+#
+# =============================================================================
+# Contract with resolve-config.sh (E28-S9 / E28-S142)
+# =============================================================================
+# - This file is the authoritative declaration of permitted top-level keys.
+# - resolve-config.sh rejects any field in project-config.yaml that is not
+#   declared here with exit code 2 and a clear stderr message.
+# - Schema is additive and exhaustive: no implicit keys, no fallback to
+#   legacy _gaia/_config/global.yaml inheritance.
+# - Two-file merge (local overlay shared) is implemented generically by the
+#   resolver — new schema entries require no resolver code changes.
+#
+# Format: a plain YAML document where each top-level key maps to a field
+# descriptor with four attributes:
+#   type        — string | path | bool | map
+#   required    — true | false
+#   default     — literal default value (or null when unset)
+#   description — human-readable one-liner
+#
+# This is NOT JSON Schema. A minimal validator walks top-level keys and checks
+# each field descriptor against the loaded project-config.yaml.
+
+schema_version: "1.1.0"
+
+fields:
+
+  project_root:
+    type: path
+    required: true
+    default: null
+    description: "Absolute path to the framework root (where _gaia/ lives)."
+
+  project_path:
+    type: path
+    required: true
+    default: null
+    description: "Absolute path to the application source tree. Non-'.' value makes the framework/project split visible. See ADR-044. Shared default; machine-local override in global.yaml wins per precedence rule."
+
+  user_name:
+    type: string
+    required: false
+    default: null
+    description: "Team display name for this project (shared). User-scoped preferences remain in machine-local global.yaml under the same key, which overrides this shared default per the precedence rule. Shared per feature brief P20-S1."
+
+  communication_language:
+    type: string
+    required: false
+    default: "English"
+    description: "Team default language for agent prose output (shared). Shared per feature brief P20-S1."
+
+  memory_path:
+    type: path
+    required: true
+    default: null
+    description: "Absolute path to persistent agent memory directory. Typically machine-local (encodes operator filesystem); declared here so CI fixtures can set it deterministically. Machine-local global.yaml override wins."
+
+  checkpoint_path:
+    type: path
+    required: true
+    default: null
+    description: "Absolute path to workflow checkpoint directory. Same local-override semantics as memory_path."
+
+  installed_path:
+    type: path
+    required: true
+    default: null
+    description: "Absolute path to the installed framework tree (_gaia/). Machine-local in practice; machine-local global.yaml override wins."
+
+  framework_version:
+    type: string
+    required: true
+    default: null
+    description: "GAIA framework version this project targets. Pinned per project."
+
+  date:
+    type: string
+    required: true
+    default: null
+    description: "ISO-8601 date stamp for the config revision."
+
+  val_integration:
+    type: map
+    required: false
+    default: { template_output_review: true }
+    description: "Val agent integration knobs. See ADR-042."
+
+  ci_cd:
+    type: map
+    required: false
+    default: null
+    description: "CI/CD promotion chain — list of environments with branch, provider, and checks. Written by /gaia-ci-setup. See ADR-048."
+
+  testing:
+    type: map
+    required: false
+    default: null
+    description: "Testing integration config — bridge enablement, framework selection, coverage thresholds."
+
+  test_execution_bridge:
+    type: map
+    required: false
+    default: null
+    description: "Test Execution Bridge configuration. Enables real-runner integration with evidence files (FR-194, FR-197, NFR-034, ADR-028)."
+
+  sprint:
+    type: map
+    required: false
+    default: null
+    description: "Sprint configuration — active sprint id, sizing overrides, per-sprint conventions. Shared team config per feature brief P20-S1."
+
+  review_gate:
+    type: map
+    required: false
+    default: null
+    description: "Review Gate configuration — required review types and gate ordering before a story transitions to done. Shared team config per feature brief P20-S1."
+
+  team_conventions:
+    type: map
+    required: false
+    default: null
+    description: "Team-wide naming, commit style, and code-style conventions enforced by review workflows. Shared team config per feature brief P20-S1."
+
+  agent_customizations:
+    type: map
+    required: false
+    default: null
+    description: "Project-wide agent .customize.yaml overrides aggregated by agent id. Shared team config per feature brief P20-S1."

@@ -1,0 +1,8 @@
+# Cluster 6 diff allowlist — lines matching these patterns are scrubbed
+# before diffing skill output against golden files. Mirrors the Cluster 5
+# allowlist semantics from E28-S44.
+#
+# Timestamps, dates, and agent model version strings are non-deterministic.
+^> \*\*Date:\*\*
+^> \*\*Author:\*\*
+agent_model_name_version

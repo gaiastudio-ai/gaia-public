@@ -1,0 +1,10 @@
+# Fixture A — root-project (project_path: ".")
+# Shared (team) config layer — baseline values.
+# The machine-local global.yaml overlays this with `project_path: "."`.
+project_root: /fixture/root-project
+project_path: /fixture/root-project
+memory_path: /fixture/root-project/_memory
+checkpoint_path: /fixture/root-project/_memory/checkpoints
+installed_path: /fixture/root-project/_gaia
+framework_version: 1.127.2-rc.1
+date: 2026-04-17

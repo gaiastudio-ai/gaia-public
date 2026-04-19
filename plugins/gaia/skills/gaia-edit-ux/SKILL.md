@@ -1,0 +1,111 @@
+---
+name: gaia-edit-ux
+description: Edit an existing UX design document with cascade-aware downstream artifact detection, delegating UX-authoring reasoning to the ux-designer subagent (Christy) — Cluster 5 planning skill. Use when the user wants to modify sections of an existing UX design while preserving consistency with architecture, epics, stories, and test plans.
+context: fork
+allowed-tools: [Read, Write, Edit, Grep, Glob, Bash, Agent]
+---
+
+## Setup
+
+!${CLAUDE_PLUGIN_ROOT}/skills/gaia-edit-ux/scripts/setup.sh
+
+## Mission
+
+This skill orchestrates edits to an existing UX Design document. UX design authoring and reasoning is delegated to the **ux-designer** subagent (Christy), who evaluates change impact, validates consistency, and produces the updated artifact. The skill loads the current UX design, coordinates the multi-step edit flow, detects cascade impacts on downstream artifacts, and writes the output to `docs/planning-artifacts/ux-design.md`.
+
+This skill is the native Claude Code conversion of the legacy `_gaia/lifecycle/workflows/2-planning/edit-ux-design` workflow (brief Cluster 5, story P5-S4 / E28-S43). The step ordering, cascade-aware semantics, and output path are preserved verbatim from the legacy `instructions.xml` — do not restructure, re-prompt, or reorder.
+
+## Critical Rules
+
+- A UX design MUST already exist at `docs/planning-artifacts/ux-design.md` before starting. If missing, fail fast with "No UX design found at docs/planning-artifacts/ux-design.md — run /gaia-create-ux first."
+- Preserve existing content not being changed — edits are surgical, not wholesale rewrites.
+- Add a version note documenting what changed and why after every edit session.
+- Update "Review Findings Incorporated" section after adversarial review (if triggered).
+- UX design edit reasoning is delegated to the `ux-designer` subagent (Christy) via native Claude Code subagent invocation — do NOT inline Christy's persona into this skill body. If the ux-designer subagent (E28-S21) is not available, fail with "ux-designer subagent not available — install E28-S21" error.
+- Cascade impact assessment on downstream artifacts (architecture.md, epics-and-stories.md, test-plan.md) is MANDATORY after every edit — this is the key semantic preserved from the legacy workflow.
+
+## Steps
+
+### Step 1 — Load Existing UX Design
+
+- Read the current UX design at `docs/planning-artifacts/ux-design.md`.
+- If the file does not exist, fail fast: "No UX design found at docs/planning-artifacts/ux-design.md — run /gaia-create-ux first."
+- Identify existing sections: personas, information architecture, wireframes, interaction patterns, accessibility.
+- Identify existing Version History entries — note last version for auto-increment.
+- Display current structure summary to user: section headers, persona count, wireframe count, current version.
+
+### Step 2 — Identify Changes
+
+Delegate to the **ux-designer** subagent (Christy) via `agents/ux-designer` to evaluate the requested changes.
+
+Ask the user:
+
+1. What sections need to change?
+2. Why are these changes needed?
+3. Is this linked to a change request? If so, provide the CR ID.
+
+Classify change scope: MINOR (section update, text change) / SIGNIFICANT (new persona, new flow, navigation restructure) / BREAKING (complete redesign of major section).
+
+Confirm scope of changes before proceeding. The ux-designer subagent evaluates whether the requested changes are consistent with the existing UX design structure and flags any potential conflicts.
+
+### Step 3 — Apply Edits
+
+Delegate to the **ux-designer** subagent (Christy) via `agents/ux-designer` to apply the edits:
+
+- For each affected section: present current content, propose edits, wait for user confirmation or modification.
+- Preserve all unchanged sections exactly as-is — no reordering, no reformatting, no content loss.
+- Validate consistency between edited sections and remaining unchanged sections.
+- If edits affect FR-to-Screen Mapping: verify traceability remains accurate.
+
+### Step 4 — Add Version Note
+
+- Append a new row to the Version History table:
+  `| {date} | {change summary} | {driver} | {CR ID or reference} |`
+- If no Version History section exists, create one:
+  ```
+  ## Version History
+  | Date | Change | Reason | CR/Reference |
+  |------|--------|--------|-------------|
+  | {date} | {change summary} | {driver} | {CR ID or reference} |
+  ```
+
+### Step 5 — Save Updated UX Design
+
+- Generate a diff summary showing exactly what changed.
+- Write updated UX design to `docs/planning-artifacts/ux-design.md` with all edits applied, unchanged sections preserved, and version note added.
+
+### Step 6 — Adversarial Review
+
+- Read `_gaia/_config/adversarial-triggers.yaml` to evaluate trigger rules. Determine the current `change_type`: if invoked with a change_type context (e.g., from add-feature triage), use that value. If no context is available, infer from the change scope: minor edits map to "low-risk-enhancement", significant feature additions map to "feature".
+- Look up the trigger rule for `change_type` + artifact "ux-design". If adversarial is false for this combination: skip adversarial review — mark "Review Findings Incorporated" as "Adversarial review not triggered — change type: {change_type} per adversarial-triggers.yaml". Proceed to Step 8.
+- If adversarial is true: spawn a subagent to run the adversarial review task against `docs/planning-artifacts/ux-design.md`.
+- When subagent returns: verify `adversarial-review-ux-design-*.md` exists in `docs/planning-artifacts/`.
+
+### Step 7 — Incorporate Review Findings
+
+- Read `docs/planning-artifacts/adversarial-review-ux-design-*.md` — extract critical and high severity findings.
+- For each critical/high finding: incorporate into UX design document.
+- Update the "## Review Findings Incorporated" section — append new entries with amendment date.
+- Write the updated UX design to `docs/planning-artifacts/ux-design.md`.
+
+### Step 8 — Cascade Impact Check
+
+This is the cascade-aware behavior preserved from the legacy edit-ux-design workflow — the key semantic that distinguishes editing from creation.
+
+- Read `docs/planning-artifacts/architecture.md` section headers.
+- Compare UX design changes against architecture scope and downstream artifacts (epics-and-stories.md, test-plan.md).
+- Classify cascade impact:
+  - **NONE:** UX-only changes — architecture and stories unaffected.
+  - **MINOR:** Architecture needs a section update — recommend `/gaia-edit-arch`.
+  - **SIGNIFICANT:** New components or interaction patterns affecting architecture — recommend `/gaia-edit-arch` with adversarial review, then `/gaia-add-stories`.
+- Report cascade assessment to user with recommended next command(s).
+
+## Finalize
+
+!${CLAUDE_PLUGIN_ROOT}/skills/gaia-edit-ux/scripts/finalize.sh
+
+## Next Steps
+
+- If cascade NONE: no further action required.
+- If cascade MINOR: `/gaia-edit-arch` — Update architecture to match UX design changes.
+- If cascade SIGNIFICANT: `/gaia-edit-arch` — Update architecture, then `/gaia-add-stories` to create new stories for added scope.

@@ -1,0 +1,6 @@
+/gaia-sprint-plan
+sprint_id: sprint-fixture-1
+capacity_points: 40
+execution_mode: yolo
+driver: parity-baseline-token-budget
+fixture_id: sprint-planning-2026-04-17

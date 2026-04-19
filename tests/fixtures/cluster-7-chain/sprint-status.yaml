@@ -1,0 +1,7 @@
+# sprint-status.yaml — Cluster 7 chain integration test fixture
+# Initial state: story E99-S1 seeded in backlog.
+sprint_id: "sprint-test"
+stories:
+  - key: "E99-S1"
+    status: "backlog"
+    title: "Fixture story for chain test"

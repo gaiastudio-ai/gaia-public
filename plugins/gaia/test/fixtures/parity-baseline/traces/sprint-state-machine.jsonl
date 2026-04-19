@@ -1,0 +1,7 @@
+{"from":"backlog","to":"validating","skill":"sprint-state.sh","story_key":"SSM-E2E-01","timestamp":"2026-04-17T00:00:00Z"}
+{"from":"validating","to":"ready-for-dev","skill":"sprint-state.sh","story_key":"SSM-E2E-01","timestamp":"2026-04-17T00:00:00Z"}
+{"from":"ready-for-dev","to":"in-progress","skill":"sprint-state.sh","story_key":"SSM-E2E-01","timestamp":"2026-04-17T00:00:00Z"}
+{"from":"in-progress","to":"blocked","skill":"sprint-state.sh","story_key":"SSM-E2E-01","timestamp":"2026-04-17T00:00:00Z"}
+{"from":"blocked","to":"in-progress","skill":"sprint-state.sh","story_key":"SSM-E2E-01","timestamp":"2026-04-17T00:00:00Z"}
+{"from":"in-progress","to":"review","skill":"sprint-state.sh","story_key":"SSM-E2E-01","timestamp":"2026-04-17T00:00:00Z"}
+{"from":"review","to":"done","skill":"sprint-state.sh","story_key":"SSM-E2E-01","timestamp":"2026-04-17T00:00:00Z"}

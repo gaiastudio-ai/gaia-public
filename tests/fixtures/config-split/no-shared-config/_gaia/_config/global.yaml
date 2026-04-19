@@ -1,0 +1,10 @@
+# Fixture D — no-shared-config (backward-compat fallback)
+# Only global.yaml is present. No config/project-config.yaml on disk.
+# The resolver must fall back silently to global.yaml-only mode.
+project_root: /fixture/no-shared-config
+project_path: /fixture/no-shared-config
+memory_path: /fixture/no-shared-config/_memory
+checkpoint_path: /fixture/no-shared-config/_memory/checkpoints
+installed_path: /fixture/no-shared-config/_gaia
+framework_version: 1.127.2-rc.1
+date: 2026-04-17

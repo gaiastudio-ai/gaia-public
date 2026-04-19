@@ -234,17 +234,19 @@ _has_yq() { command -v yq >/dev/null 2>&1; }
 @test "scenario 6 — --dry-run prints planned split without writing any files" {
   _has_yq || skip "yq not installed — cannot run migration"
   cp "$FIX/mixed-global.yaml" "$GLOBAL_PATH"
-  # Capture file mtimes before.
-  pre_mtime=$(stat -f '%m' "$GLOBAL_PATH" 2>/dev/null || stat -c '%Y' "$GLOBAL_PATH")
+  # Capture content hash before so we are immune to filesystem mtime
+  # resolution quirks (some CI runners only report seconds, and rapid
+  # successive `cp` + script invocation can land in the same second).
+  pre_sha=$(shasum -a 256 "$GLOBAL_PATH" | awk '{print $1}')
   run "$SCRIPT" --global-yaml "$GLOBAL_PATH" --out-shared "$SHARED_PATH" --dry-run
   [ "$status" -eq 0 ]
   # No shared file written.
   [ ! -f "$SHARED_PATH" ]
   # No backup written.
   ! ls "$GLOBAL_PATH".bak.* >/dev/null 2>&1
-  # Global was not modified.
-  post_mtime=$(stat -f '%m' "$GLOBAL_PATH" 2>/dev/null || stat -c '%Y' "$GLOBAL_PATH")
-  [ "$pre_mtime" = "$post_mtime" ]
+  # Global was not modified — content hash is the authoritative check.
+  post_sha=$(shasum -a 256 "$GLOBAL_PATH" | awk '{print $1}')
+  [ "$pre_sha" = "$post_sha" ]
   # Output describes the planned split.
   [[ "$output" == *"shared"* ]] || [[ "$output" == *"local"* ]]
 }

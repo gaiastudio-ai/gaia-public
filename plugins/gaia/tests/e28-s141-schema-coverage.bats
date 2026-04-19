@@ -19,7 +19,16 @@ CONFIG_DIR="$(cd "$BATS_TEST_DIRNAME/../config" && pwd)"
 SCHEMA="$CONFIG_DIR/project-config.schema.yaml"
 MIGRATION="$CONFIG_DIR/MIGRATION-from-global-yaml.md"
 FIXTURES="$BATS_TEST_DIRNAME/fixtures/round-trip"
-LEGACY_GLOBAL="$(cd "$BATS_TEST_DIRNAME/../../../../_gaia/_config" && pwd)/global.yaml"
+# LEGACY_GLOBAL lives in the developer's project-root workspace (outside the
+# gaia-public checkout). In CI the plugin repo is checked out standalone so
+# the _gaia/_config/global.yaml mirror is not present — resolve lazily and
+# skip the disposition test when unavailable.
+_legacy_parent="$BATS_TEST_DIRNAME/../../../../_gaia/_config"
+if [ -d "$_legacy_parent" ]; then
+  LEGACY_GLOBAL="$(cd "$_legacy_parent" && pwd)/global.yaml"
+else
+  LEGACY_GLOBAL=""
+fi
 SCRIPTS_DIR="$(cd "$BATS_TEST_DIRNAME/../scripts" && pwd)"
 
 # The canonical precedence sentence — must appear identically in both artifacts (AC4).
@@ -31,7 +40,13 @@ PRECEDENCE_SENTENCE="When the same key appears in both \`global.yaml\` (local) a
 }
 
 @test "AC1: every top-level field in legacy global.yaml appears in MIGRATION disposition table" {
-  [ -f "$LEGACY_GLOBAL" ]
+  # CI skip: the legacy global.yaml lives in the developer workspace outside
+  # the plugin repo. The plugin-ci.yml job checks out gaia-public standalone
+  # so the _gaia/_config mirror is absent — skip the disposition cross-check
+  # when the fixture cannot be located.
+  if [ -z "$LEGACY_GLOBAL" ] || [ ! -f "$LEGACY_GLOBAL" ]; then
+    skip "legacy _gaia/_config/global.yaml not present in this checkout"
+  fi
   [ -f "$MIGRATION" ]
 
   # Extract top-level YAML keys from legacy global.yaml

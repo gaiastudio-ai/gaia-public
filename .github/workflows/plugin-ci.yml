@@ -1,10 +1,21 @@
 name: plugin-ci
 
+# E28-S184 — bats-tests dormancy root-cause fix. Prior config triggered on
+# PRs to `main` only, so the `bats-tests` job never ran on the sprint-24
+# staging -> main sequence and the coverage wrapper's silent abort stayed
+# hidden. Path filter `plugins/gaia/**` keeps noise low by scoping to the
+# product source surface the wrapper actually guards.
 on:
   pull_request:
-    branches: [main]
+    branches: [main, staging]
+    paths:
+      - 'plugins/gaia/**'
+      - '.github/workflows/plugin-ci.yml'
   push:
-    branches: [main]
+    branches: [main, staging]
+    paths:
+      - 'plugins/gaia/**'
+      - '.github/workflows/plugin-ci.yml'
 
 jobs:
   frontmatter-lint:

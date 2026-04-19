@@ -37,7 +37,7 @@ Per **ADR-025 Model B**, the script is the single source of truth for the framew
 | `package.json` | npm manifest — `"version": "…"` |
 | `_gaia/_config/global.yaml` | framework source of truth — `framework_version: "…"` |
 
-The stale "6 files" narrative from earlier drafts no longer applies. `gaia-install.sh`, `CLAUDE.md`, and `README.md` no longer carry hardcoded versions — the installer reads from `package.json` at runtime, and the markdown files reference the version indirectly.
+Earlier drafts described a broader touch-set; that narrative no longer applies. `gaia-install.sh`, `CLAUDE.md`, and `README.md` no longer carry hardcoded versions — the installer reads from `package.json` at runtime, and the markdown files reference the version indirectly.
 
 When `--modules` is passed, the script also touches per-module `_gaia/{mod}/config.yaml` entries and the matching rows in `_gaia/_config/manifest.yaml` — these are **module**-scoped writes, separate from the 2 global files above.
 

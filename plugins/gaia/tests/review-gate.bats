@@ -12,7 +12,10 @@ setup() {
   common_setup
   SCRIPT="$SCRIPTS_DIR/review-gate.sh"
   export PROJECT_PATH="$TEST_TMP"
-  ART="$TEST_TMP/docs/implementation-artifacts/stories"
+  # Flat implementation-artifacts layout (per 2de74a4 — review-gate.sh
+  # locates stories via {IMPLEMENTATION_ARTIFACTS}/<key>-*.md, no stories/
+  # subdirectory).
+  ART="$TEST_TMP/docs/implementation-artifacts"
   mkdir -p "$ART"
 }
 teardown() { common_teardown; }
@@ -21,6 +24,7 @@ seed_story() {
   local key="$1" verdict="${2:-UNVERIFIED}"
   cat > "$ART/${key}-fake.md" <<EOF
 ---
+template: 'story'
 key: "$key"
 ---
 

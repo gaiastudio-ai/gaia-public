@@ -2,7 +2,7 @@
 name: gaia-fill-test-gaps
 description: Read gap report, triage by severity and story, propose remediation actions. Use when "fill test gaps" or /gaia-fill-test-gaps.
 argument-hint: "[--severity critical|high|medium|all]"
-tools: Read, Grep, Glob, Bash, Write, Edit
+allowed-tools: [Read, Grep, Glob, Bash, Write, Edit]
 ---
 
 ## Setup

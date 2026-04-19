@@ -10,7 +10,7 @@ name: gaia-dev-story
 description: Implement a user story end-to-end -- validate, dev, test, PR. Use when "dev this story" or /gaia-dev-story.
 argument-hint: [story-key]
 context: fork
-tools: Read, Write, Edit, Grep, Glob, Bash
+allowed-tools: Read Write Edit Grep Glob Bash
 hooks:
   PostToolUse:
     - matcher: "Edit|Write"

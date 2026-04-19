@@ -2,7 +2,7 @@
 name: gaia-threat-model
 description: Create security threat model using STRIDE/DREAD methodology through collaborative analysis with the security subagent (Zara) — Cluster 6 architecture skill. Use when the user wants to produce a validated threat model document covering asset identification, STRIDE threat analysis, DREAD risk scoring, mitigation strategies, and security requirements.
 context: fork
-tools: Read, Write, Edit, Grep, Glob, Bash, Agent
+allowed-tools: [Read, Write, Edit, Grep, Glob, Bash, Agent]
 ---
 
 ## Setup

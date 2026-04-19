@@ -7,5 +7,5 @@ name: gaia-review-perf
 description: Review code for performance issues. Use when "review performance" or /gaia-review-perf.
 argument-hint: "[story-key]"
 context: fork
-tools: Read, Grep, Glob, Bash
+allowed-tools: Read Grep Glob Bash
 ```

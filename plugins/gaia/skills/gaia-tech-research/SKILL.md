@@ -3,7 +3,7 @@ name: gaia-tech-research
 description: Research a technology or tech stack with objective trade-off analysis — Cluster 4 analysis skill. Use when the user wants to evaluate technologies, compare alternatives, and get adoption recommendations before architecture decisions.
 argument-hint: "[technology or tech stack to research]"
 context: fork
-tools: Read, Write, Glob, Grep, Bash, WebSearch, WebFetch
+allowed-tools: [Read, Write, Glob, Grep, Bash, WebSearch, WebFetch]
 ---
 
 ## Setup

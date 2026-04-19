@@ -126,11 +126,11 @@ if [ -f "$SKILL_FILE" ]; then
   # Check frontmatter exists and has required fields
   has_name=$(head -20 "$SKILL_FILE" | grep -c "^name:")
   has_desc=$(head -20 "$SKILL_FILE" | grep -c "^description:")
-  has_tools=$(head -20 "$SKILL_FILE" | grep -c "^tools:")
+  has_tools=$(head -20 "$SKILL_FILE" | grep -c "^allowed-tools:")
   if [ "$has_name" -ge 1 ] && [ "$has_desc" -ge 1 ] && [ "$has_tools" -ge 1 ]; then
     ok "Scenario 6: SKILL.md frontmatter has required fields"
   else
-    fail "Scenario 6: SKILL.md frontmatter" "missing name/description/tools"
+    fail "Scenario 6: SKILL.md frontmatter" "missing name/description/allowed-tools"
   fi
 else
   fail "Scenario 6: SKILL.md" "file not found at $SKILL_FILE"

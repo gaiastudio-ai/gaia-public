@@ -2,7 +2,7 @@
 name: gaia-add-feature
 description: Triage and route a fix, enhancement, or feature through only the affected artifacts. Classifies as patch/enhancement/feature and cascades accordingly -- updating PRD, architecture, epics, test plan, threat model, and traceability as needed (FR-323).
 context: fork
-tools: Read, Write, Edit, Grep, Glob, Bash, Agent
+allowed-tools: [Read, Write, Edit, Grep, Glob, Bash, Agent]
 ---
 
 ## Setup

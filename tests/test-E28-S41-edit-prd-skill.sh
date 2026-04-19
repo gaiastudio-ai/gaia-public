@@ -4,7 +4,7 @@
 # Asserts that gaia-edit-prd skill directory is correctly scaffolded per
 # the Cluster 5 planning pattern (P5-S2):
 #   AC1: SKILL.md exists with Cluster 5 frontmatter (name, description,
-#        tools, subagent routing)
+#        allowed-tools, subagent routing)
 #   AC2: Cascade-aware edit logic preserved from legacy edit-prd workflow
 #   AC3: scripts/setup.sh and scripts/finalize.sh conform to Cluster 4 shared pattern
 #   AC4: Subagent routing to pm (Derek) — no inline persona content
@@ -50,7 +50,7 @@ assert "SKILL.md exists" "[ -f '$EP_SKILL' ]"
 assert "frontmatter has name field" "grep -q '^name:' '$EP_SKILL' 2>/dev/null"
 assert "frontmatter name is gaia-edit-prd" "grep -q '^name: gaia-edit-prd' '$EP_SKILL' 2>/dev/null"
 assert "frontmatter has description field" "grep -q '^description:' '$EP_SKILL' 2>/dev/null"
-assert "frontmatter has tools field" "grep -q '^tools:' '$EP_SKILL' 2>/dev/null"
+assert "frontmatter has allowed-tools field" "grep -q '^allowed-tools:' '$EP_SKILL' 2>/dev/null"
 assert "frontmatter has context: fork" "grep -q '^context: fork' '$EP_SKILL' 2>/dev/null"
 
 echo ""

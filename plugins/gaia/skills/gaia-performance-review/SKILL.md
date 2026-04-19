@@ -2,7 +2,7 @@
 name: gaia-performance-review
 description: Run anytime performance bottleneck analysis on a story — N+1 queries, memory/bundle impact, caching, and algorithmic complexity. Emits a machine-readable PASSED/FAILED verdict and updates the Review Gate. Use when "performance review" or /gaia-performance-review.
 argument-hint: "[story-key]"
-tools: Read, Write, Edit, Bash, Grep
+allowed-tools: [Read, Write, Edit, Bash, Grep]
 ---
 
 > **Scope note — two perf skills exist.** This skill (`gaia-performance-review`) is the **anytime bottleneck analysis** covering N+1 queries, memory/bundle impact, caching strategy, and algorithmic complexity on a story-scoped basis. For the **PR-gate performance check** invoked by the Review Gate orchestrator, see `gaia-review-perf` (Cluster 9 / E28-S71). The two skills coexist deliberately — `gaia-review-perf` runs in fork context with a read-only tool allowlist and dispatches to the Juno subagent; `gaia-performance-review` (this skill) runs in main context and produces the full bottleneck report.

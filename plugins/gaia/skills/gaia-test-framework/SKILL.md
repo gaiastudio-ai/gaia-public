@@ -2,7 +2,7 @@
 name: gaia-test-framework
 description: Initialize test framework with appropriate tooling based on detected project stack. Use when "setup test framework" or /gaia-test-framework.
 context: fork
-tools: Read, Write, Edit, Grep, Glob, Bash
+allowed-tools: [Read, Write, Edit, Grep, Glob, Bash]
 ---
 
 ## Setup

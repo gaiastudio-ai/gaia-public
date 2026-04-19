@@ -4,7 +4,7 @@ description: OSS stub for the premium figma-integration skill. The full Figma MC
 version: '1.0'
 license: enterprise
 feature_flag: figma-premium
-tools: Read
+allowed-tools: [Read]
 ---
 
 # Figma Integration — OSS Stub

@@ -1,7 +1,7 @@
 ---
 name: gaia-docker-workflow
 description: Multi-stage Dockerfile patterns, Docker Compose for local development, and image security scanning with vulnerability triage. Shared dev skill JIT-loaded by dev-story and stack dev agents.
-tools: Read, Grep
+allowed-tools: [Read, Grep]
 ---
 
 ## About

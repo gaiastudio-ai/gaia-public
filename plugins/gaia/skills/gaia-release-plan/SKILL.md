@@ -8,7 +8,7 @@ triggers:
   - release plan
   - release strategy
   - staged rollout
-tools: Read, Grep, Glob, Bash, Write, Edit
+allowed-tools: [Read, Grep, Glob, Bash, Write, Edit]
 ---
 
 ## Setup

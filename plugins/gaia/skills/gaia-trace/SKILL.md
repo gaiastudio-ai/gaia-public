@@ -2,7 +2,7 @@
 name: gaia-trace
 description: Generate requirements-to-tests traceability matrix with deterministic gate verification. Use when "create traceability matrix" or /gaia-trace.
 context: fork
-tools: Read, Write, Edit, Grep, Glob, Bash
+allowed-tools: [Read, Write, Edit, Grep, Glob, Bash]
 ---
 
 ## Setup

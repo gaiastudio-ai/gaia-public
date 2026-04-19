@@ -1,7 +1,7 @@
 ---
 name: gaia-security-basics
 description: OWASP Top 10 prevention patterns, input validation at system boundaries, environment-based secrets management, and CORS/CSRF configuration. Shared dev skill JIT-loaded by dev-story, security-review, and stack dev agents.
-tools: Read, Grep
+allowed-tools: [Read, Grep]
 ---
 
 ## About

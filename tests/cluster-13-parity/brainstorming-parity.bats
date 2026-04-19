@@ -5,7 +5,7 @@
 # SKILL.md file at plugins/gaia/skills/gaia-brainstorming/SKILL.md.
 #
 #   AC1: SKILL.md frontmatter conforms to canonical skill pattern
-#        (name, description, argument-hint, context: fork, tools)
+#        (name, description, argument-hint, context: fork, allowed-tools)
 #   AC2: Session-management flow preserved — 4 phase headings in order,
 #        full 8-row technique table, 15–30 ideas target, Impact/Feasibility
 #        ranking matrix
@@ -54,16 +54,16 @@ setup() {
   head -20 "$SKILL_DIR/SKILL.md" | grep -q '^context: fork'
 }
 
-@test "E28-S100: SKILL.md frontmatter tools contains Read" {
-  head -20 "$SKILL_DIR/SKILL.md" | grep -q 'tools:.*Read'
+@test "E28-S100: SKILL.md frontmatter allowed-tools contains Read" {
+  head -20 "$SKILL_DIR/SKILL.md" | grep -q 'allowed-tools:.*Read'
 }
 
-@test "E28-S100: SKILL.md frontmatter tools contains Write" {
-  head -20 "$SKILL_DIR/SKILL.md" | grep -q 'tools:.*Write'
+@test "E28-S100: SKILL.md frontmatter allowed-tools contains Write" {
+  head -20 "$SKILL_DIR/SKILL.md" | grep -q 'allowed-tools:.*Write'
 }
 
-@test "E28-S100: SKILL.md frontmatter tools contains Glob" {
-  head -20 "$SKILL_DIR/SKILL.md" | grep -q 'tools:.*Glob'
+@test "E28-S100: SKILL.md frontmatter allowed-tools contains Glob" {
+  head -20 "$SKILL_DIR/SKILL.md" | grep -q 'allowed-tools:.*Glob'
 }
 
 # ---------- AC2: Phase headings in order ----------

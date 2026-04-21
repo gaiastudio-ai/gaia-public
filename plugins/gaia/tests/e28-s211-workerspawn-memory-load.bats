@@ -161,3 +161,42 @@ gaia-test-design gaia-threat-model gaia-validate-prd"
   count=$(grep -c -E '^\s*-\s+name:' "$MANIFEST")
   [ "$count" -eq 20 ]
 }
+
+# NFR-052 coverage: parse_manifest is a public function in validate-workerspawn-memory.sh
+# and must be exercised directly. Source the script with MANIFEST pointed at a
+# minimal fixture and assert the tab-separated output is well-formed.
+@test "NFR-052: parse_manifest emits tab-separated skill/agent/tier triples from manifest" {
+  # Build a minimal manifest fixture with 2 skills, one multi-persona.
+  tmp_dir="$(mktemp -d)"
+  cat > "${tmp_dir}/manifest.yaml" <<'YAML'
+skills:
+  - name: fake-skill-a
+    personas:
+      - agent_id: validator
+        tier: decision-log
+  - name: fake-skill-b
+    personas:
+      - agent_id: architect
+        tier: all
+      - agent_id: pm
+        tier: ground-truth
+YAML
+
+  # Extract parse_manifest function definition from the validator and call it
+  # against our fixture. sed range '/^parse_manifest/,/^}/' isolates the
+  # function body without sourcing the script's main execution path.
+  func_def="$(sed -n '/^parse_manifest()/,/^}/p' "$VALIDATOR")"
+
+  run bash -c "
+    MANIFEST='${tmp_dir}/manifest.yaml'
+    ${func_def}
+    parse_manifest
+  "
+  [ "$status" -eq 0 ]
+  # Must include all three expected triples.
+  echo "$output" | grep -qF $'fake-skill-a\tvalidator\tdecision-log'
+  echo "$output" | grep -qF $'fake-skill-b\tarchitect\tall'
+  echo "$output" | grep -qF $'fake-skill-b\tpm\tground-truth'
+
+  rm -rf "$tmp_dir"
+}

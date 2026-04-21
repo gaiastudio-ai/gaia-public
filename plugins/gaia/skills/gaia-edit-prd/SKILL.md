@@ -9,6 +9,10 @@ allowed-tools: [Read, Write, Edit, Grep, Glob, Bash, Agent]
 
 !${CLAUDE_PLUGIN_ROOT}/skills/gaia-edit-prd/scripts/setup.sh
 
+## Memory
+
+!${CLAUDE_PLUGIN_ROOT}/scripts/memory-loader.sh pm all
+
 ## Mission
 
 This skill orchestrates edits to an existing Product Requirements Document (PRD). PRD authoring and reasoning is delegated to the **pm** subagent (Derek), who evaluates change impact, validates consistency, and produces the updated artifact. The skill loads the current PRD, coordinates the multi-step edit flow, detects cascade impacts on downstream artifacts, and writes the output to `docs/planning-artifacts/prd.md`.

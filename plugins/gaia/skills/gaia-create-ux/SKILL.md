@@ -9,6 +9,10 @@ allowed-tools: [Read, Write, Edit, Grep, Glob, Bash, Agent]
 
 !${CLAUDE_PLUGIN_ROOT}/skills/gaia-create-ux/scripts/setup.sh
 
+## Memory
+
+!${CLAUDE_PLUGIN_ROOT}/scripts/memory-loader.sh ux-designer decision-log
+
 ## Mission
 
 You are orchestrating the creation of a UX Design document. The UX design authoring is delegated to the **ux-designer** subagent (Christy), who conducts user research, designs information architecture, creates wireframes, and produces the final artifact. You load the PRD, validate inputs, coordinate the multi-step flow, and write the output to `docs/planning-artifacts/ux-design.md` using the carried `ux-design-assessment-template.md` for brownfield assessments.

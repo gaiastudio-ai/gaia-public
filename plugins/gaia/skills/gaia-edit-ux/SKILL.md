@@ -9,6 +9,10 @@ allowed-tools: [Read, Write, Edit, Grep, Glob, Bash, Agent]
 
 !${CLAUDE_PLUGIN_ROOT}/skills/gaia-edit-ux/scripts/setup.sh
 
+## Memory
+
+!${CLAUDE_PLUGIN_ROOT}/scripts/memory-loader.sh ux-designer decision-log
+
 ## Mission
 
 This skill orchestrates edits to an existing UX Design document. UX design authoring and reasoning is delegated to the **ux-designer** subagent (Christy), who evaluates change impact, validates consistency, and produces the updated artifact. The skill loads the current UX design, coordinates the multi-step edit flow, detects cascade impacts on downstream artifacts, and writes the output to `docs/planning-artifacts/ux-design.md`.

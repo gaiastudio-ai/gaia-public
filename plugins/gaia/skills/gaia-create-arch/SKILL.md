@@ -9,6 +9,10 @@ allowed-tools: [Read, Write, Edit, Grep, Glob, Bash, Agent]
 
 !${CLAUDE_PLUGIN_ROOT}/skills/gaia-create-arch/scripts/setup.sh
 
+## Memory
+
+!${CLAUDE_PLUGIN_ROOT}/scripts/memory-loader.sh architect all
+
 ## Mission
 
 You are orchestrating the creation of a System Architecture document. The architecture authoring is delegated to the **architect** subagent (Theo), who conducts technology selection, designs system components, and produces the final artifact. You load the PRD, validate inputs, coordinate the multi-step flow, and write the output to `docs/planning-artifacts/architecture.md` using the carried `architecture-template.md` template structure.

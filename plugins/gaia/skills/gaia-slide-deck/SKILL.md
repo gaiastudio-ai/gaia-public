@@ -6,6 +6,10 @@ context: fork
 allowed-tools: [Read, Write, Glob, Agent]
 ---
 
+## Memory
+
+!${CLAUDE_PLUGIN_ROOT}/scripts/memory-loader.sh presentation-designer decision-log
+
 # gaia-slide-deck
 
 Presentation design pipeline: **Audience and Purpose → Content

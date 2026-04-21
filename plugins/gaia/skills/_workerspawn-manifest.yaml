@@ -1,0 +1,121 @@
+# WorkerSpawn skill manifest (E28-S211)
+#
+# Enumerates the 20 Bucket 3 WorkerSpawn skills identified by the E28-S206
+# subagent-invocation audit. The `validate-workerspawn-memory.sh` script
+# consumes this manifest to assert every skill's SKILL.md body embeds a
+# canonical `memory-loader.sh {agent-id} {tier}` invocation (ADR-046 Path 2,
+# FR-331).
+#
+# Per-skill fields:
+#   name:       skill directory name under plugins/gaia/skills/
+#   personas:   one entry per persona the skill dispatches (multi-dispatch
+#               skills carry multiple personas). Each entry binds an agent_id
+#               (the resolvable GAIA persona in _memory/config.yaml) to the
+#               canonical tier argument for memory-loader.sh. Tier is `all`
+#               for Tier 1 personas, `decision-log` for Tier 2 and Tier 3.
+#
+# Agent-id ↔ tier mapping comes from _memory/config.yaml:
+#   Tier 1 (all):           validator, architect, pm, sm
+#   Tier 2 (decision-log):  orchestrator, security, devops, test-architect
+#   Tier 3 (decision-log):  storyteller, tech-writer, ux-designer,
+#                           problem-solver, brainstorming-coach,
+#                           innovation-strategist, design-thinking-coach,
+#                           presentation-designer, analyst, data-engineer,
+#                           performance, qa, *-dev agents
+
+version: 1
+skills:
+  - name: gaia-add-feature
+    personas:
+      - agent_id: pm
+        tier: decision-log
+    notes: "Orchestrator — dispatches to downstream skills. Tier 1 pm persona used for triage helper, but tier forced to decision-log per story Task 3.1 (orchestrator-level triage doesn't need full ground-truth)."
+  - name: gaia-add-stories
+    personas:
+      - agent_id: pm
+        tier: all
+      - agent_id: architect
+        tier: all
+  - name: gaia-brownfield
+    personas:
+      - agent_id: architect
+        tier: all
+    notes: "Multi-persona skill (architect, pm, test-architect, devops). Primary architect load covers the deep-architecture generation phase (9a) which is the longest-running delegation."
+  - name: gaia-create-arch
+    personas:
+      - agent_id: architect
+        tier: all
+  - name: gaia-create-epics
+    personas:
+      - agent_id: architect
+        tier: all
+      - agent_id: pm
+        tier: all
+  - name: gaia-create-prd
+    personas:
+      - agent_id: pm
+        tier: all
+  - name: gaia-create-ux
+    personas:
+      - agent_id: ux-designer
+        tier: decision-log
+  - name: gaia-creative-sprint
+    personas:
+      - agent_id: design-thinking-coach
+        tier: decision-log
+      - agent_id: problem-solver
+        tier: decision-log
+      - agent_id: innovation-strategist
+        tier: decision-log
+  - name: gaia-edit-arch
+    personas:
+      - agent_id: architect
+        tier: all
+  - name: gaia-edit-prd
+    personas:
+      - agent_id: pm
+        tier: all
+  - name: gaia-edit-ux
+    personas:
+      - agent_id: ux-designer
+        tier: decision-log
+  - name: gaia-infra-design
+    personas:
+      - agent_id: devops
+        tier: decision-log
+  - name: gaia-pitch-deck
+    personas:
+      - agent_id: presentation-designer
+        tier: decision-log
+  - name: gaia-problem-solving
+    personas:
+      - agent_id: problem-solver
+        tier: decision-log
+  - name: gaia-readiness-check
+    personas:
+      - agent_id: architect
+        tier: all
+      - agent_id: devops
+        tier: decision-log
+    notes: "Skill delegates to architect (contradiction checks, TEA readiness) and devops (operational readiness). Story Task 3.15 shorthand 'pm x 2' was superseded by the actual skill code which uses architect + devops."
+  - name: gaia-slide-deck
+    personas:
+      - agent_id: presentation-designer
+        tier: decision-log
+  - name: gaia-storytelling
+    personas:
+      - agent_id: storyteller
+        tier: decision-log
+  - name: gaia-test-design
+    personas:
+      - agent_id: test-architect
+        tier: all
+    notes: "Already compliant pre-E28-S211 — reference pattern source."
+  - name: gaia-threat-model
+    personas:
+      - agent_id: security
+        tier: decision-log
+  - name: gaia-validate-prd
+    personas:
+      - agent_id: validator
+        tier: all

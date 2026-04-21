@@ -11,6 +11,10 @@ model: inherit
 
 !${CLAUDE_PLUGIN_ROOT}/skills/gaia-brownfield/scripts/setup.sh
 
+## Memory
+
+!${CLAUDE_PLUGIN_ROOT}/scripts/memory-loader.sh architect all
+
 ## Mission
 
 You are applying the GAIA framework to an existing codebase. This skill runs **deep project discovery, parallel documentation subagents, multi-scan gap analysis, NFR assessment, gap consolidation, PRD/architecture generation, and optional ground-truth bootstrap**, then writes the canonical brownfield onboarding artifact set.

@@ -9,6 +9,10 @@ allowed-tools: [Read, Glob, Bash, Agent]
 
 !${CLAUDE_PLUGIN_ROOT}/skills/gaia-validate-prd/scripts/setup.sh
 
+## Memory
+
+!${CLAUDE_PLUGIN_ROOT}/scripts/memory-loader.sh validator all
+
 ## Deprecation Notice (ADR-045 / FR-330)
 
 > **This skill is deprecated.** `validate-prd` is the legacy entry point for PRD validation. All validation logic now lives in the `gaia-val-validate` skill. Callers should prefer `/gaia-val-validate` directly going forward.

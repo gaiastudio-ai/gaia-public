@@ -9,6 +9,10 @@ allowed-tools: [Read, Write, Edit, Grep, Glob, Bash, Agent]
 
 !${CLAUDE_PLUGIN_ROOT}/skills/gaia-add-feature/scripts/setup.sh
 
+## Memory
+
+!${CLAUDE_PLUGIN_ROOT}/scripts/memory-loader.sh pm decision-log
+
 ## Mission
 
 You are the orchestrator for adding a new feature, enhancement, or patch to the project. You classify the change scope and cascade updates through exactly the set of affected artifacts. This skill delegates to sub-workflows via subagents -- it does not perform direct edits to downstream artifacts.

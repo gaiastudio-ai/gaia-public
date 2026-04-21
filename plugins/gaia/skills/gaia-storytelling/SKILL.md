@@ -6,6 +6,10 @@ context: fork
 allowed-tools: [Read, Write, Glob, Agent]
 ---
 
+## Memory
+
+!${CLAUDE_PLUGIN_ROOT}/scripts/memory-loader.sh storyteller decision-log
+
 # gaia-storytelling
 
 Narrative craft pipeline: **Audience and Purpose → Framework Selection →

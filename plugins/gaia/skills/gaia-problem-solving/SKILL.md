@@ -6,6 +6,10 @@ context: fork
 allowed-tools: [Read, Write, Grep, Glob, Bash, Agent]
 ---
 
+## Memory
+
+!${CLAUDE_PLUGIN_ROOT}/scripts/memory-loader.sh problem-solver decision-log
+
 # gaia-problem-solving
 
 Context-aware problem-solving pipeline with an explicit **plan → approve →

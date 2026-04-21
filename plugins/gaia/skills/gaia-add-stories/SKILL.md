@@ -9,6 +9,11 @@ allowed-tools: [Read, Write, Edit, Grep, Glob, Bash, Agent]
 
 !${CLAUDE_PLUGIN_ROOT}/skills/gaia-add-stories/scripts/setup.sh
 
+## Memory
+
+!${CLAUDE_PLUGIN_ROOT}/scripts/memory-loader.sh pm all
+!${CLAUDE_PLUGIN_ROOT}/scripts/memory-loader.sh architect all
+
 ## Mission
 
 You are adding new stories to the project's epics-and-stories document. Stories may be added to existing epics or new epics may be created. Story protection is strictly enforced -- stories with status in-progress, review, ready-for-dev, or done are read-only and must never be modified.

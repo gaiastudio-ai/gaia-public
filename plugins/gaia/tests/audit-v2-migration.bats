@@ -300,6 +300,71 @@ SETUP_EOF
 }
 
 # AC7 — when GITHUB_STEP_SUMMARY is set, harness appends a markdown block.
+# ---------- E28-S213 — config/project-config.yaml seeding in enriched fixture ----------
+
+# AC1 / Subtask 2.1 — enriched mode seeds config/project-config.yaml with all 10 required fields.
+@test "E28-S213 AC1: --fixture-mode enriched creates config/project-config.yaml with all 10 required fields" {
+  run "$HARNESS" \
+    --plugin-cache "$PLUGIN_CACHE" \
+    --project-root "$PROJECT_ROOT" \
+    --fixture-mode enriched \
+    --out "$TEST_TMP/audit.csv"
+  [ "$status" -eq 0 ]
+  # The config file must exist and be non-empty.
+  [ -s "$PROJECT_ROOT/config/project-config.yaml" ]
+  # All 10 required fields must be present as keys in the file.
+  local cfg="$PROJECT_ROOT/config/project-config.yaml"
+  grep -q '^project_root:' "$cfg"
+  grep -q '^project_path:' "$cfg"
+  grep -q '^memory_path:' "$cfg"
+  grep -q '^checkpoint_path:' "$cfg"
+  grep -q '^installed_path:' "$cfg"
+  grep -q '^framework_version:' "$cfg"
+  grep -q '^date:' "$cfg"
+  grep -q '^test_artifacts:' "$cfg"
+  grep -q '^planning_artifacts:' "$cfg"
+  grep -q '^implementation_artifacts:' "$cfg"
+}
+
+# AC3 / Subtask 2.2 — minimal mode must NOT create config/project-config.yaml.
+@test "E28-S213 AC3: --fixture-mode minimal does NOT create config/project-config.yaml" {
+  mk_skill_requiring_test_plan fake-skill
+  run "$HARNESS" \
+    --plugin-cache "$PLUGIN_CACHE" \
+    --project-root "$PROJECT_ROOT" \
+    --fixture-mode minimal \
+    --out "$TEST_TMP/audit.csv"
+  # Exit 1 expected (fake-skill fails in minimal mode — no prereqs).
+  [ "$status" -eq 1 ]
+  # config/project-config.yaml must NOT be created in minimal mode.
+  [ ! -f "$PROJECT_ROOT/config/project-config.yaml" ]
+}
+
+# AC4 / Subtask 2.3 — calling prepare_enriched_fixture twice is idempotent (file not overwritten).
+@test "E28-S213 AC4: enriched fixture idempotent — project-config.yaml not overwritten on second run" {
+  run "$HARNESS" \
+    --plugin-cache "$PLUGIN_CACHE" \
+    --project-root "$PROJECT_ROOT" \
+    --fixture-mode enriched \
+    --out "$TEST_TMP/audit-first.csv"
+  [ "$status" -eq 0 ]
+  [ -s "$PROJECT_ROOT/config/project-config.yaml" ]
+  # Capture checksum after first run.
+  local cksum1
+  cksum1=$(shasum -a 256 "$PROJECT_ROOT/config/project-config.yaml" | awk '{print $1}')
+  # Run the harness again (simulates a re-run on the same PROJECT_ROOT).
+  run "$HARNESS" \
+    --plugin-cache "$PLUGIN_CACHE" \
+    --project-root "$PROJECT_ROOT" \
+    --fixture-mode enriched \
+    --out "$TEST_TMP/audit-second.csv"
+  [ "$status" -eq 0 ]
+  local cksum2
+  cksum2=$(shasum -a 256 "$PROJECT_ROOT/config/project-config.yaml" | awk '{print $1}')
+  # Checksums must be equal — file was not overwritten.
+  [ "$cksum1" = "$cksum2" ]
+}
+
 @test "E28-S195 AC7: GITHUB_STEP_SUMMARY receives a markdown summary block" {
   local summary_file="$TEST_TMP/step-summary.md"
   : > "$summary_file"

@@ -24,7 +24,10 @@
 #   enriched            — opt-in. Pre-creates prereq artifacts
 #                         (prd.md, epics-and-stories.md, test-plan.md,
 #                         traceability-matrix.md, ci-setup.md) under
-#                         $PROJECT_ROOT/docs/{planning,test}-artifacts/
+#                         $PROJECT_ROOT/docs/{planning,test}-artifacts/,
+#                         seeds config/project-config.yaml (E28-S213) so
+#                         resolve-config.sh satisfies its priority ladder
+#                         and skills that call it exit 0 rather than B1,
 #                         and EXPORTS uppercase env vars
 #                         ($TEST_ARTIFACTS, $PLANNING_ARTIFACTS,
 #                         $IMPLEMENTATION_ARTIFACTS) before each skill run,
@@ -193,13 +196,14 @@ if [ "$FIXTURE_MODE" = "enriched" ]; then
   )
 fi
 
-# ---------- Enriched fixture pre-creation (E28-S200 / AC6) ----------
+# ---------- Enriched fixture pre-creation (E28-S200 / AC6; E28-S213) ----------
 #
-# Creates the 5 prereq artifacts multiple skills expect (validate-gate.sh
+# Creates the prereq artifacts multiple skills expect (validate-gate.sh
 # gate list: prd_exists, epics_and_stories_exists, test_plan_exists,
-# traceability_exists, ci_setup_exists). Content is a minimal non-empty
-# placeholder — the audit harness only cares that files exist and are
-# non-empty, not that they are semantically valid.
+# traceability_exists, ci_setup_exists) and seeds config/project-config.yaml
+# so resolve-config.sh's priority ladder resolves correctly (E28-S213).
+# Content is a minimal non-empty placeholder — the audit harness only cares
+# that files exist and are non-empty, not that they are semantically valid.
 #
 # Runs exactly once BEFORE the main loop so every skill's setup.sh sees
 # the same enriched state. Minimal mode does NOT call this — that's what
@@ -226,6 +230,33 @@ prepare_enriched_fixture() {
       printf '# placeholder — audit-v2-migration.sh --fixture-mode enriched\n' > "$f"
     fi
   done
+
+  # E28-S213 — Seed config/project-config.yaml so resolve-config.sh's
+  # priority ladder ($CLAUDE_PROJECT_ROOT/config/project-config.yaml) resolves
+  # and skills that call resolve-config.sh as their first step exit 0 instead
+  # of being classified B1. The guard mirrors the placeholder loop above:
+  # write only when absent so re-running the harness is idempotent (AC4).
+  local config_dir="$PROJECT_ROOT/config"
+  local config_file="$config_dir/project-config.yaml"
+  mkdir -p "$config_dir"
+  if [ ! -s "$config_file" ]; then
+    # Resolve the absolute project_root at write time — same pattern used
+    # elsewhere in the harness for env exports.
+    local abs_root
+    abs_root="$(cd "$PROJECT_ROOT" && pwd)"
+    cat > "$config_file" <<YAML
+framework_version: "1.0.0-fixture"
+date: "2026-01-01"
+project_root: "$abs_root"
+project_path: "."
+memory_path: "$abs_root/_memory"
+checkpoint_path: "$abs_root/_memory/checkpoints"
+installed_path: "$abs_root/_gaia"
+planning_artifacts: "$abs_root/docs/planning-artifacts"
+implementation_artifacts: "$abs_root/docs/implementation-artifacts"
+test_artifacts: "$abs_root/docs/test-artifacts"
+YAML
+  fi
 }
 
 if [ "$FIXTURE_MODE" = "enriched" ]; then

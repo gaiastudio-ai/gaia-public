@@ -9,6 +9,11 @@ allowed-tools: [Read, Write, Edit, Grep, Glob, Bash, Agent]
 
 !${CLAUDE_PLUGIN_ROOT}/skills/gaia-readiness-check/scripts/setup.sh
 
+## Memory
+
+!${CLAUDE_PLUGIN_ROOT}/scripts/memory-loader.sh architect all
+!${CLAUDE_PLUGIN_ROOT}/scripts/memory-loader.sh devops decision-log
+
 ## Mission
 
 Validate that all upstream planning, architecture, testing, and CI artifacts are complete, consistent, and free of cross-artifact contradictions before implementation begins. This skill enforces two mandatory quality gates — `traceability-matrix.md` and `ci-setup.md` must exist — and produces a machine-readable readiness report with PASS/FAIL/CONDITIONAL PASS status.

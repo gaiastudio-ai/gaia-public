@@ -6,6 +6,10 @@ context: fork
 allowed-tools: [Read, Write, Glob, Agent]
 ---
 
+## Memory
+
+!${CLAUDE_PLUGIN_ROOT}/scripts/memory-loader.sh presentation-designer decision-log
+
 # gaia-pitch-deck
 
 Investor / partner pitch pipeline: **Pitch Context → Load Business

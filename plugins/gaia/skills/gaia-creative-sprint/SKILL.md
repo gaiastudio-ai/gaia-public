@@ -6,6 +6,12 @@ context: fork
 allowed-tools: [Read, Write, Edit, Grep, Glob, Bash, Agent]
 ---
 
+## Memory
+
+!${CLAUDE_PLUGIN_ROOT}/scripts/memory-loader.sh design-thinking-coach decision-log
+!${CLAUDE_PLUGIN_ROOT}/scripts/memory-loader.sh problem-solver decision-log
+!${CLAUDE_PLUGIN_ROOT}/scripts/memory-loader.sh innovation-strategist decision-log
+
 # gaia-creative-sprint
 
 Multi-agent creative pipeline that runs a three-phase sprint: **empathize →

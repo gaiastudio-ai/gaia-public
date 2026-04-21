@@ -9,6 +9,10 @@ allowed-tools: [Read, Write, Edit, Grep, Glob, Bash, Agent]
 
 !${CLAUDE_PLUGIN_ROOT}/skills/gaia-edit-arch/scripts/setup.sh
 
+## Memory
+
+!${CLAUDE_PLUGIN_ROOT}/scripts/memory-loader.sh architect all
+
 ## Mission
 
 This skill orchestrates edits to an existing System Architecture document. Architecture authoring and reasoning is delegated to the **architect** subagent (Theo), who evaluates change impact, validates consistency, records ADRs, and produces the updated artifact. The skill loads the current architecture, coordinates the multi-step edit flow, detects cascade impacts on downstream artifacts, and writes the output to `docs/planning-artifacts/architecture.md`.

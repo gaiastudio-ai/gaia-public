@@ -1,0 +1,7 @@
+mitigations:
+  - id: pair-programming
+    label: "Pair programming"
+    description: "Assign two engineers to reduce knowledge silos."
+  - id: quantum-entanglement-review
+    label: "Quantum entanglement review"
+    description: "An unexpected, never-before-cataloged mitigation strategy."

@@ -77,10 +77,44 @@ For stories **removed** from the sprint (moved back to backlog):
 PROJECT_PATH="${CLAUDE_PROJECT_ROOT}" "${CLAUDE_PLUGIN_ROOT}/scripts/sprint-state.sh" transition --story {story_key} --to backlog
 ```
 
-For stories **injected** into the sprint:
+For stories **injected** into the sprint that **already have a story file**:
 ```bash
 PROJECT_PATH="${CLAUDE_PROJECT_ROOT}" "${CLAUDE_PLUGIN_ROOT}/scripts/sprint-state.sh" transition --story {story_key} --to {target_status}
 ```
+
+For stories **injected** into the sprint that **need a new story file** (Skill-to-Skill Delegation, FR-FITP-2):
+
+Story creation is delegated to `/gaia-create-story` via subagent spawn. This replaces all inline story-creation logic -- delegation is authoritative.
+
+1. **Pre-spawn validation:** validate `origin_ref` using `spawn-guard.sh`:
+```bash
+"${CLAUDE_PLUGIN_ROOT}/scripts/spawn-guard.sh" validate-ref "${sprint_id}"
+```
+If validation fails, halt with guidance. Do not spawn the subagent.
+
+2. **Collision check:** verify no story file already exists at the canonical path:
+```bash
+"${CLAUDE_PLUGIN_ROOT}/scripts/spawn-guard.sh" check-collision "${CLAUDE_PROJECT_ROOT}/docs/implementation-artifacts" "${story_key}"
+```
+If collision detected, halt with guidance to delete or rename before retry. Do not spawn the subagent.
+
+3. **Spawn `/gaia-create-story`:** invoke as a subagent with origin context:
+```
+/gaia-create-story {story_key} with origin="correct-course" origin_ref="{sprint_id}"
+```
+The spawned `/gaia-create-story` populates the story frontmatter with `origin: "correct-course"` and `origin_ref: "{sprint_id}"` and produces the full elaboration (AC, tasks, test scenarios).
+
+4. **Post-spawn verification:** after the subagent completes, verify the story file exists and frontmatter is correct:
+```bash
+"${CLAUDE_PLUGIN_ROOT}/scripts/spawn-guard.sh" verify "${CLAUDE_PROJECT_ROOT}/docs/implementation-artifacts/${story_key}-*.md" "correct-course" "${sprint_id}"
+```
+If verification fails (schema drift), halt with actionable guidance referencing NFR-FITP-1.
+
+5. **On subagent failure** (timeout, context overflow, crash): halt with actionable guidance (failure reason, retry instructions). Clean up any partial file:
+```bash
+"${CLAUDE_PLUGIN_ROOT}/scripts/spawn-guard.sh" cleanup "${CLAUDE_PROJECT_ROOT}/docs/implementation-artifacts/${story_key}-*.md"
+```
+No partial story stubs may persist on disk after a failed spawn.
 
 For stories that **changed status** but remain in the sprint:
 ```bash

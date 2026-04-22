@@ -119,6 +119,7 @@ allowlist_match() {
     "$real_root"/docs/implementation-artifacts/retrospective-*.md) return 0 ;;
     "$real_root"/docs/planning-artifacts/action-items.yaml)        return 0 ;;
     "$real_root"/custom/skills/*.md)                     return 0 ;;
+    "$real_root"/custom/skills/*.customize.yaml)         return 0 ;;
     "$real_root"/.customize.yaml)                        return 0 ;;
     *) return 1 ;;
   esac
@@ -192,6 +193,12 @@ EOF
       cat <<'EOF'
 # Retrospective
 
+EOF
+      ;;
+    */custom/skills/*.customize.yaml)
+      cat <<'EOF'
+# .customize.yaml — agent overrides registered by retro proposal pipeline (ADR-053).
+# Location: custom/skills/ (ADR-020 §lines 1720-1722).
 EOF
       ;;
     */.customize.yaml)

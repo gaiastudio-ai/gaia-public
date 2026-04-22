@@ -206,6 +206,32 @@ Failure posture:
 - Second retro invocation for the same sprint → writer sees the existing `### Sprint {id}` row and returns `skipped_idempotent`; velocity-data.md is byte-identical (AC2 / TC-RIM-4).
 - Missing file → writer creates and seeds with the canonical "SM Velocity Data" header before appending (AC-EC2).
 
+### Step 5e --- Tech Debt Reflection (FR-RIM-7, architecture §10.28.8)
+
+Read `${CLAUDE_PROJECT_ROOT}/docs/implementation-artifacts/tech-debt-dashboard.md` and extract a Tech Debt Reflection block for the retro artifact. This step is **read-only** — it MUST NOT modify the dashboard file.
+
+Invoke:
+
+```bash
+source "${CLAUDE_PLUGIN_ROOT}/skills/gaia-retro/scripts/skill-proposal.sh"
+extract_tech_debt_reflection "${CLAUDE_PROJECT_ROOT}" "${sprint_id}"
+```
+
+The function extracts:
+- **Debt ratio delta:** current sprint vs. prior sprint (percentage change)
+- **Aging delta:** mean age of open debt items (days change)
+- **Category breakdown:** architecture, code, test, documentation, process (count and delta per category)
+
+Hold the output in session memory for inclusion in the retro artifact at Step 6.
+
+Failure posture:
+
+- Missing `tech-debt-dashboard.md` → renders "No tech debt data available" note and retro continues without failing (AC-EC1, architecture §10.28.8 edge case).
+- Malformed dashboard (ratio/aging/categories unparseable) → logs a warning to retro Dev Notes, skips extraction, and writes "tech-debt reflection unavailable: {reason}" without halting (AC-EC2).
+- First sprint (no prior dashboard snapshot to diff against) → ratio/aging deltas render as "baseline" markers; category breakdown uses absolute counts; no divide-by-zero (AC-EC3).
+- Older-format dashboard without category breakdown → renders ratio/aging blocks and emits "category breakdown unavailable (older dashboard format)" rather than failing (AC-EC10).
+- Dashboard file byte-identical after step completes (read-only contract — architecture §10.28.8).
+
 ### Step 5b --- Cross-Retro Pattern Detection (FR-RIM-1)
 
 After action items are drafted in Step 5, scan prior retrospective files for recurring themes. Themes appearing in 2+ distinct sprints are flagged systemic, and their parent `action-items.yaml` entry receives an `escalation_count` increment.
@@ -238,6 +264,66 @@ All edge paths are non-blocking (per the story's "Failure posture"):
 
 > **Note (E36-S2 coupling):** the increment writer is an inline, byte-compatible stand-in for the ADR-052 shared retro writer helper delivered by E36-S2. When E36-S2 lands, replace the body of `action-items-increment.sh` with a delegation to the helper — the CLI contract stays stable, so callers in this skill do not need to change.
 
+### Step 5f --- Skill Improvement Proposals (FR-RIM-6, ADR-053, architecture §10.28.7)
+
+Map each retro finding from Steps 3-4 to existing shared skills by scanning `${CLAUDE_PLUGIN_ROOT}/skills/` and `${CLAUDE_PROJECT_ROOT}/custom/skills/` registries. For each matched finding, build a structured proposal object per architecture §10.28.7 schema.
+
+Invoke:
+
+```bash
+source "${CLAUDE_PLUGIN_ROOT}/skills/gaia-retro/scripts/skill-proposal.sh"
+build_proposal "${finding_ref}" "${target_skill}" "${rationale}" "${diff_text}"
+```
+
+**Stage 1: Proposal.** The proposal is a structured YAML object held in-session:
+
+```yaml
+proposal:
+  finding_ref: "retro-{sprint_id}-finding-{n}"
+  target_skill: "{skill-name}"
+  target_path: "custom/skills/{skill-name}.md"
+  rationale: "Sprint {N} retro found {theme} ..."
+  diff: |
+    + ## New Section
+    + ...
+```
+
+**Stage 2: Approval.** Present each proposal to the user for interactive approval. YOLO auto-approve is explicitly out of scope (architecture §10.28.7 Stage 2). For each proposal:
+- Display the target skill, rationale, and diff preview
+- If `target_path` already exists with divergent content, present a merge-preview diff and require explicit overwrite confirmation (AC-EC6)
+- Wait for user approval or rejection
+
+**Stage 3: Write.** Only upon explicit user approval, delegate to the shared retro writer (ADR-052):
+
+```bash
+source "${CLAUDE_PLUGIN_ROOT}/skills/gaia-retro/scripts/skill-proposal.sh"
+write_approved_proposal \
+  "${CLAUDE_PROJECT_ROOT}" \
+  "${sprint_id}" \
+  "${target_skill}" \
+  "custom/skills/${target_skill}.md" \
+  "${rationale}" \
+  "${diff_content}" \
+  "${CLAUDE_PLUGIN_ROOT}/../../scripts/retro-sidecar-write.sh"
+```
+
+The function:
+1. Writes `custom/skills/{skill-name}.md` with the proposed content via the shared writer
+2. Registers the `skill_overrides` entry in `custom/skills/all-dev.customize.yaml` via the shared writer
+3. The plugin loader reads `custom/skills/` with higher precedence than bundled skills (ADR-020)
+
+**Hard constraint:** Proposals MUST NOT write to `plugins/gaia/skills/` directly. The retro writer's NFR-RIM-2 allowlist rejects any such path with `status=unauthorized` (AC-EC8, TC-RIM-9).
+
+Failure posture:
+
+- Finding maps to multiple existing skills → `target_skill` field is a list of candidates; user selects one at approval; non-selected candidates produce no writes (AC-EC4).
+- Finding maps to NO existing skill → Step 5f yields zero proposals for that finding; retro Dev Notes record "no skill match for finding #{n}"; no error (AC-EC5).
+- Pre-write validation rejects proposals whose diff is non-UTF-8 or > 100 KB with an explicit error; proposal remains in session for editing (AC-EC11).
+- Missing `.customize.yaml` → writer seeds the file with canonical header before registering the `skill_overrides` entry; no error (AC-EC7).
+- Proposal write path attempts `gaia-public/plugins/gaia/skills/` bypass → shared retro writer rejects via NFR-RIM-2 allowlist; retro halts with authorization error; `plugins/gaia/skills/` byte-identical (AC-EC8).
+- User rejects a proposal → clear session cache; zero filesystem writes; rejection logged in retro artifact's "Proposals" section as `{finding_ref}: REJECTED` (AC4, AC-EC9).
+- Concurrent retro invocations each approve targeting same file → `flock` serializes; second writer re-presents a fresh merge preview (AC-EC12).
+
 ### Step 6 --- Write Retro Artifact
 
 Compose the retrospective artifact with the following sections:
@@ -245,6 +331,8 @@ Compose the retrospective artifact with the following sections:
 - What Went Well (from Step 3)
 - What Could Improve (from Step 4)
 - Action Items (from Step 5)
+- Tech Debt Reflection (from Step 5e)
+- Skill Improvement Proposals (from Step 5f — approved, rejected, and skipped proposals)
 
 Determine the output file path:
 - Default: `${CLAUDE_PROJECT_ROOT}/docs/implementation-artifacts/retrospective-{sprint_id}-{YYYY-MM-DD}.md`

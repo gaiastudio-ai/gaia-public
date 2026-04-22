@@ -297,31 +297,37 @@ EOF
 }
 
 # NFR-052 unit tests for new public functions ----------------------------------
-# Tests target the internal classifier by invoking the subcommand with
-# hand-crafted fixtures that isolate each verdict branch.
+#
+# Covered public functions (review-gate.sh):
+#   - classify_review_gate — pure ADR-054 dominance classifier
+#   - cmd_review_gate_check — the review-gate-check sub-operation entry point
+#
+# Tests target classify_review_gate and cmd_review_gate_check by invoking
+# the sub-operation with hand-crafted fixtures that isolate each verdict
+# branch.
 
-@test "nfr-052: classify helper — all-PASSED classifies as COMPLETE" {
+@test "nfr-052: classify_review_gate — all-PASSED classifies as COMPLETE via cmd_review_gate_check" {
   seed_story_mixed NFR1 PASSED PASSED PASSED PASSED PASSED PASSED
   run "$SCRIPT" review-gate-check --story NFR1
   [ "$status" -eq 0 ]
   [[ "$output" == *"Review Gate: COMPLETE"* ]]
 }
 
-@test "nfr-052: classify helper — single FAILED classifies as BLOCKED" {
+@test "nfr-052: classify_review_gate — single FAILED classifies as BLOCKED via cmd_review_gate_check" {
   seed_story_mixed NFR2 PASSED PASSED PASSED PASSED FAILED PASSED
   run "$SCRIPT" review-gate-check --story NFR2
   [ "$status" -eq 1 ]
   [[ "$output" == *"Review Gate: BLOCKED"* ]]
 }
 
-@test "nfr-052: classify helper — only UNVERIFIED classifies as PENDING" {
+@test "nfr-052: classify_review_gate — only UNVERIFIED classifies as PENDING via cmd_review_gate_check" {
   seed_story_mixed NFR3 UNVERIFIED UNVERIFIED UNVERIFIED UNVERIFIED UNVERIFIED UNVERIFIED
   run "$SCRIPT" review-gate-check --story NFR3
   [ "$status" -eq 2 ]
   [[ "$output" == *"Review Gate: PENDING"* ]]
 }
 
-@test "nfr-052: classify helper — all six PENDING gates listed in Pending gates" {
+@test "nfr-052: cmd_review_gate_check — all six PENDING gates listed in Pending gates" {
   seed_story_mixed NFR4 UNVERIFIED UNVERIFIED UNVERIFIED UNVERIFIED UNVERIFIED UNVERIFIED
   run "$SCRIPT" review-gate-check --story NFR4
   [ "$status" -eq 2 ]
@@ -331,4 +337,52 @@ EOF
   [[ "$output" == *"Test Automation"* ]]
   [[ "$output" == *"Test Review"* ]]
   [[ "$output" == *"Performance Review"* ]]
+}
+
+# Direct unit tests for classify_review_gate extracted via awk (same
+# pattern as e35-s2-approval-gate-units.bats for NFR-052 coverage).
+# Extracts only the classify_review_gate definition and re-runs it in
+# the test subshell, bypassing the dispatcher.
+
+_load_classify_helper() {
+  eval "$(awk '
+    /^classify_review_gate[[:space:]]*\(\)/ { printing = 1 }
+    printing { print }
+    printing && /^}/ { printing = 0; exit }
+  ' "$SCRIPT")"
+}
+
+@test "nfr-052: classify_review_gate — extracted helper returns BLOCKED for any FAILED" {
+  _load_classify_helper
+  run classify_review_gate PASSED PASSED FAILED PASSED PASSED PASSED
+  [ "$status" -eq 0 ]
+  [ "$output" = "BLOCKED" ]
+}
+
+@test "nfr-052: classify_review_gate — extracted helper returns PENDING for UNVERIFIED no FAILED" {
+  _load_classify_helper
+  run classify_review_gate PASSED PASSED UNVERIFIED PASSED PASSED PASSED
+  [ "$status" -eq 0 ]
+  [ "$output" = "PENDING" ]
+}
+
+@test "nfr-052: classify_review_gate — extracted helper returns COMPLETE when all PASSED" {
+  _load_classify_helper
+  run classify_review_gate PASSED PASSED PASSED PASSED PASSED PASSED
+  [ "$status" -eq 0 ]
+  [ "$output" = "COMPLETE" ]
+}
+
+@test "nfr-052: classify_review_gate — extracted helper treats NOT STARTED as PENDING" {
+  _load_classify_helper
+  run classify_review_gate PASSED PASSED PASSED PASSED PASSED "NOT STARTED"
+  [ "$status" -eq 0 ]
+  [ "$output" = "PENDING" ]
+}
+
+@test "nfr-052: classify_review_gate — extracted helper FAILED dominates over PENDING" {
+  _load_classify_helper
+  run classify_review_gate PASSED UNVERIFIED FAILED PASSED "NOT STARTED" PASSED
+  [ "$status" -eq 0 ]
+  [ "$output" = "BLOCKED" ]
 }

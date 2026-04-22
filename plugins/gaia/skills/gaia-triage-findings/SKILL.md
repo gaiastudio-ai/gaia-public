@@ -118,7 +118,9 @@ The guard exits 0 and appends an override record to the triage report under a `#
 
 **Non-mutation invariant:** on the guard-fired path (no override), zero writes to the target story file, zero writes to `sprint-status.yaml`, zero writes to `action-items.yaml` (action-items writes land in E39-S3).
 
-### Step 4 --- Create Backlog Stories
+### Step 4 --- Create Backlog Stories (Skill-to-Skill Delegation, FR-FITP-2)
+
+Story creation is delegated to `/gaia-create-story` via subagent spawn. This replaces all inline story-creation logic -- delegation is authoritative. The spawned `/gaia-create-story` produces the full elaboration (AC, tasks, test scenarios) and records provenance in the frontmatter.
 
 For each CREATE STORY decision:
 
@@ -126,29 +128,36 @@ For each CREATE STORY decision:
 2. Scan `${CLAUDE_PROJECT_ROOT}/docs/planning-artifacts/epics-and-stories.md` and `${CLAUDE_PROJECT_ROOT}/docs/implementation-artifacts/` for all existing stories in that epic.
 3. Find the highest story number and assign the next sequential key.
 4. Update `epics-and-stories.md` with the new story entry under the correct epic.
-5. Create the new story file at `${CLAUDE_PROJECT_ROOT}/docs/implementation-artifacts/{story_key}-{slug}.md` with complete frontmatter:
 
-```yaml
-template: 'story'
-version: 1.4.0
-used_by: ['create-story']
-key: "{new_story_key}"
-title: "{title_from_finding}"
-epic: "{source_epic}"
-status: backlog
-priority: "{P0|P1|P2}"
-size: "{estimated_size}"
-points: {estimated_points}
-risk: "{risk_level}"
-sprint_id: null
-date: "{today}"
-author: "Triage"
-depends_on: []
-blocks: []
-traces_to: []
+5. **Pre-spawn validation:** validate `origin_ref` (the finding ID) using `spawn-guard.sh`:
+```bash
+"${CLAUDE_PLUGIN_ROOT}/scripts/spawn-guard.sh" validate-ref "${finding_id}"
 ```
+If validation fails (empty, null, shell-unsafe characters), halt with guidance. Do not spawn the subagent.
 
-Set `origin: triage` and `origin_ref` to the source story file path for traceability.
+6. **Collision check:** verify no story file already exists at the canonical path:
+```bash
+"${CLAUDE_PLUGIN_ROOT}/scripts/spawn-guard.sh" check-collision "${CLAUDE_PROJECT_ROOT}/docs/implementation-artifacts" "${new_story_key}"
+```
+If collision detected, halt with guidance to delete or rename before retry. Do not spawn the subagent.
+
+7. **Spawn `/gaia-create-story`:** invoke as a subagent with origin context:
+```
+/gaia-create-story {new_story_key} with origin="triage-findings" origin_ref="{finding_id}"
+```
+The spawned `/gaia-create-story` populates the story frontmatter with `origin: "triage-findings"` and `origin_ref: "{finding_id}"` and produces the full elaboration (AC, tasks, test scenarios). The parent MUST NOT duplicate elaboration logic -- delegation is authoritative.
+
+8. **Post-spawn verification:** after the subagent completes, verify the story file exists and frontmatter is correct:
+```bash
+"${CLAUDE_PLUGIN_ROOT}/scripts/spawn-guard.sh" verify "${CLAUDE_PROJECT_ROOT}/docs/implementation-artifacts/${new_story_key}-*.md" "triage-findings" "${finding_id}"
+```
+If verification fails (schema drift in `origin`/`origin_ref`), halt with actionable guidance referencing NFR-FITP-1.
+
+9. **On subagent failure** (timeout, context overflow, crash): halt with actionable guidance (failure reason, retry instructions). Clean up any partial file:
+```bash
+"${CLAUDE_PLUGIN_ROOT}/scripts/spawn-guard.sh" cleanup "${CLAUDE_PROJECT_ROOT}/docs/implementation-artifacts/${new_story_key}-*.md"
+```
+No partial story stubs may persist on disk after a failed spawn.
 
 ### Step 5 --- Mark Findings as Triaged
 

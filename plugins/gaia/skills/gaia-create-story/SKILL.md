@@ -59,6 +59,7 @@ This skill is the native Claude Code conversion of the legacy create-story workf
 - Generate the slug from the story title: lowercase, replace non-alphanumeric with hyphens, collapse consecutive hyphens, trim edges.
 - Populate ALL 15 required frontmatter fields from the epics-and-stories source data.
 - Set `status: backlog` in frontmatter.
+- If `origin` and `origin_ref` were passed by the invoking command (e.g., `/gaia-correct-course` or `/gaia-triage-findings` via Skill-to-Skill Delegation, FR-FITP-2): set `origin: "{origin_value}"` and `origin_ref: "{origin_ref_value}"` in frontmatter. These record provenance for traceability (NFR-FITP-1). If not passed, leave as `origin: null` and `origin_ref: null`.
 - Write acceptance criteria in Given/When/Then format.
 - Write tasks/subtasks breakdown.
 - Write test scenarios table.

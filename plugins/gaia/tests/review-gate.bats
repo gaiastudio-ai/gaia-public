@@ -111,3 +111,224 @@ EOF
   [ "$status" -eq 0 ]
   [ "$(grep -c 'QA Tests | PASSED' "$ART/R8-fake.md")" = "1" ]
 }
+
+# ---------------------------------------------------------------------------
+# E37-S1 — review-gate-check sub-operation
+#
+# Composite Review Gate check: emits COMPLETE/BLOCKED/PENDING summary and
+# deterministic exit codes (0/1/2). Read-only, additive to existing
+# check/update/status sub-operations. Fixtures mirror ADR-054 semantics:
+#   - all-PASSED  → exit 0 / COMPLETE
+#   - one-FAILED  → exit 1 / BLOCKED (FAILED dominates over PENDING)
+#   - mixed-pending (UNVERIFIED/NOT STARTED, no FAILED) → exit 2 / PENDING
+# ---------------------------------------------------------------------------
+
+# Seed a story with explicit per-gate verdicts. Order is fixed: Code Review,
+# QA Tests, Security Review, Test Automation, Test Review, Performance Review.
+seed_story_mixed() {
+  local key="$1" v1="$2" v2="$3" v3="$4" v4="$5" v5="$6" v6="$7"
+  cat > "$ART/${key}-fake.md" <<EOF
+---
+template: 'story'
+key: "$key"
+---
+
+# Story: Fake
+
+## Review Gate
+
+| Review | Status | Report |
+|--------|--------|--------|
+| Code Review | $v1 | — |
+| QA Tests | $v2 | — |
+| Security Review | $v3 | — |
+| Test Automation | $v4 | — |
+| Test Review | $v5 | — |
+| Performance Review | $v6 | — |
+
+## Tail
+EOF
+}
+
+@test "review-gate-check: AC1 — all PASSED → exit 0, COMPLETE, table present" {
+  seed_story_mixed CRG1 PASSED PASSED PASSED PASSED PASSED PASSED
+  run "$SCRIPT" review-gate-check --story CRG1
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"| Review | Status | Report |"* ]]
+  [[ "$output" == *"Code Review"* ]]
+  [[ "$output" == *"Performance Review"* ]]
+  [[ "$output" == *"Review Gate: COMPLETE"* ]]
+  [[ "$output" != *"Blocking gates:"* ]]
+  [[ "$output" != *"Pending gates:"* ]]
+}
+
+@test "review-gate-check: AC2 — any FAILED → exit 1, BLOCKED, Blocking gates list" {
+  seed_story_mixed CRG2 PASSED FAILED PASSED PASSED PASSED PASSED
+  run "$SCRIPT" review-gate-check --story CRG2
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Review Gate: BLOCKED"* ]]
+  [[ "$output" == *"Blocking gates:"* ]]
+  [[ "$output" == *"QA Tests"* ]]
+}
+
+@test "review-gate-check: AC2 — FAILED dominates over PENDING → exit 1 BLOCKED" {
+  # 4 PASSED + 1 FAILED + 1 NOT STARTED — FAILED wins over PENDING per ADR-054.
+  seed_story_mixed CRG2B PASSED PASSED PASSED FAILED PASSED "NOT STARTED"
+  run "$SCRIPT" review-gate-check --story CRG2B
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Review Gate: BLOCKED"* ]]
+  [[ "$output" == *"Blocking gates:"* ]]
+  [[ "$output" == *"Test Automation"* ]]
+  # The pending row must NOT appear as a pending-list item when BLOCKED.
+  [[ "$output" != *"Pending gates:"* ]]
+}
+
+@test "review-gate-check: AC3 — UNVERIFIED (no FAILED) → exit 2 PENDING, Pending gates list" {
+  seed_story_mixed CRG3 UNVERIFIED PASSED PASSED PASSED PASSED PASSED
+  run "$SCRIPT" review-gate-check --story CRG3
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"Review Gate: PENDING"* ]]
+  [[ "$output" == *"Pending gates:"* ]]
+  [[ "$output" == *"Code Review"* ]]
+  [[ "$output" != *"Blocking gates:"* ]]
+}
+
+@test "review-gate-check: AC3 — NOT STARTED treated as PENDING" {
+  seed_story_mixed CRG3B PASSED PASSED "NOT STARTED" PASSED PASSED PASSED
+  run "$SCRIPT" review-gate-check --story CRG3B
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"Review Gate: PENDING"* ]]
+  [[ "$output" == *"Pending gates:"* ]]
+  [[ "$output" == *"Security Review"* ]]
+}
+
+@test "review-gate-check: AC3 — mixed UNVERIFIED + NOT STARTED → PENDING lists both" {
+  seed_story_mixed CRG3C PASSED UNVERIFIED "NOT STARTED" PASSED PASSED PASSED
+  run "$SCRIPT" review-gate-check --story CRG3C
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"Review Gate: PENDING"* ]]
+  [[ "$output" == *"QA Tests"* ]]
+  [[ "$output" == *"Security Review"* ]]
+}
+
+@test "review-gate-check: AC4 — sequence of 3 fixtures yields 0/1/2 deterministically" {
+  seed_story_mixed CRG4A PASSED PASSED PASSED PASSED PASSED PASSED
+  seed_story_mixed CRG4B PASSED FAILED PASSED PASSED PASSED PASSED
+  seed_story_mixed CRG4C PASSED PASSED UNVERIFIED PASSED PASSED PASSED
+
+  run "$SCRIPT" review-gate-check --story CRG4A
+  [ "$status" -eq 0 ]
+
+  run "$SCRIPT" review-gate-check --story CRG4B
+  [ "$status" -eq 1 ]
+
+  run "$SCRIPT" review-gate-check --story CRG4C
+  [ "$status" -eq 2 ]
+}
+
+@test "review-gate-check: AC4 — stderr is empty on COMPLETE path" {
+  seed_story_mixed CRG4D PASSED PASSED PASSED PASSED PASSED PASSED
+  local errfile="$TEST_TMP/crg4d.err"
+  run bash -c "'$SCRIPT' review-gate-check --story CRG4D 2>'$errfile'"
+  [ "$status" -eq 0 ]
+  [ ! -s "$errfile" ]
+}
+
+@test "review-gate-check: AC4 — stderr is empty on BLOCKED path" {
+  seed_story_mixed CRG4E PASSED FAILED PASSED PASSED PASSED PASSED
+  local errfile="$TEST_TMP/crg4e.err"
+  run bash -c "'$SCRIPT' review-gate-check --story CRG4E 2>'$errfile'"
+  [ "$status" -eq 1 ]
+  [ ! -s "$errfile" ]
+}
+
+@test "review-gate-check: AC4 — stderr is empty on PENDING path" {
+  seed_story_mixed CRG4F PASSED PASSED UNVERIFIED PASSED PASSED PASSED
+  local errfile="$TEST_TMP/crg4f.err"
+  run bash -c "'$SCRIPT' review-gate-check --story CRG4F 2>'$errfile'"
+  [ "$status" -eq 2 ]
+  [ ! -s "$errfile" ]
+}
+
+@test "review-gate-check: AC6 — read-only invariant, story file shasum unchanged" {
+  seed_story_mixed CRG6 PASSED PASSED PASSED PASSED PASSED PASSED
+  local before after
+  before=$(shasum -a 256 "$ART/CRG6-fake.md" | awk '{print $1}')
+  run "$SCRIPT" review-gate-check --story CRG6
+  [ "$status" -eq 0 ]
+  after=$(shasum -a 256 "$ART/CRG6-fake.md" | awk '{print $1}')
+  [ "$before" = "$after" ]
+}
+
+@test "review-gate-check: AC6 — no new files created alongside story" {
+  seed_story_mixed CRG6B PASSED FAILED PASSED PASSED PASSED PASSED
+  local before_count
+  before_count=$(find "$ART" -type f | wc -l)
+  run "$SCRIPT" review-gate-check --story CRG6B
+  [ "$status" -eq 1 ]
+  local after_count
+  after_count=$(find "$ART" -type f | wc -l)
+  [ "$before_count" = "$after_count" ]
+}
+
+@test "review-gate-check: TC-CRG-7 — idempotent reruns yield identical stdout + exit" {
+  seed_story_mixed CRG7 PASSED PASSED UNVERIFIED PASSED PASSED PASSED
+  run "$SCRIPT" review-gate-check --story CRG7
+  local status1="$status" output1="$output"
+  run "$SCRIPT" review-gate-check --story CRG7
+  [ "$status" = "$status1" ]
+  [ "$output" = "$output1" ]
+}
+
+@test "review-gate-check: --help mentions review-gate-check" {
+  run "$SCRIPT" --help
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"review-gate-check"* ]]
+  [[ "$output" == *"COMPLETE"* ]]
+  [[ "$output" == *"BLOCKED"* ]]
+  [[ "$output" == *"PENDING"* ]]
+}
+
+@test "review-gate-check: missing story key → non-zero with stderr" {
+  local errfile="$TEST_TMP/missing.err"
+  run bash -c "'$SCRIPT' review-gate-check --story NOPE-S999 2>'$errfile'"
+  [ "$status" -ne 0 ]
+  [ -s "$errfile" ]
+}
+
+# NFR-052 unit tests for new public functions ----------------------------------
+# Tests target the internal classifier by invoking the subcommand with
+# hand-crafted fixtures that isolate each verdict branch.
+
+@test "nfr-052: classify helper — all-PASSED classifies as COMPLETE" {
+  seed_story_mixed NFR1 PASSED PASSED PASSED PASSED PASSED PASSED
+  run "$SCRIPT" review-gate-check --story NFR1
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Review Gate: COMPLETE"* ]]
+}
+
+@test "nfr-052: classify helper — single FAILED classifies as BLOCKED" {
+  seed_story_mixed NFR2 PASSED PASSED PASSED PASSED FAILED PASSED
+  run "$SCRIPT" review-gate-check --story NFR2
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Review Gate: BLOCKED"* ]]
+}
+
+@test "nfr-052: classify helper — only UNVERIFIED classifies as PENDING" {
+  seed_story_mixed NFR3 UNVERIFIED UNVERIFIED UNVERIFIED UNVERIFIED UNVERIFIED UNVERIFIED
+  run "$SCRIPT" review-gate-check --story NFR3
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"Review Gate: PENDING"* ]]
+}
+
+@test "nfr-052: classify helper — all six PENDING gates listed in Pending gates" {
+  seed_story_mixed NFR4 UNVERIFIED UNVERIFIED UNVERIFIED UNVERIFIED UNVERIFIED UNVERIFIED
+  run "$SCRIPT" review-gate-check --story NFR4
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"Code Review"* ]]
+  [[ "$output" == *"QA Tests"* ]]
+  [[ "$output" == *"Security Review"* ]]
+  [[ "$output" == *"Test Automation"* ]]
+  [[ "$output" == *"Test Review"* ]]
+  [[ "$output" == *"Performance Review"* ]]
+}

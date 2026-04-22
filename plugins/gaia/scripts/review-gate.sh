@@ -12,14 +12,22 @@
 #
 # Invocation contract (stable for E28-S17 bats-core authors):
 #
-#   review-gate.sh check  --story <key>
-#   review-gate.sh update --story <key> --gate <name> --verdict <PASSED|FAILED|UNVERIFIED> [--plan-id <id>]
-#   review-gate.sh status --story <key> [--gate <name> --plan-id <id>]
+#   review-gate.sh check             --story <key>
+#   review-gate.sh update            --story <key> --gate <name> --verdict <PASSED|FAILED|UNVERIFIED> [--plan-id <id>]
+#   review-gate.sh status            --story <key> [--gate <name> --plan-id <id>]
+#   review-gate.sh review-gate-check --story <key>
 #   review-gate.sh --help
 #
 # Canonical gate names (case-sensitive, exact):
 #   "Code Review" | "QA Tests" | "Security Review"
 #   "Test Automation" | "Test Review" | "Performance Review"
+#
+# Fork-context read-only allowlist (NFR-CRG-2):
+#   The `review-gate-check` sub-operation is a pure read and is safe to
+#   invoke from a subagent whose tool allowlist is `Read`, `Grep`, `Bash`
+#   only (no `Write`, no `Edit`). It never modifies the story file,
+#   creates tempfiles / lockfiles / sidecar scratch files, or touches
+#   sprint-status.yaml.
 #
 # Extended gate name (requires --plan-id, E35-S2):
 #   "test-automate-plan" — ledger-only gate for approval-gate verdict keying
@@ -121,23 +129,42 @@ die() {
 usage() {
   cat <<'USAGE'
 Usage:
-  review-gate.sh check  --story <key>
-  review-gate.sh update --story <key> --gate <name> --verdict <PASSED|FAILED|UNVERIFIED> [--plan-id <id>]
-  review-gate.sh status --story <key> [--gate <name> --plan-id <id>]
+  review-gate.sh check             --story <key>
+  review-gate.sh update            --story <key> --gate <name> --verdict <PASSED|FAILED|UNVERIFIED> [--plan-id <id>]
+  review-gate.sh status            --story <key> [--gate <name> --plan-id <id>]
+  review-gate.sh review-gate-check --story <key>
   review-gate.sh --help
 
 Subcommands:
-  check   Exit 0 iff all six Review Gate rows are PASSED. Otherwise exit 1 and
-          list the non-PASSED gate names on stderr (one per line).
-  update  Atomically rewrite exactly one row of the Review Gate table. Only the
-          Status and Report cells of the matched gate are changed — all other
-          bytes of the story file are preserved (headers, blank lines, other
-          rows, trailing content). Writes are serialized via flock.
-          When --plan-id is provided, the verdict is written to the ledger
-          file instead (tab-separated: story_key gate plan_id verdict).
-  status  Print a single JSON object to stdout via jq -nc. Without --plan-id,
-          returns the full Review Gate table. With --gate and --plan-id,
-          queries the ledger for the (story_key, gate, plan_id) tuple.
+  check             Exit 0 iff all six Review Gate rows are PASSED. Otherwise
+                    exit 1 and list the non-PASSED gate names on stderr (one
+                    per line).
+  update            Atomically rewrite exactly one row of the Review Gate
+                    table. Only the Status and Report cells of the matched
+                    gate are changed — all other bytes of the story file are
+                    preserved (headers, blank lines, other rows, trailing
+                    content). Writes are serialized via flock. When --plan-id
+                    is provided, the verdict is written to the ledger file
+                    instead (tab-separated: story_key gate plan_id verdict).
+  status            Print a single JSON object to stdout via jq -nc. Without
+                    --plan-id, returns the full Review Gate table. With
+                    --gate and --plan-id, queries the ledger for the
+                    (story_key, gate, plan_id) tuple.
+  review-gate-check Composite Review Gate check (E37-S1, ADR-054, FR-CRG-2).
+                    Reads the six Review Gate rows and prints the table
+                    followed by a summary line:
+                      Review Gate: COMPLETE   (exit 0) — all six PASSED
+                      Review Gate: BLOCKED    (exit 1) — any FAILED
+                                              (FAILED dominates over PENDING)
+                      Review Gate: PENDING    (exit 2) — any UNVERIFIED or
+                                              NOT STARTED and no FAILED
+                    On BLOCKED, a "Blocking gates:" list names each FAILED
+                    row. On PENDING, a "Pending gates:" list names each
+                    UNVERIFIED / NOT STARTED row. On COMPLETE no list is
+                    emitted. Stderr is empty on all three success paths.
+                    Read-only (NFR-CRG-1): zero file writes, zero lockfile
+                    or tempfile creation. Safe to invoke under a subagent
+                    read-only allowlist of Read, Grep, Bash (NFR-CRG-2).
 
 Flags:
   --story <key>      Story key (required for all subcommands).
@@ -165,8 +192,12 @@ IMPLEMENTATION_ARTIFACTS defaults to "${PROJECT_PATH}/docs/implementation-artifa
 PROJECT_PATH defaults to "." when unset.
 
 Exit codes:
-  0 — success
-  1 — usage error, invalid input, missing file/section, or (check) any non-PASSED row
+  0 — success (check: all PASSED; review-gate-check: COMPLETE)
+  1 — usage error, invalid input, missing file/section, (check) any non-PASSED
+      row, or (review-gate-check) BLOCKED — any FAILED row
+  2 — (review-gate-check) PENDING — any UNVERIFIED / NOT STARTED row and no
+      FAILED. Distinct from the exit-1 error path so callers can distinguish
+      "still in progress" from "explicitly failed".
 USAGE
 }
 
@@ -535,6 +566,153 @@ cmd_status() {
     }'
 }
 
+# ---------- Subcommand: review-gate-check (E37-S1) ----------
+#
+# Composite Review Gate check per ADR-054 / FR-CRG-2. Emits the six-row
+# Review Gate table verbatim followed by a summary line and — on the
+# BLOCKED or PENDING paths — a list of the offending gate names. Exit
+# codes are deterministic:
+#
+#   0 — COMPLETE: all six gates have verdict PASSED
+#   1 — BLOCKED:  at least one gate is FAILED (FAILED dominates PENDING)
+#   2 — PENDING:  at least one gate is UNVERIFIED / NOT STARTED and
+#                 no gate is FAILED
+#
+# Read-only (NFR-CRG-1): zero file writes, zero tempfile / mv / flock. The
+# sub-operation only parses the story file — it never creates, modifies,
+# or deletes any file or sidecar. Before/after shasum -a 256 of the story
+# file is byte-identical across all three verdict paths.
+#
+# Fork-context (NFR-CRG-2): safe to invoke under a subagent whose tool
+# allowlist is Read, Grep, Bash only — the execution path uses awk / grep
+# / bash built-ins and the existing locate_story_file helper.
+
+# Classify the six canonical verdicts into a composite status. Used as a
+# standalone helper so callers and unit tests can exercise the decision
+# logic independently of I/O. Echoes exactly one of: COMPLETE | BLOCKED |
+# PENDING. This helper is pure — no side effects — and is the canonical
+# source of ADR-054 dominance rules.
+#
+# Arguments: six verdict strings in canonical gate order.
+classify_review_gate() {
+  local v
+  # FAILED dominates over everything else.
+  for v in "$@"; do
+    if [ "$v" = "FAILED" ]; then
+      printf 'BLOCKED'
+      return 0
+    fi
+  done
+  # No FAILED — any UNVERIFIED / NOT STARTED is PENDING.
+  for v in "$@"; do
+    if [ "$v" = "UNVERIFIED" ] || [ "$v" = "NOT STARTED" ]; then
+      printf 'PENDING'
+      return 0
+    fi
+  done
+  # All rows are PASSED (or a non-canonical verdict equivalent to PASSED
+  # as ruled canonical elsewhere). Treat as COMPLETE only if every row is
+  # exactly PASSED — any other value is a data-integrity issue the caller
+  # is expected to catch via load_canonical_rows's row presence check.
+  for v in "$@"; do
+    if [ "$v" != "PASSED" ]; then
+      # Unknown verdict — treat as PENDING (safe fallback; matches the
+      # ADR-054 "UNVERIFIED equivalence" clause for non-canonical text).
+      printf 'PENDING'
+      return 0
+    fi
+  done
+  printf 'COMPLETE'
+  return 0
+}
+
+cmd_review_gate_check() {
+  local file="$1"
+
+  # Reuse the existing canonical-row loader. This populates two parallel
+  # global arrays — ROW_GATES[i] / ROW_STATUSES[i] — in canonical order,
+  # and exits 1 via die() if any canonical gate is missing from the table.
+  load_canonical_rows "$file"
+
+  # Parse the six Report cells out of the parsed TSV stream so the table
+  # we render preserves whatever the story author wrote in the Report
+  # column (typically the em-dash placeholder, sometimes a review-file URL).
+  local -a report_for_gate=()
+  local parsed_gate parsed_status parsed_report i found
+  local cg
+  for cg in "${CANONICAL_GATES[@]}"; do
+    found=0
+    while IFS=$'\t' read -r parsed_gate parsed_status parsed_report; do
+      if [ "$parsed_gate" = "$cg" ]; then
+        report_for_gate+=("$parsed_report")
+        found=1
+        break
+      fi
+    done < <(parse_gate_rows "$file")
+    if [ $found -eq 0 ]; then
+      # Should be impossible — load_canonical_rows already enforced row
+      # presence — but guard defensively so the read loop never leaves
+      # report_for_gate short.
+      report_for_gate+=("—")
+    fi
+  done
+
+  # Render the six-row markdown table exactly as a story file stores it.
+  printf '| Review | Status | Report |\n'
+  printf '|--------|--------|--------|\n'
+  i=0
+  while [ $i -lt "${#ROW_GATES[@]}" ]; do
+    printf '| %s | %s | %s |\n' \
+      "${ROW_GATES[$i]}" "${ROW_STATUSES[$i]}" "${report_for_gate[$i]}"
+    i=$((i + 1))
+  done
+
+  # Classify.
+  local composite
+  composite="$(classify_review_gate "${ROW_STATUSES[@]}")"
+
+  printf '\nReview Gate: %s\n' "$composite"
+
+  case "$composite" in
+    COMPLETE)
+      return 0
+      ;;
+    BLOCKED)
+      printf 'Blocking gates:\n'
+      i=0
+      while [ $i -lt "${#ROW_GATES[@]}" ]; do
+        if [ "${ROW_STATUSES[$i]}" = "FAILED" ]; then
+          printf '  - %s\n' "${ROW_GATES[$i]}"
+        fi
+        i=$((i + 1))
+      done
+      exit 1
+      ;;
+    PENDING)
+      printf 'Pending gates:\n'
+      i=0
+      while [ $i -lt "${#ROW_GATES[@]}" ]; do
+        case "${ROW_STATUSES[$i]}" in
+          UNVERIFIED|"NOT STARTED")
+            printf '  - %s\n' "${ROW_GATES[$i]}"
+            ;;
+          PASSED|FAILED)
+            : # skip
+            ;;
+          *)
+            # Non-canonical verdicts are treated as PENDING per
+            # classify_review_gate's fallback; surface them so the caller
+            # can see which row(s) forced PENDING.
+            printf '  - %s\n' "${ROW_GATES[$i]}"
+            ;;
+        esac
+        i=$((i + 1))
+      done
+      exit 2
+      ;;
+  esac
+}
+
 # ---------- Subcommand: check ----------
 
 cmd_check() {
@@ -740,7 +918,7 @@ main() {
       usage
       exit 0
       ;;
-    check|update|status)
+    check|update|status|review-gate-check)
       ;;
     *)
       printf '%s: unknown subcommand: %s\n' "$SCRIPT_NAME" "$subcmd" >&2
@@ -800,6 +978,9 @@ main() {
   case "$subcmd" in
     check)
       cmd_check "$STORY_FILE"
+      ;;
+    review-gate-check)
+      cmd_review_gate_check "$STORY_FILE"
       ;;
     status)
       cmd_status "$STORY_FILE" "$story_key" "$gate_name" "$plan_id"

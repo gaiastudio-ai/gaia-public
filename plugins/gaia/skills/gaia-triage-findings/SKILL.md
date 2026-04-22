@@ -1,9 +1,9 @@
 ---
 name: gaia-triage-findings
-description: "Scan in-progress and completed story files for development findings and triage each into a new backlog story, an existing story, or dismiss. Produces new story files with complete frontmatter (15 required fields, status: backlog, sprint_id: null). Source story findings tables stay intact for idempotent re-triage. GAIA-native replacement for the legacy triage-findings XML engine workflow."
-argument-hint: "[story-key?]"
+description: "Scan in-progress and completed story files for development findings and triage each into a new backlog story, an existing story, or dismiss. Produces new story files with complete frontmatter (15 required fields, status: backlog, sprint_id: null). Source story findings tables stay intact for idempotent re-triage. Done-story guard (FR-FITP-1) blocks ADD TO EXISTING mutations against status: done targets with an explicit override path recorded for retrospective review. GAIA-native replacement for the legacy triage-findings XML engine workflow."
+argument-hint: "[story-key?] [--override-done-story --user <u> --date <d> --finding <fid> --reason <r>]"
 allowed-tools: [Read, Write, Bash]
-version: "1.0.0"
+version: "1.1.0"
 ---
 
 ## Setup
@@ -27,6 +27,7 @@ This skill is the native Claude Code conversion of the legacy `_gaia/lifecycle/w
 - New stories MUST be appended to `epics-and-stories.md` under the correct epic.
 - New backlog story files MUST use the canonical filename format `{story_key}-{story_title_slug}.md`.
 - All 15 required frontmatter fields must be populated: `template`, `version`, `used_by`, `key`, `title`, `epic`, `status`, `priority`, `size`, `points`, `risk`, `sprint_id`, `date`, `author`, and at minimum one of `depends_on`/`blocks`/`traces_to` (can be empty arrays).
+- **Done-Story Immutability Guard (FR-FITP-1):** Before any ADD TO EXISTING mutation, MUST invoke `scripts/triage-guard.sh check <target_story>`. If the target story has `status: done`, the guard halts with guidance to route through `/gaia-create-story` (new story) or `/gaia-add-feature` (change request) — zero writes to the done story. An explicit override path exists (`--override-done-story` with user, date, finding ID, reason) that records the override in the triage report with `retro_flag: true` so `/gaia-retro` surfaces it. Done stories are immutable institutional artifacts; silent mutation merges retro-blind regressions back into closed work.
 
 ## Steps
 
@@ -72,6 +73,50 @@ Present recommendations and let the user confirm or override each decision:
 - **CREATE STORY** -- generate a new backlog story file
 - **ADD TO EXISTING** -- append finding to an existing story's tasks
 - **DISMISS** -- finding is not actionable or already resolved
+
+### Step 3b --- Done-Story Guard (ADD TO EXISTING only, FR-FITP-1)
+
+For every finding classified as **ADD TO EXISTING**, BEFORE any mutation of the target story, invoke the done-story guard:
+
+```bash
+${CLAUDE_PLUGIN_ROOT}/scripts/triage-guard.sh check "${target_story_file}"
+```
+
+Interpret the exit code:
+
+- **Exit 0** — target status is `in-progress`, `review`, `ready-for-dev`, `validating`, or `backlog`. Proceed with the ADD TO EXISTING mutation (append finding to the target story's tasks).
+- **Exit 2** — target is `status: done`. The guard emits halt guidance on stdout (story key, sprint ID, retrospective linkage, sanctioned redirects). Present the guidance to the user. Do NOT mutate the target story. Two sanctioned paths:
+  - **Recommended:** re-classify the finding as CREATE STORY (routes through `/gaia-create-story` with `origin: triage-findings`).
+  - **Change request:** open `/gaia-add-feature` if the finding implies a spec-level amendment.
+- **Exit 1** — error reading the target story file. Surface the stderr and halt the classification pathway for that finding.
+
+**Override path (rare, audited):** If the user explicitly requests the override, re-invoke the guard with all override arguments:
+
+```bash
+${CLAUDE_PLUGIN_ROOT}/scripts/triage-guard.sh check \
+  --override \
+  --user "${USER}" \
+  --date "$(date -u +%Y-%m-%d)" \
+  --finding "${finding_id}" \
+  --reason "${user_supplied_reason}" \
+  --report "${CLAUDE_PROJECT_ROOT}/docs/implementation-artifacts/triage-report.md" \
+  "${target_story_file}"
+```
+
+The guard exits 0 and appends an override record to the triage report under a `## Done-Story Guard Overrides` section:
+
+```yaml
+- user: "<user>"
+  date: "<YYYY-MM-DD>"
+  finding_id: "<finding_id>"
+  target_story_key: "<E*-S*>"
+  reason: "<free-text>"
+  retro_flag: true
+```
+
+`retro_flag: true` ensures `/gaia-retro` surfaces the override for retrospective review. Proceed with the ADD TO EXISTING mutation only after the guard exits 0.
+
+**Non-mutation invariant:** on the guard-fired path (no override), zero writes to the target story file, zero writes to `sprint-status.yaml`, zero writes to `action-items.yaml` (action-items writes land in E39-S3).
 
 ### Step 4 --- Create Backlog Stories
 

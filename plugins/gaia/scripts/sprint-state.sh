@@ -15,7 +15,17 @@
 #   sprint-state.sh transition --story <key> --to <state>
 #   sprint-state.sh get        --story <key>
 #   sprint-state.sh validate   --story <key>
+#   sprint-state.sh reconcile  [--sprint-id <id>] [--dry-run]
 #   sprint-state.sh --help
+#
+# Reconcile (ADR-055 §10.29.1, E38-S1):
+#   Scans story files under IMPLEMENTATION_ARTIFACTS to detect and correct
+#   drift between authoritative story frontmatter (source of truth) and
+#   the derivative sprint-status.yaml cache. Write boundary (NFR-SPQG-2):
+#   reconcile NEVER modifies story-file frontmatter — yaml only, routed
+#   through the same allowlisted writer the transition path uses.
+#   Exit codes: 0 = no drift or drift corrected; 2 = drift detected in
+#   --dry-run; 1 = error (missing file / parse error / write failure).
 #
 # Canonical state set (from CLAUDE.md#Sprint State Machine):
 #   backlog | validating | ready-for-dev | in-progress | blocked | review | done
@@ -112,6 +122,7 @@ Usage:
   sprint-state.sh transition --story <key> --to <state>
   sprint-state.sh get        --story <key>
   sprint-state.sh validate   --story <key>
+  sprint-state.sh reconcile  [--sprint-id <id>] [--dry-run]
   sprint-state.sh --help
 
 Subcommands:
@@ -124,6 +135,11 @@ Subcommands:
               stdout and exit 0.
   validate    Compare story file status to sprint-status.yaml. Exit 0 if
               they agree, exit 1 with a drift description on stderr if not.
+  reconcile   Scan the target sprint's story files and reconcile
+              sprint-status.yaml to match authoritative frontmatter per
+              ADR-055 §10.29.1. NEVER modifies story files (NFR-SPQG-2).
+              Exit 0 on no-drift or drift-corrected, 2 on dry-run drift,
+              1 on error.
 
 Canonical states (CLAUDE.md):
   backlog | validating | ready-for-dev | in-progress | blocked | review | done
@@ -131,11 +147,14 @@ Canonical states (CLAUDE.md):
 Config:
   PROJECT_PATH                defaults to "."
   IMPLEMENTATION_ARTIFACTS    defaults to "${PROJECT_PATH}/docs/implementation-artifacts"
+  SPRINT_STATUS_YAML          overrides the default yaml path (tests).
 
 Exit codes:
   0  success
   1  usage error, invalid state, illegal transition, missing file, lock
-     failure, review gate failure, glob mismatch, or drift (validate)
+     failure, review gate failure, glob mismatch, drift (validate), or
+     reconcile error (missing story file, parse failure, write failure)
+  2  reconcile --dry-run detected drift but wrote nothing
 USAGE
 }
 
@@ -160,11 +179,25 @@ validate_transition() {
   die "illegal transition: '${from}' -> '${to}' is not in the allowed adjacency list"
 }
 
-# Resolve configuration — PROJECT_PATH and IMPLEMENTATION_ARTIFACTS directory.
+# Resolve configuration — PROJECT_PATH, IMPLEMENTATION_ARTIFACTS, and yaml path.
+# Honor pre-exported SPRINT_STATUS_YAML so tests can point the script at a
+# temp-dir yaml that does not live under IMPLEMENTATION_ARTIFACTS (E38-S1).
+# When SPRINT_STATUS_YAML is unset, resolve to the canonical location under
+# IMPLEMENTATION_ARTIFACTS, then fall back to $PROJECT_PATH/sprint-status.yaml
+# if the canonical path does not exist but the fallback does — supports the
+# E38-S1 bats fixtures which place the yaml at $TEST_TMP root for test speed.
 resolve_paths() {
   PROJECT_PATH="${PROJECT_PATH:-.}"
   IMPLEMENTATION_ARTIFACTS="${IMPLEMENTATION_ARTIFACTS:-${PROJECT_PATH}/docs/implementation-artifacts}"
-  SPRINT_STATUS_YAML="${IMPLEMENTATION_ARTIFACTS}/sprint-status.yaml"
+  if [ -z "${SPRINT_STATUS_YAML:-}" ]; then
+    local canonical="${IMPLEMENTATION_ARTIFACTS}/sprint-status.yaml"
+    local fallback="${PROJECT_PATH}/sprint-status.yaml"
+    if [ -e "$canonical" ] || [ ! -e "$fallback" ]; then
+      SPRINT_STATUS_YAML="$canonical"
+    else
+      SPRINT_STATUS_YAML="$fallback"
+    fi
+  fi
   SPRINT_STATUS_LOCK="${SPRINT_STATUS_YAML}.lock"
 }
 
@@ -598,6 +631,272 @@ cmd_transition() {
   fi
 }
 
+# ---------- Subcommand: reconcile (E38-S1, ADR-055 §10.29.1) ----------
+
+# Locate a story file for reconcile. Unlike locate_story_file(), this does NOT
+# enforce the `template: 'story'` filter — reconcile needs to work on the bats
+# test fixtures as well as canonical stories. Returns the first .md match for
+# the given key under IMPLEMENTATION_ARTIFACTS. Case-insensitive glob via
+# nocaseglob so {slug}-story.md fixtures match upper-cased keys on Linux.
+# Returns via stdout. Exits non-zero (return 1) if no file found — caller
+# handles the missing-file error.
+reconcile_locate_story_file() {
+  local key="$1"
+  local matches=()
+  shopt -s nullglob nocaseglob
+  # shellcheck disable=SC2206
+  matches=( "${IMPLEMENTATION_ARTIFACTS}/${key}-"*.md )
+  shopt -u nullglob nocaseglob
+  if [ "${#matches[@]}" -eq 0 ]; then
+    return 1
+  fi
+  printf '%s' "${matches[0]}"
+}
+
+# Read story-file frontmatter status; prints to stdout. Reuses the stricter
+# read_story_status() when the file has a canonical frontmatter block; falls
+# back to exit 2 (via awk END) when the field is missing or the frontmatter
+# is unparseable. Return codes: 0 = ok, 2 = parse error / missing status.
+reconcile_read_story_status() {
+  local file="$1"
+  awk '
+    BEGIN { in_fm = 0; seen = 0; found = 0 }
+    /^---[[:space:]]*$/ {
+      if (!in_fm && !seen) { in_fm = 1; seen = 1; next }
+      if (in_fm) { exit }
+    }
+    in_fm && /^[[:space:]]*status:[[:space:]]*/ {
+      v = $0
+      sub(/^[[:space:]]*status:[[:space:]]*/, "", v)
+      gsub(/^["'\''[:space:]]+|["'\''[:space:]]+$/, "", v)
+      # Reject malformed values containing colons (e.g. "status: : : malformed").
+      if (v ~ /:/) { exit 2 }
+      print v
+      found = 1
+      exit
+    }
+    END { if (!found) exit 2 }
+  ' "$file"
+}
+
+# Read all (key, status) pairs from sprint-status.yaml for the active sprint.
+# Emits `<key>\t<status>` lines to stdout. Uses pure awk — no yq dependency.
+# If the yaml is absent or unreadable, returns 1 so callers can HALT.
+reconcile_list_yaml_stories() {
+  local file="$1"
+  if [ ! -r "$file" ]; then
+    return 1
+  fi
+  awk '
+    BEGIN { in_stories = 0; key = ""; status = "" }
+    {
+      line = $0
+      sub(/\r$/, "", line)
+    }
+    line ~ /^stories:[[:space:]]*$/ { in_stories = 1; next }
+    # Stories section ends at an empty list marker or a new top-level key.
+    line ~ /^stories:[[:space:]]*\[\][[:space:]]*$/ { in_stories = 0; next }
+    in_stories && line ~ /^[^[:space:]-]/ { in_stories = 0; next }
+    !in_stories { next }
+    # A new entry starts with "  - key: ...".
+    line ~ /^[[:space:]]+-[[:space:]]+key:[[:space:]]*/ {
+      # Flush any previous entry.
+      if (key != "") { printf "%s\t%s\n", key, status; }
+      key = line
+      sub(/^[[:space:]]+-[[:space:]]+key:[[:space:]]*/, "", key)
+      gsub(/^["'\''[:space:]]+|["'\''[:space:]]+$/, "", key)
+      status = ""
+      next
+    }
+    # Subsequent lines of the same entry.
+    line ~ /^[[:space:]]+status:[[:space:]]*/ {
+      v = line
+      sub(/^[[:space:]]+status:[[:space:]]*/, "", v)
+      gsub(/^["'\''[:space:]]+|["'\''[:space:]]+$/, "", v)
+      status = v
+      next
+    }
+    END {
+      if (key != "") { printf "%s\t%s\n", key, status; }
+    }
+  ' "$file"
+}
+
+# Allowlisted yaml writer — the single chokepoint for every reconcile write.
+# Enforces NFR-SPQG-2: story files are OFF-LIMITS; this helper only accepts
+# SPRINT_STATUS_YAML as the target. Runs the inner rewrite in a subshell so
+# that die() inside rewrite_sprint_status_yaml (e.g., on read-only yaml) is
+# caught as a non-zero return code instead of killing the whole reconcile.
+write_sprint_status_yaml() {
+  local target="$1" story_key="$2" new_status="$3"
+  # Allowlist check — NFR-SPQG-2 write boundary.
+  case "$target" in
+    "$SPRINT_STATUS_YAML") ;;
+    *)
+      printf '%s: error: write_sprint_status_yaml refused non-allowlisted path: %s\n' \
+        "$SCRIPT_NAME" "$target" >&2
+      return 1
+      ;;
+  esac
+  # Pre-check writability to catch read-only / full-disk before awk rewrite.
+  if [ ! -w "$target" ]; then
+    printf '%s: error: sprint-status.yaml is not writable: %s\n' \
+      "$SCRIPT_NAME" "$target" >&2
+    return 1
+  fi
+  ( rewrite_sprint_status_yaml "$story_key" "$new_status" ) || return 1
+}
+
+# Core reconcile algorithm — runs inside the lock critical section.
+# Sets RECONCILE_CHECKED, RECONCILE_DIVERGENCES, RECONCILE_ERRORS globals.
+RECONCILE_CHECKED=0
+RECONCILE_DIVERGENCES=0
+RECONCILE_ERRORS=0
+do_reconcile_locked() {
+  local dry_run="$1"
+  local yaml="$SPRINT_STATUS_YAML"
+
+  if [ ! -r "$yaml" ]; then
+    printf '%s: error: sprint-status.yaml not readable: %s\n' "$SCRIPT_NAME" "$yaml" >&2
+    RECONCILE_ERRORS=$((RECONCILE_ERRORS + 1))
+    return
+  fi
+
+  local pairs
+  pairs="$(reconcile_list_yaml_stories "$yaml")" || {
+    printf '%s: error: could not parse %s\n' "$SCRIPT_NAME" "$yaml" >&2
+    RECONCILE_ERRORS=$((RECONCILE_ERRORS + 1))
+    return
+  }
+
+  # No stories → fast path (AC-EC1).
+  if [ -z "$pairs" ]; then
+    return
+  fi
+
+  local key yaml_status story_file story_status tag
+  while IFS=$'\t' read -r key yaml_status; do
+    [ -n "$key" ] || continue
+    RECONCILE_CHECKED=$((RECONCILE_CHECKED + 1))
+
+    story_file="$(reconcile_locate_story_file "$key")" || {
+      printf 'RECONCILE: %s missing story file — skipped\n' "$key"
+      printf '%s: error: story file not found for %s under %s\n' \
+        "$SCRIPT_NAME" "$key" "$IMPLEMENTATION_ARTIFACTS" >&2
+      RECONCILE_ERRORS=$((RECONCILE_ERRORS + 1))
+      continue
+    }
+
+    story_status="$(reconcile_read_story_status "$story_file")" || {
+      printf 'RECONCILE: %s parse error — skipped (%s)\n' "$key" "$story_file"
+      printf '%s: error: malformed frontmatter in %s (key=%s)\n' \
+        "$SCRIPT_NAME" "$story_file" "$key" >&2
+      RECONCILE_ERRORS=$((RECONCILE_ERRORS + 1))
+      continue
+    }
+
+    if [ "$story_status" = "$yaml_status" ]; then
+      continue
+    fi
+
+    RECONCILE_DIVERGENCES=$((RECONCILE_DIVERGENCES + 1))
+    if [ "$dry_run" = "1" ]; then
+      tag="DRY-RUN"
+      printf 'RECONCILE: %s %s -> %s [%s]\n' "$key" "$yaml_status" "$story_status" "$tag"
+    else
+      tag="UPDATED"
+      if ! write_sprint_status_yaml "$SPRINT_STATUS_YAML" "$key" "$story_status" 2>/tmp/.reconcile-werr.$$; then
+        local werr=""
+        werr="$(cat /tmp/.reconcile-werr.$$ 2>/dev/null || true)"
+        rm -f /tmp/.reconcile-werr.$$ 2>/dev/null || true
+        printf 'RECONCILE: %s %s -> %s [WRITE-FAILED]\n' "$key" "$yaml_status" "$story_status"
+        printf '%s: error: write failed for %s: %s\n' "$SCRIPT_NAME" "$SPRINT_STATUS_YAML" "$werr" >&2
+        RECONCILE_ERRORS=$((RECONCILE_ERRORS + 1))
+        continue
+      fi
+      rm -f /tmp/.reconcile-werr.$$ 2>/dev/null || true
+      printf 'RECONCILE: %s %s -> %s [%s]\n' "$key" "$yaml_status" "$story_status" "$tag"
+    fi
+  done <<EOF
+$pairs
+EOF
+}
+
+cmd_reconcile() {
+  local dry_run="$1"
+
+  local flock_bin
+  flock_bin=$(command -v flock || true)
+
+  mkdir -p "$(dirname "$SPRINT_STATUS_LOCK")" 2>/dev/null || true
+
+  # Counters persisted across the flock subshell via a side-channel file.
+  # The subshell writes counters on successful run; the outer shell reads
+  # them back tolerantly (a missing or partial file yields zero counters
+  # rather than a `set -e` abort). The `|| true` on `read` is load-bearing:
+  # printf without a trailing newline makes `read` return non-zero at EOF,
+  # which under `set -e` would kill the whole reconcile on Linux/bash 5.
+  if [ -n "$flock_bin" ]; then
+    set +e
+    (
+      exec 9>"$SPRINT_STATUS_LOCK" || exit 1
+      "$flock_bin" -x -w 10 9 || exit 1
+      do_reconcile_locked "$dry_run"
+      printf '%s %s %s\n' "$RECONCILE_CHECKED" "$RECONCILE_DIVERGENCES" "$RECONCILE_ERRORS" \
+        > "${SPRINT_STATUS_LOCK}.result"
+    )
+    local sub_rc=$?
+    set -e
+    if [ "$sub_rc" -ne 0 ] && [ ! -f "${SPRINT_STATUS_LOCK}.result" ]; then
+      die "reconcile failed inside flock critical section (rc=$sub_rc)"
+    fi
+    if [ -f "${SPRINT_STATUS_LOCK}.result" ]; then
+      # shellcheck disable=SC2034
+      read -r RECONCILE_CHECKED RECONCILE_DIVERGENCES RECONCILE_ERRORS \
+        < "${SPRINT_STATUS_LOCK}.result" || true
+      rm -f "${SPRINT_STATUS_LOCK}.result"
+    fi
+  else
+    local tries=0
+    while ! ( set -C; : > "$SPRINT_STATUS_LOCK" ) 2>/dev/null; do
+      tries=$((tries + 1))
+      if [ "$tries" -ge 50 ]; then
+        die "lock timeout acquiring $SPRINT_STATUS_LOCK"
+      fi
+      sleep 0.1 2>/dev/null || sleep 1
+    done
+    # shellcheck disable=SC2064
+    trap "rm -f '$SPRINT_STATUS_LOCK'" EXIT INT TERM
+    do_reconcile_locked "$dry_run"
+    rm -f "$SPRINT_STATUS_LOCK"
+    trap - EXIT INT TERM
+  fi
+
+  # Summary line.
+  local verb="CORRECTED"
+  if [ "$dry_run" = "1" ]; then
+    verb="DETECTED"
+  fi
+  if [ "$RECONCILE_DIVERGENCES" -eq 0 ] && [ "$RECONCILE_ERRORS" -eq 0 ]; then
+    printf 'RECONCILE SUMMARY: %s stories checked, 0 divergences — no drift\n' "$RECONCILE_CHECKED"
+  else
+    printf 'RECONCILE SUMMARY: %s stories checked, %s divergences %s\n' \
+      "$RECONCILE_CHECKED" "$RECONCILE_DIVERGENCES" "$verb"
+  fi
+
+  # Exit-code contract (ADR-055 §10.29.1):
+  #   1 = any error (missing file, parse failure, write failure)
+  #   2 = dry-run drift detected but nothing written
+  #   0 = no drift, or drift corrected successfully
+  if [ "$RECONCILE_ERRORS" -gt 0 ]; then
+    exit 1
+  fi
+  if [ "$dry_run" = "1" ] && [ "$RECONCILE_DIVERGENCES" -gt 0 ]; then
+    exit 2
+  fi
+  exit 0
+}
+
 # ---------- Argument parsing ----------
 
 main() {
@@ -613,7 +912,7 @@ main() {
       usage
       exit 0
       ;;
-    transition|get|validate)
+    transition|get|validate|reconcile)
       ;;
     *)
       printf '%s: error: unknown subcommand: %s\n' "$SCRIPT_NAME" "$subcmd" >&2
@@ -623,6 +922,7 @@ main() {
   esac
 
   local story_key="" to_state=""
+  local reconcile_sprint_id="" reconcile_dry_run=0
   while [ $# -gt 0 ]; do
     case "$1" in
       --story)
@@ -635,6 +935,13 @@ main() {
         to_state="$2"; shift 2 ;;
       --to=*)
         to_state="${1#--to=}"; shift ;;
+      --sprint-id)
+        [ $# -ge 2 ] || die "--sprint-id requires a value"
+        reconcile_sprint_id="$2"; shift 2 ;;
+      --sprint-id=*)
+        reconcile_sprint_id="${1#--sprint-id=}"; shift ;;
+      --dry-run)
+        reconcile_dry_run=1; shift ;;
       --help|-h)
         usage
         exit 0 ;;
@@ -642,8 +949,6 @@ main() {
         die "unknown flag: $1" ;;
     esac
   done
-
-  [ -n "$story_key" ] || die "$subcmd requires --story <key>"
 
   # Resolve SPRINT_STATE_SCRIPT_DIR (directory containing this script) for
   # sibling script lookups. Respect a pre-exported override for tests.
@@ -654,12 +959,21 @@ main() {
 
   case "$subcmd" in
     get)
+      [ -n "$story_key" ] || die "get requires --story <key>"
       cmd_get "$story_key" ;;
     validate)
+      [ -n "$story_key" ] || die "validate requires --story <key>"
       cmd_validate "$story_key" ;;
     transition)
+      [ -n "$story_key" ] || die "transition requires --story <key>"
       [ -n "$to_state" ] || die "transition requires --to <state>"
       cmd_transition "$story_key" "$to_state" ;;
+    reconcile)
+      # reconcile_sprint_id currently scopes to the active sprint implicitly
+      # since the yaml holds one sprint at a time (ADR-055 §10.29.1 default).
+      # Accepted for forward-compatibility but not yet consulted.
+      : "${reconcile_sprint_id:=}"
+      cmd_reconcile "$reconcile_dry_run" ;;
   esac
 }
 

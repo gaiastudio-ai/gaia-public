@@ -116,7 +116,19 @@ This skill is the native Claude Code conversion of the legacy dev-story workflow
 - Run `scripts/merge.sh {pr_number} {story_key}` to merge the PR.
 - The script handles conflict detection, branch protection, and strategy selection.
 
-### Step 14 -- Update Review Gate
+### Step 14 -- Post-Completion Gate
+
+- After the dev-story subagent returns `status=done`, the orchestrator verifies that a merge commit containing the story key actually exists on the target branch before accepting the done transition.
+- Run `scripts/verify-pr-merged.sh {story_key} {target_branch}` where `{target_branch}` is derived from `ci_cd.promotion_chain[0].branch` in global.yaml.
+- If no promotion chain is configured, pass `--no-chain` instead of a branch name. The script exits 3 (skip) and the gate passes silently for backward compatibility.
+- **Exit code 0 (pass):** Merge commit found on target branch. Proceed to Step 15.
+- **Exit code 2 (fail):** No merge commit found. The orchestrator re-runs Steps 10-13 (commit, push, create PR, wait for CI, merge) in the main orchestrator context before advancing the story to done. This handles the case where the subagent completed implementation but failed to push or merge.
+- **Word-boundary matching:** The script uses `\b{story_key}\b` grep patterns to avoid false positives on partial key matches (e.g., E20-S1 must not match E20-S19). Matching is case-insensitive to handle squash-merge message rewrites.
+- **Historical failure modes that motivated this gate:**
+  - **E17-S1 (sprint-17):** Dev-story subagent completed implementation but never pushed commits. Orchestrator accepted `status=done` at face value. Sprint closed with unmerged code.
+  - **E28-S213 (sprint-25):** Dev-story subagent completed all reviews but skipped push/PR/merge steps. Same outcome -- orchestrator trusted the status and sprint closed without the code landing.
+
+### Step 15 -- Update Review Gate
 
 - Initialize the Review Gate table in the story file: all 6 rows set to UNVERIFIED.
 - Update story status to `review`.

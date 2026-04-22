@@ -34,6 +34,22 @@ Otherwise, read `${CLAUDE_PROJECT_ROOT}/docs/implementation-artifacts/sprint-sta
 
 If sprint-status.yaml is missing or unreadable, ask the user for the sprint ID.
 
+### Step 1b --- Review Report Extraction (FR-RIM-2)
+
+Extract verdicts and key findings from review artifacts for the resolved sprint. This produces a "data-driven findings" block that seeds Steps 3 and 4.
+
+Invoke:
+
+```bash
+${CLAUDE_PLUGIN_ROOT}/skills/gaia-retro/scripts/review-extract.sh \
+  --impl-dir "${CLAUDE_PROJECT_ROOT}/docs/implementation-artifacts" \
+  --sprint-id "${sprint_id}"
+```
+
+The scanner globs `code-review-*.md`, `security-review-*.md`, `qa-tests-*.md`, and `performance-review-*.md`, filters to artifacts whose YAML frontmatter `sprint_id` matches the resolved sprint, and parses the `**Verdict:**` line from each. Malformed or truncated artifacts yield a `UNKNOWN` verdict with a `parse-warning` note (AC-EC4). When no artifacts match the current sprint, the scanner emits an explicit `no review artifacts for sprint {id}` note (AC-EC5) so prior-sprint review files do not leak into the current retro's findings.
+
+Hold the scanner output in session memory — do NOT copy it verbatim into the final retro artifact. Surface it as context to the facilitator during Steps 3 and 4.
+
 ### Step 2 --- Load Sprint Data
 
 Read `${CLAUDE_PROJECT_ROOT}/docs/implementation-artifacts/sprint-status.yaml` to extract:
@@ -97,6 +113,38 @@ Prompt the facilitator:
 > Review the proposed action items. Add, remove, or modify items. Each action item needs an owner and target sprint.
 
 Collect the facilitator's input and compile the final action items list.
+
+### Step 5b --- Cross-Retro Pattern Detection (FR-RIM-1)
+
+After action items are drafted in Step 5, scan prior retrospective files for recurring themes. Themes appearing in 2+ distinct sprints are flagged systemic, and their parent `action-items.yaml` entry receives an `escalation_count` increment.
+
+Invoke:
+
+```bash
+${CLAUDE_PLUGIN_ROOT}/skills/gaia-retro/scripts/cross-retro-detect.sh \
+  --retros-dir     "${CLAUDE_PROJECT_ROOT}/docs/implementation-artifacts" \
+  --action-items   "${CLAUDE_PROJECT_ROOT}/docs/implementation-artifacts/action-items.yaml" \
+  --current-sprint "${sprint_id}"
+```
+
+The scanner:
+
+1. Globs `retrospective-*.md` under the retros dir.
+2. Extracts action-item lines under `## Action Items` sections (or resolves `AI-{n}` references in `action-items.yaml`).
+3. Normalizes each line (`lowercase(trim(text))`) and computes `SHA-256(norm)`.
+4. Flags themes seen in 2+ distinct sprint IDs as systemic.
+5. For each systemic theme, delegates to `action-items-increment.sh` using `(current_sprint, theme_hash)` as the idempotency key so re-running the same retro never double-increments (NFR-RIM-3).
+
+All edge paths are non-blocking (per the story's "Failure posture"):
+
+- No prior retros → success, zero escalations (AC3 / AC-EC9).
+- Missing or unreadable `action-items.yaml` → warn on stderr, continue (AC-EC2).
+- Orphan `AI-{n}` reference → log orphan, skip that item, continue (AC-EC6).
+- Empty / zero-byte retro file → contributes zero themes (AC-EC9).
+- Mixed-case or whitespace variants → normalize to the same hash (AC-EC10).
+- 100+ prior retros → bounded per-file read (`MAX_BYTES=65536`) caps token usage (NFR-RIM-1).
+
+> **Note (E36-S2 coupling):** the increment writer is an inline, byte-compatible stand-in for the ADR-052 shared retro writer helper delivered by E36-S2. When E36-S2 lands, replace the body of `action-items-increment.sh` with a delegation to the helper — the CLI contract stays stable, so callers in this skill do not need to change.
 
 ### Step 6 --- Write Retro Artifact
 

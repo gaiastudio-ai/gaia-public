@@ -15,6 +15,12 @@ You are planning a sprint using the Nate (Scrum Master) persona. This skill read
 
 This skill is the native Claude Code conversion of the legacy `_gaia/lifecycle/workflows/sprint-planning/` XML engine workflow (brief Cluster 8, story E28-S60). It delegates planning reasoning to the `sm` subagent and uses `sprint-state.sh` for atomic state updates per ADR-042.
 
+## How It Works
+
+Sprint planning scans the backlog and builds a candidate set for user selection. Stories with `priority_flag: "next-sprint"` in their frontmatter are **auto-included** in the candidate set before user interaction begins (E38-S4, FR-SPQG-3). These pre-filled stories are annotated with `[priority_flag: next-sprint]` so the user can see why they were included. The user may deselect any auto-included story -- deselection preserves the flag for the next planning run. After sprint finalization, the flag is cleared (set to `null`) on all included stories; deselected flagged stories retain their flag.
+
+The `priority_flag` field is set only by humans (via frontmatter edit in triage, correct-course, or add-feature). This skill only reads and clears the flag -- it never writes `"next-sprint"`.
+
 ## Critical Rules
 
 - NEVER write to `sprint-status.yaml` directly. All writes MUST go through `sprint-state.sh` (E28-S11). This is the ADR-042 contract.
@@ -22,6 +28,7 @@ This skill is the native Claude Code conversion of the legacy `_gaia/lifecycle/w
 - Dependency blocking: a story whose `depends_on` list contains any story NOT in `done` status CANNOT be included.
 - Sprint commitments respect the velocity estimate from the `sizing_map` config key, resolved via `!scripts/resolve-config.sh sizing_map` (ADR-044 §10.26.3).
 - Use the sm subagent (Nate) persona for planning reasoning -- do not re-implement planning logic inline.
+- NEVER auto-set `priority_flag: "next-sprint"` on any story. Only humans set this flag. The skill reads and clears it only (per `feedback_priority_flag_never_auto_set`).
 
 ## Steps
 
@@ -35,6 +42,7 @@ This skill is the native Claude Code conversion of the legacy `_gaia/lifecycle/w
   - **NOT SELECTABLE (no file):** "Story {key} has no individual file -- run `/gaia-create-story {key}` first."
   - **NOT SELECTABLE (wrong status):** "Story {key} is in '{status}' status -- must be `ready-for-dev` to be selectable."
 - Display the classification: selectable stories table (`Key | Title | Priority | Size | Risk | Status`) and non-selectable stories with reasons.
+- **Priority-flag pre-scan (E38-S4):** run `pflag_scan_backlog` from `${CLAUDE_PLUGIN_ROOT}/scripts/priority-flag.sh` against `docs/implementation-artifacts/`. This returns all story keys whose frontmatter has `status: backlog` AND `priority_flag: "next-sprint"`. Display these as a separate section: "Auto-included by priority_flag: [list of keys]". These stories are pre-filled into the candidate set in Step 3 before user selection. If no flagged stories are found, display "priority_flag: no flagged backlog stories found" and proceed normally.
 - Load most recent `retro-{sprint_id}.md` from `docs/implementation-artifacts/` if available. If retro found: extract open action items and present them as sprint constraints.
 
 ### Step 2 -- Sprint Scoping
@@ -47,6 +55,7 @@ This skill is the native Claude Code conversion of the legacy `_gaia/lifecycle/w
 ### Step 3 -- Story Selection
 
 - Select stories for this sprint based on priority ordering (P0 > P1 > P2) and dependency topology -- only from stories classified as SELECTABLE in Step 1.
+- **Priority-flag pre-fill (E38-S4):** any story keys returned by the priority-flag pre-scan in Step 1 are pre-selected in the candidate set before user interaction. Annotate each auto-included entry with `[priority_flag: next-sprint]` so the user sees why it was pre-filled. The user may deselect any pre-filled story -- deselection preserves the flag for the next planning run (AC2).
 - Ensure total size fits within velocity estimate using `sizing_map` point values.
 - **Dependency blocking:** for each candidate, check its `depends_on` list. If any dependency is NOT `done`, the story CANNOT be included. Display: "BLOCKED: Story {key} depends on {dep_key} (status: {dep_status})."
 - **Priority surfacing:** after selection, check for P0 stories that are `ready-for-dev` but NOT selected. If any found, warn: "WARNING: P0 stories ready but not selected:" and ask user to confirm the exclusion.
@@ -118,7 +127,17 @@ This skill is the native Claude Code conversion of the legacy `_gaia/lifecycle/w
             dependency: "{dep_key}"
         reason: "Acknowledged by user during sprint planning"
     ```
-    Proceed to Step 7 with the original order preserved.
+    Proceed to Step 6c with the original order preserved.
+
+### Step 6c -- Priority-Flag Clear (E38-S4, FR-SPQG-3)
+
+- After sprint finalization (sprint-status.yaml committed), iterate the set of stories that landed in the sprint.
+- For each included story, use `pflag_read` from `${CLAUDE_PLUGIN_ROOT}/scripts/priority-flag.sh` to check if `priority_flag` is `"next-sprint"`.
+- For each included story with `priority_flag: "next-sprint"`, call `pflag_clear` to rewrite the frontmatter to `priority_flag: null`. This is a line-targeted rewrite that preserves all other frontmatter fields byte-for-byte.
+- **Deselection preservation (AC2):** stories that were flagged but deselected (excluded from the sprint) are NOT cleared. Their `priority_flag: "next-sprint"` persists so the next planning run auto-includes them again.
+- **Failure isolation:** if `pflag_clear` fails on one story (permission error, malformed frontmatter), log a warning and continue clearing the remaining stories. Do NOT abort the sprint-plan run.
+- After all clears, call `pflag_record_cleared` from the same script to append a `priority_flag_cleared:` block to `sprint-status.yaml` listing the cleared story keys. If no stories were cleared, record an empty array.
+- Emit a summary line: `"priority_flag cleared on {N} included stories; {M} deselected flagged stories retained their flag."`
 
 ### Step 7 -- Save Sprint Plan Document
 

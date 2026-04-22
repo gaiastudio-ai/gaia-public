@@ -99,8 +99,12 @@ CANONICAL_GATES=(
 # Three canonical verdict values (exact case).
 CANONICAL_VERDICTS=("UNVERIFIED" "PASSED" "FAILED")
 
-# Extended gate names — require --plan-id to be present (E35-S2).
-PLAN_ID_GATES=("test-automate-plan")
+# Extended gate names — require --plan-id to be present (E35-S2, E33-S1).
+# "story-validation" (E33-S1) records the terminal verdict of the Val +
+# SM fix-loop pattern from ADR-050 without overwriting the six canonical
+# Review Gate table rows (which belong to the six downstream review
+# commands). Uses the same ledger-keyed path as test-automate-plan.
+PLAN_ID_GATES=("test-automate-plan" "story-validation")
 
 # plan_id canonical regex: alphanumerics plus ._:+- (AC-EC2 security guard).
 # Permissive for UUIDs and timestamp-nonce fallbacks; strict against shell injection.

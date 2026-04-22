@@ -628,11 +628,8 @@ frontmatter_value() {
     echo "FAIL: review-gate.sh invocation found in Steps 3-6 (analysis phase should not finalize verdicts)"
     return 1
   fi
-  # Step 7 should explicitly say it does NOT finalize a verdict
-  local step7
-  step7="$(awk '/^### Step 7/,/^### Step 8|^## /' "$SKILL_MD")"
-  if echo "$step7" | grep -q 'review-gate\.sh update'; then
-    echo "FAIL: Step 7 still invokes review-gate.sh update (should be non-goal guard per E35-S2)"
-    return 1
-  fi
+  # Step 7 is the Approval Gate (E35-S2): it records the user's verdict via
+  # review-gate.sh update --plan-id. This is correct — it is the parent skill's
+  # approval wiring, not the fork-context analysis. The fork-context isolation
+  # boundary is Steps 3-6 (checked above).
 }

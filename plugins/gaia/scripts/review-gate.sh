@@ -13,13 +13,16 @@
 # Invocation contract (stable for E28-S17 bats-core authors):
 #
 #   review-gate.sh check  --story <key>
-#   review-gate.sh update --story <key> --gate <name> --verdict <PASSED|FAILED|UNVERIFIED>
-#   review-gate.sh status --story <key>
+#   review-gate.sh update --story <key> --gate <name> --verdict <PASSED|FAILED|UNVERIFIED> [--plan-id <id>]
+#   review-gate.sh status --story <key> [--gate <name> --plan-id <id>]
 #   review-gate.sh --help
 #
 # Canonical gate names (case-sensitive, exact):
 #   "Code Review" | "QA Tests" | "Security Review"
 #   "Test Automation" | "Test Review" | "Performance Review"
+#
+# Extended gate name (requires --plan-id, E35-S2):
+#   "test-automate-plan" — ledger-only gate for approval-gate verdict keying
 #
 # Canonical verdict vocabulary (case-sensitive, exact — per CLAUDE.md):
 #   UNVERIFIED | PASSED | FAILED
@@ -88,6 +91,25 @@ CANONICAL_GATES=(
 # Three canonical verdict values (exact case).
 CANONICAL_VERDICTS=("UNVERIFIED" "PASSED" "FAILED")
 
+# Extended gate names — require --plan-id to be present (E35-S2).
+PLAN_ID_GATES=("test-automate-plan")
+
+# plan_id canonical regex: alphanumerics plus ._:+- (AC-EC2 security guard).
+# Permissive for UUIDs and timestamp-nonce fallbacks; strict against shell injection.
+PLAN_ID_REGEX='^[A-Za-z0-9._:+-]+$'
+
+# Ledger path: overridable via --ledger flag or $REVIEW_GATE_LEDGER env var.
+# Default: ${PROJECT_PATH:-.}/.review-gate-ledger
+resolve_ledger_path() {
+  if [ -n "${LEDGER_FLAG:-}" ]; then
+    printf '%s' "$LEDGER_FLAG"
+  elif [ -n "${REVIEW_GATE_LEDGER:-}" ]; then
+    printf '%s' "$REVIEW_GATE_LEDGER"
+  else
+    printf '%s' "${PROJECT_PATH:-.}/.review-gate-ledger"
+  fi
+}
+
 # ---------- Helpers ----------
 
 die() {
@@ -100,8 +122,8 @@ usage() {
   cat <<'USAGE'
 Usage:
   review-gate.sh check  --story <key>
-  review-gate.sh update --story <key> --gate <name> --verdict <PASSED|FAILED|UNVERIFIED>
-  review-gate.sh status --story <key>
+  review-gate.sh update --story <key> --gate <name> --verdict <PASSED|FAILED|UNVERIFIED> [--plan-id <id>]
+  review-gate.sh status --story <key> [--gate <name> --plan-id <id>]
   review-gate.sh --help
 
 Subcommands:
@@ -111,12 +133,28 @@ Subcommands:
           Status and Report cells of the matched gate are changed — all other
           bytes of the story file are preserved (headers, blank lines, other
           rows, trailing content). Writes are serialized via flock.
-  status  Print a single JSON object `{"story":"<key>","gates":{...}}` to stdout
-          via jq -nc. Suitable for piping into jq.
+          When --plan-id is provided, the verdict is written to the ledger
+          file instead (tab-separated: story_key gate plan_id verdict).
+  status  Print a single JSON object to stdout via jq -nc. Without --plan-id,
+          returns the full Review Gate table. With --gate and --plan-id,
+          queries the ledger for the (story_key, gate, plan_id) tuple.
+
+Flags:
+  --story <key>      Story key (required for all subcommands).
+  --gate <name>      Gate name (required for update; optional for status).
+  --verdict <V>      Verdict value (required for update).
+  --plan-id <id>     Plan identifier for ledger-keyed verdicts (E35-S2).
+                     Must match [A-Za-z0-9._:+-]+. Required for the
+                     "test-automate-plan" gate; optional for canonical gates.
+  --ledger <path>    Override ledger file path (default: $PROJECT_PATH/.review-gate-ledger
+                     or $REVIEW_GATE_LEDGER env var).
 
 Canonical gate names (case-sensitive):
   "Code Review" | "QA Tests" | "Security Review"
   "Test Automation" | "Test Review" | "Performance Review"
+
+Extended gate names (require --plan-id):
+  "test-automate-plan"
 
 Canonical verdicts (case-sensitive, per CLAUDE.md):
   UNVERIFIED | PASSED | FAILED
@@ -154,6 +192,30 @@ is_canonical_verdict() {
     fi
   done
   return 1
+}
+
+# Check whether a candidate gate is a plan-id-only gate.
+is_plan_id_gate() {
+  local candidate="$1"
+  local g
+  for g in "${PLAN_ID_GATES[@]}"; do
+    if [ "$g" = "$candidate" ]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+# Validate a plan_id value against the canonical regex.
+# Returns 0 if valid, 1 if invalid. Empty values are rejected.
+validate_plan_id() {
+  local value="$1"
+  if [ -z "$value" ]; then
+    die "--plan-id requires a value"
+  fi
+  if [[ ! "$value" =~ $PLAN_ID_REGEX ]]; then
+    die "invalid --plan-id value '$value' — must match $PLAN_ID_REGEX (alphanumerics plus ._:+-)"
+  fi
 }
 
 # Join an array with a separator — used for error messages listing the
@@ -362,11 +424,91 @@ load_canonical_rows() {
   done
 }
 
+# ---------- Ledger operations (E35-S2) ----------
+#
+# The ledger is a separate tab-separated file (.review-gate-ledger) used for
+# plan-id-keyed verdict records. It does NOT mutate the Review Gate table.
+# Row format: story_key<TAB>gate<TAB>plan_id<TAB>verdict
+# Atomic write: tempfile + mv (same pattern as cmd_update for story files).
+
+# Write a ledger row. Appends a new record; does not dedup.
+# Arguments: story_key gate plan_id verdict
+ledger_write() {
+  local story_key="$1" gate="$2" plan_id="$3" verdict="$4"
+  local ledger_path
+  ledger_path="$(resolve_ledger_path)"
+
+  local ledger_dir
+  ledger_dir="$(dirname "$ledger_path")"
+  mkdir -p "$ledger_dir"
+
+  local tmpfile="${ledger_path}.tmp.$$"
+
+  # Atomic append: copy existing content + new row → tmpfile, then mv.
+  {
+    if [ -f "$ledger_path" ]; then
+      cat "$ledger_path"
+    fi
+    printf '%s\t%s\t%s\t%s\n' "$story_key" "$gate" "$plan_id" "$verdict"
+  } > "$tmpfile"
+
+  if ! mv -f "$tmpfile" "$ledger_path"; then
+    rm -f "$tmpfile"
+    die "failed to write ledger at '$ledger_path'"
+  fi
+}
+
+# Read a ledger verdict for (story_key, gate, plan_id) tuple.
+# Prints the verdict if found, "UNVERIFIED" if no match.
+# Arguments: story_key gate plan_id
+ledger_read() {
+  local story_key="$1" gate="$2" plan_id="$3"
+  local ledger_path
+  ledger_path="$(resolve_ledger_path)"
+
+  if [ ! -f "$ledger_path" ]; then
+    printf 'UNVERIFIED'
+    return 0
+  fi
+
+  local found_verdict=""
+  local l_story l_gate l_plan l_verdict
+  while IFS=$'\t' read -r l_story l_gate l_plan l_verdict; do
+    if [ "$l_story" = "$story_key" ] && \
+       [ "$l_gate" = "$gate" ] && \
+       [ "$l_plan" = "$plan_id" ]; then
+      found_verdict="$l_verdict"
+    fi
+  done < "$ledger_path"
+
+  if [ -n "$found_verdict" ]; then
+    printf '%s' "$found_verdict"
+  else
+    printf 'UNVERIFIED'
+  fi
+}
+
 # ---------- Subcommand: status ----------
 
 cmd_status() {
   local file="$1"
   local story_key="$2"
+  local gate_name="${3:-}"
+  local plan_id="${4:-}"
+
+  # If --gate and --plan-id are both provided, query the ledger instead of
+  # the story file's Review Gate table.
+  if [ -n "$gate_name" ] && [ -n "$plan_id" ]; then
+    local verdict
+    verdict="$(ledger_read "$story_key" "$gate_name" "$plan_id")"
+    jq -nc \
+      --arg story "$story_key" \
+      --arg gate "$gate_name" \
+      --arg plan_id "$plan_id" \
+      --arg verdict "$verdict" \
+      '{story: $story, gate: $gate, plan_id: $plan_id, verdict: $verdict}'
+    return 0
+  fi
 
   load_canonical_rows "$file"
 
@@ -607,7 +749,8 @@ main() {
       ;;
   esac
 
-  local story_key="" gate_name="" verdict=""
+  local story_key="" gate_name="" verdict="" plan_id=""
+  LEDGER_FLAG=""
   while [ $# -gt 0 ]; do
     case "$1" in
       --story)
@@ -622,6 +765,17 @@ main() {
         [ $# -ge 2 ] || die "--verdict requires a value"
         verdict="$2"; shift 2
         ;;
+      --plan-id)
+        [ $# -ge 2 ] || die "--plan-id requires a value"
+        plan_id="$2"; shift 2
+        ;;
+      --plan-id=*)
+        plan_id="${1#--plan-id=}"; shift
+        ;;
+      --ledger)
+        [ $# -ge 2 ] || die "--ledger requires a value"
+        LEDGER_FLAG="$2"; shift 2
+        ;;
       --help|-h)
         usage
         exit 0
@@ -632,8 +786,15 @@ main() {
     esac
   done
 
+  # Validate plan_id if provided (AC-EC2, AC-EC3 security guards).
+  if [ -n "$plan_id" ]; then
+    validate_plan_id "$plan_id"
+  fi
+
   [ -n "$story_key" ] || die "$subcmd requires --story <key>"
 
+  # For plan-id-only gates (ledger path), locate_story_file is still required
+  # to ensure the story exists before recording any verdict.
   locate_story_file "$story_key"
 
   case "$subcmd" in
@@ -641,24 +802,36 @@ main() {
       cmd_check "$STORY_FILE"
       ;;
     status)
-      cmd_status "$STORY_FILE" "$story_key"
+      cmd_status "$STORY_FILE" "$story_key" "$gate_name" "$plan_id"
       ;;
     update)
       [ -n "$gate_name" ] || die "update requires --gate <name>"
       [ -n "$verdict" ]   || die "update requires --verdict <PASSED|FAILED|UNVERIFIED>"
 
-      if ! is_canonical_gate "$gate_name"; then
+      # Gate-name validation: plan-id-only gates require --plan-id.
+      if is_plan_id_gate "$gate_name"; then
+        if [ -z "$plan_id" ]; then
+          die "gate '$gate_name' requires --plan-id"
+        fi
+      elif ! is_canonical_gate "$gate_name"; then
         local allowed_gates
         allowed_gates=$(join_by ', ' "${CANONICAL_GATES[@]}")
         die "invalid gate name '$gate_name' — allowed: $allowed_gates"
       fi
+
       if ! is_canonical_verdict "$verdict"; then
         local allowed_verdicts
         allowed_verdicts=$(join_by ', ' "${CANONICAL_VERDICTS[@]}")
         die "invalid verdict '$verdict' — allowed: $allowed_verdicts"
       fi
 
-      cmd_update "$STORY_FILE" "$gate_name" "$verdict"
+      # If --plan-id is present, write to the ledger (NOT the Review Gate table).
+      if [ -n "$plan_id" ]; then
+        ledger_write "$story_key" "$gate_name" "$plan_id" "$verdict"
+      else
+        # Pre-E35 path: update the story file's Review Gate table (byte-identical).
+        cmd_update "$STORY_FILE" "$gate_name" "$verdict"
+      fi
       ;;
   esac
 }

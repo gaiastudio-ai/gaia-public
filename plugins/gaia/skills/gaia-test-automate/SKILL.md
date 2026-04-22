@@ -105,11 +105,62 @@ This skill is the native Claude Code conversion of the legacy `_gaia/lifecycle/w
 - Print the plan file contents to the conversation for user review.
 - Phase 1 is now complete. The plan file awaits user approval via the approval gate (E35-S2, non-goal for this story).
 
-### Step 7 -- Handoff to Approval Gate (non-goal guard)
+### Step 7 -- Approval Gate (E35-S2)
 
-- Phase 1 does NOT finalize a Review Gate verdict. The approval gate is wired by E35-S2.
-- Phase 1 does NOT invoke `review-gate.sh`. Verdict recording happens after Phase 2 execution (E35-S3).
-- Report to the user: "Phase 1 analysis complete. Plan file emitted at docs/test-artifacts/test-automate-plan-{story_key}.md. Approval gate and Phase 2 execution are wired by E35-S2 and E35-S3 respectively."
+This step gates progression from Phase 1 to Phase 2. The user (or YOLO auto-approve) must approve the plan before Phase 2 can execute. The verdict is recorded via `review-gate.sh update --plan-id` and written to the plan file's `approval` block.
+
+**Pre-conditions:**
+- The plan file MUST exist at `docs/test-artifacts/test-automate-plan-{story_key}.md` (emitted by Step 6).
+- The story file MUST exist at `docs/implementation-artifacts/{story_key}-*.md`.
+
+**7.1 — Read and validate plan file:**
+- Read the plan file emitted by Step 6. Parse YAML frontmatter to extract `plan_id`.
+- If the plan file is missing or the story file is missing, HALT: "Cannot proceed with approval gate -- plan file or story file not found. Re-run Phase 1." Do NOT write any ledger record (AC-EC4).
+- If the frontmatter is malformed (cannot extract `plan_id`), HALT: "plan_tamper_detected -- cannot parse plan_id from plan file frontmatter. Re-run Phase 1."
+
+**7.2 — Present plan for approval:**
+- Display the plan contents: narrative body and `proposed_tests[]` summary (test file paths, test case names, mapped acceptance criteria).
+- Record the `plan_id` value at presentation time for tamper detection (AC-EC5, AC-EC8).
+
+**7.3 — Collect verdict:**
+- In **normal mode**: prompt the user:
+  ```
+  [a] Approve (PASSED) | [r] Reject (FAILED) | [x] Abort
+  ```
+- In **YOLO mode**: auto-approve path (AC5):
+  1. Load tier-directory allowlist by invoking `test-env-allowlist.sh --test-env docs/test-artifacts/test-environment.yaml`.
+  2. If `test-environment.yaml` is missing (AC-EC6): pause for explicit user approval. Log: "allowlist source absent -- cannot auto-approve."
+  3. For each `proposed_tests[].test_file` path in the plan, check whether it falls within any allowlisted tier directory (prefix match after path normalization).
+  4. If ALL proposed test paths are within the allowlist: auto-approve. Set verdict = PASSED.
+  5. If ANY proposed test path is outside the allowlist: pause for explicit user approval even in YOLO. Log which path(s) are outside scope.
+
+**7.4 — Tamper check (AC-EC5, AC-EC8):**
+- Immediately before recording the verdict, re-read the plan file and extract the current on-disk `plan_id`.
+- If the on-disk `plan_id` differs from the value recorded at presentation time (Step 7.2), HALT: "plan_tamper_detected -- plan_id changed between presentation and verdict. The on-disk plan was overwritten (possibly by a concurrent invocation). Re-run Phase 1."
+- If the `plan_id` matches, proceed to record the verdict against the on-disk `plan_id`.
+
+**7.5 — Record verdict:**
+- On **PASSED** (user approves or YOLO auto-approves):
+  1. Invoke: `review-gate.sh update --story {story_key} --gate test-automate-plan --verdict PASSED --plan-id {plan_id}`
+  2. Patch the plan file's YAML frontmatter `approval` block:
+     - Set `approval.verdict` to `"PASSED"`
+     - Set `approval.verdict_plan_id` to `{plan_id}`
+  3. Use atomic write (temp file + mv) for the plan file patch.
+  4. Post-write verification: re-read the plan file and confirm `approval.verdict` = PASSED and `approval.verdict_plan_id` = `{plan_id}`. If divergence, HALT with message pointing at AC4.
+  5. Report: "Plan approved. Verdict PASSED recorded for plan_id={plan_id}. Ready for Phase 2 execution (E35-S3)."
+
+- On **FAILED** (user rejects, AC-EC7):
+  1. Invoke: `review-gate.sh update --story {story_key} --gate test-automate-plan --verdict FAILED --plan-id {plan_id}`
+  2. Patch the plan file's `approval.verdict` to `"FAILED"`.
+  3. Report: "Plan rejected. Verdict FAILED recorded. Phase 2 will NOT be invoked. Re-run /gaia-test-automate to generate a new plan."
+  4. Exit cleanly. Do NOT invoke Phase 2.
+
+- On **Abort**:
+  1. Exit cleanly without recording any verdict. Do NOT invoke Phase 2.
+
+**7.6 — Handoff to Phase 2:**
+- Phase 2 execution is the responsibility of E35-S3. This step does NOT invoke Phase 2.
+- Report: "Approval gate complete. Phase 2 execution is handled by E35-S3."
 - Note: sprint-status.yaml may now be out of sync. Run `/gaia-sprint-status` to reconcile.
 
 ## Finalize

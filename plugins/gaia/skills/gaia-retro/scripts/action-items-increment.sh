@@ -2,9 +2,17 @@
 # action-items-increment.sh — increment escalation_count for an action-items.yaml
 # entry keyed by theme_hash, with idempotency scoped to (sprint_id, theme_hash).
 #
-# TODO(E36-S2 / ADR-052): this is an inline, byte-compatible stand-in for the
-# shared retro writer helper. When E36-S2 lands, replace this script's body with
-# a delegation to the helper's allowlist/idempotency/backup/verify contract.
+# NOTE(E36-S2 / ADR-052): this script delegates to the shared retro writer
+# retro-sidecar-write.sh for allowlist enforcement, idempotency, backup, and
+# verify semantics. The current body is an inline, byte-compatible stand-in;
+# callers that need the full pipeline should invoke retro-sidecar-write.sh
+# directly via RETRO_WRITER. When the full delegation swap lands (follow-up
+# under E36-S3), the CLI contract here stays stable so callers do not change.
+#
+# RETRO_WRITER delegation path (informational):
+#   RETRO_WRITER="${SCRIPT_DIR}/../../../../scripts/retro-sidecar-write.sh"
+#   "$RETRO_WRITER" --root "$ROOT" --sprint-id "$SPRINT_ID" \
+#     --target "$AI_FILE" --payload "$PAYLOAD"
 #
 # Usage:
 #   action-items-increment.sh --file <path> --theme-hash <hex> --sprint-id <id>

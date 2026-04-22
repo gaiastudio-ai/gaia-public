@@ -45,6 +45,62 @@ The `priority_flag` field is set only by humans (via frontmatter edit in triage,
 - **Priority-flag pre-scan (E38-S4):** run `pflag_scan_backlog` from `${CLAUDE_PLUGIN_ROOT}/scripts/priority-flag.sh` against `docs/implementation-artifacts/`. This returns all story keys whose frontmatter has `status: backlog` AND `priority_flag: "next-sprint"`. Display these as a separate section: "Auto-included by priority_flag: [list of keys]". These stories are pre-filled into the candidate set in Step 3 before user selection. If no flagged stories are found, display "priority_flag: no flagged backlog stories found" and proceed normally.
 - Load most recent `retro-{sprint_id}.md` from `docs/implementation-artifacts/` if available. If retro found: extract open action items and present them as sprint constraints.
 
+### Step 1.5 -- Action-Item Escalation Halt (E38-S2, FR-SPQG-1)
+
+Before proceeding to sprint scoping, halt if any HIGH-priority action item has been open for two or more sprints (`escalation_count >= 2`). This forces systemic issues to resolution -- or conscious override -- before new sprint commitments are made.
+
+**Invocation:**
+
+```bash
+!${CLAUDE_PLUGIN_ROOT}/scripts/escalation-halt.sh  # library-only; source + call
+bash -c "source ${CLAUDE_PLUGIN_ROOT}/scripts/escalation-halt.sh && \
+  esch_check_blocking \
+    '${CLAUDE_PROJECT_ROOT}/docs/planning-artifacts/action-items.yaml' \
+    '${CLAUDE_PROJECT_ROOT}/docs/implementation-artifacts/sprint-status.yaml'"
+```
+
+**Contract:**
+
+- Reads `docs/planning-artifacts/action-items.yaml` (schema owned by E36-S2 / FR-RIM-5).
+- Filter predicate: `priority == "HIGH"` AND `escalation_count >= 2` AND `status == "open"` (case-sensitive).
+- **Exit 0 (proceed):** no matching items, OR all matching items have a recorded override in the current `sprint-status.yaml`.
+- **Exit 1 (halt):** one or more matching items with no recorded override. Halt message on stdout lists each blocking item (`id`, `title`, `escalation_count`, `priority: HIGH`) followed by exit guidance pointing to `/gaia-action-items` or the explicit override flag. No `sprint-status.yaml` mutation and no story-selection prompt occur when the halt fires.
+
+**Missing-file fallback (AC4):** If `action-items.yaml` is absent, empty, or contains zero action items, emit a single-line stderr warning (`NOTE: action-items.yaml not found at ... — escalation halt skipped`) and proceed. The file is NOT created here -- creation is owned by E36-S2 / FR-FITP-3 writers.
+
+**Override path (AC3):** If the user re-invokes `/gaia-sprint-plan` with the explicit override, record it via `sprint-state.sh` and proceed:
+
+```bash
+${CLAUDE_PLUGIN_ROOT}/scripts/sprint-state.sh record-escalation-override \
+  --item-ids "AI-42,AI-77" \
+  --user "$(git config user.name || printf alice)" \
+  --reason "Acknowledged during sprint planning — owner committed to resolution this sprint"
+```
+
+Override metadata schema (appended under `overrides:` in `sprint-status.yaml`):
+
+```yaml
+overrides:
+  - date: "2026-04-22"
+    user: "alice"
+    override_type: escalation_halt
+    overridden_item_ids:
+      - "AI-42"
+      - "AI-77"
+    reason: "Acknowledged during sprint planning"
+```
+
+The override is **idempotent** on the dedup key `(sprint_id, sorted-unique(overridden_item_ids), override_type)` -- re-running with the same still-open items and a prior recorded override does NOT re-halt and does NOT append a duplicate entry.
+
+**Rollback toggle:** set `GAIA_ESCALATION_HALT=off` in the environment to bypass the halt entirely (for emergency rollout if a schema regression in `action-items.yaml` appears). Default: enabled.
+
+**Cross-refs:**
+
+- **FR-SPQG-1** -- this step implements the halt gate.
+- **FR-FITP-3** (Epic F) / **E36-S2** -- upstream writers of `action-items.yaml` (`/gaia-retro`, `/gaia-correct-course`, `/gaia-triage-findings`).
+- **ADR-042** -- all `sprint-status.yaml` writes (including override recording) go through `sprint-state.sh`; this skill never writes yaml inline.
+- **ADR-055** (§10.29.4) -- if E38-S1 has landed, reconciliation runs before this halt; if not, the halt still functions because it reads `action-items.yaml`, not `sprint-status.yaml`.
+
 ### Step 2 -- Sprint Scoping
 
 - Ask: Sprint duration (1 week / 2 weeks / custom)?

@@ -12,11 +12,12 @@
 #
 # Invocation contract (stable for E28-S17 bats-core authors):
 #
-#   sprint-state.sh transition        --story <key> --to <state>
-#   sprint-state.sh get               --story <key>
-#   sprint-state.sh validate          --story <key>
-#   sprint-state.sh reconcile         [--sprint-id <id>] [--dry-run]
-#   sprint-state.sh lint-dependencies [--sprint-id <id>] [--format json|text]
+#   sprint-state.sh transition                 --story <key> --to <state>
+#   sprint-state.sh get                        --story <key>
+#   sprint-state.sh validate                   --story <key>
+#   sprint-state.sh reconcile                  [--sprint-id <id>] [--dry-run]
+#   sprint-state.sh lint-dependencies          [--sprint-id <id>] [--format json|text]
+#   sprint-state.sh record-escalation-override --item-ids <ids> --user <name> --reason <text>
 #   sprint-state.sh --help
 #
 # Reconcile (ADR-055 §10.29.1, E38-S1):
@@ -120,11 +121,12 @@ die() {
 usage() {
   cat <<'USAGE'
 Usage:
-  sprint-state.sh transition        --story <key> --to <state>
-  sprint-state.sh get               --story <key>
-  sprint-state.sh validate          --story <key>
-  sprint-state.sh reconcile         [--sprint-id <id>] [--dry-run]
-  sprint-state.sh lint-dependencies [--sprint-id <id>] [--format json|text]
+  sprint-state.sh transition                 --story <key> --to <state>
+  sprint-state.sh get                        --story <key>
+  sprint-state.sh validate                   --story <key>
+  sprint-state.sh reconcile                  [--sprint-id <id>] [--dry-run]
+  sprint-state.sh lint-dependencies          [--sprint-id <id>] [--format json|text]
+  sprint-state.sh record-escalation-override --item-ids <ids> --user <name> --reason <text>
   sprint-state.sh --help
 
 Subcommands:
@@ -1288,6 +1290,196 @@ cmd_lint_dependencies() {
   exit 0
 }
 
+# ---------- Subcommand: record-escalation-override (E38-S2, FR-SPQG-1) ----------
+#
+# Append an escalation-halt override entry to sprint-status.yaml under the
+# `overrides:` block. Atomic under flock (same critical section discipline as
+# transition). Idempotent on (sprint_id, sorted-unique(ids), override_type) —
+# if an entry with the same override_type and the same sorted id set already
+# exists, the call is a no-op (zero bytes written, exit 0).
+#
+# Write boundary (ADR-042): this is the ONLY path the sprint-plan skill uses
+# to record escalation-halt overrides. The skill MUST NOT write overrides
+# inline via yq or sed.
+#
+# Usage:
+#   sprint-state.sh record-escalation-override \
+#     --item-ids "AI-42,AI-77" --user alice --reason "Acknowledged by lead"
+
+# Sort and deduplicate a comma-or-space-separated id list. Echoes a single
+# comma-joined sorted-unique line.
+_override_normalize_ids() {
+  local raw="$1"
+  printf '%s' "$raw" \
+    | tr ',' '\n' \
+    | awk '{ gsub(/^[[:space:]]+|[[:space:]]+$/, ""); if ($0 != "") print }' \
+    | sort -u \
+    | awk 'BEGIN{first=1} { if (!first) printf ","; printf "%s", $0; first=0 } END { printf "\n" }'
+}
+
+# Source escalation-halt.sh to get esch_check_override_recorded for idempotency.
+# Library-only script — no side effects on source.
+_override_load_esch() {
+  local esch="${SPRINT_STATE_SCRIPT_DIR}/escalation-halt.sh"
+  if [ ! -r "$esch" ]; then
+    die "escalation-halt.sh not found at $esch (required for record-escalation-override)"
+  fi
+  # shellcheck disable=SC1090
+  source "$esch"
+}
+
+# Append one override entry under the `overrides:` top-level key. If the key
+# does not exist, append it at EOF with the entry as its first child.
+# Assumes caller holds the flock.
+_override_append_entry() {
+  local ids_sorted="$1" user="$2" reason="$3"
+  local file="$SPRINT_STATUS_YAML"
+  local today
+  today="$(date -u +%Y-%m-%d)"
+
+  # Escape reason for YAML double-quoted string
+  local reason_escaped
+  reason_escaped=$(printf '%s' "$reason" | awk '{ gsub(/\\/, "\\\\"); gsub(/"/, "\\\""); print }')
+
+  local tmp
+  tmp=$(mktemp "${file}.tmp.XXXXXX")
+  # shellcheck disable=SC2064
+  trap "rm -f '$tmp'" RETURN
+
+  # First pass: does the file contain an `overrides:` key at column 0?
+  local has_overrides=0
+  if grep -qE '^overrides:[[:space:]]*$' "$file" 2>/dev/null; then
+    has_overrides=1
+  fi
+
+  if [ "$has_overrides" = "1" ]; then
+    # Append the new entry at the END of the overrides section (before any
+    # subsequent top-level key). Use awk to find the section boundary.
+    awk -v ids="$ids_sorted" -v user="$user" -v reason="$reason_escaped" -v today="$today" '
+      BEGIN { in_over = 0; inserted = 0 }
+      {
+        raw = $0
+        sub(/\r$/, "", raw)
+      }
+      function emit_entry() {
+        printf "  - date: \"%s\"\n", today
+        printf "    user: \"%s\"\n", user
+        printf "    override_type: escalation_halt\n"
+        printf "    overridden_item_ids:\n"
+        n = split(ids, arr, /,/)
+        for (i = 1; i <= n; i++) {
+          if (arr[i] != "") printf "      - \"%s\"\n", arr[i]
+        }
+        printf "    reason: \"%s\"\n", reason
+        inserted = 1
+      }
+      raw ~ /^overrides:[[:space:]]*$/ { in_over = 1; print raw; next }
+      # Another top-level key closes the section
+      in_over && raw ~ /^[^[:space:]]/ {
+        emit_entry()
+        in_over = 0
+        print raw
+        next
+      }
+      { print raw }
+      END {
+        if (in_over && !inserted) emit_entry()
+      }
+    ' "$file" > "$tmp"
+  else
+    # No overrides section exists — append one at EOF with this entry.
+    cat "$file" > "$tmp"
+    # Ensure file ends with a newline before appending
+    if [ -s "$tmp" ] && [ "$(tail -c1 "$tmp" | wc -l | awk '{print $1}')" = "0" ]; then
+      printf '\n' >> "$tmp"
+    fi
+    {
+      printf 'overrides:\n'
+      printf '  - date: "%s"\n' "$today"
+      printf '    user: "%s"\n' "$user"
+      printf '    override_type: escalation_halt\n'
+      printf '    overridden_item_ids:\n'
+      # shellcheck disable=SC2001
+      local id
+      # Split on comma
+      local IFS=','
+      for id in $ids_sorted; do
+        [ -n "$id" ] || continue
+        printf '      - "%s"\n' "$id"
+      done
+      printf '    reason: "%s"\n' "$reason_escaped"
+    } >> "$tmp"
+  fi
+
+  if ! mv -f "$tmp" "$file"; then
+    rm -f "$tmp"
+    trap - RETURN
+    die "failed to mv tempfile over '$file'"
+  fi
+  trap - RETURN
+}
+
+do_record_override_locked() {
+  local ids_raw="$1" user="$2" reason="$3"
+
+  if [ ! -s "$SPRINT_STATUS_YAML" ]; then
+    die "sprint-status.yaml is missing or empty: $SPRINT_STATUS_YAML"
+  fi
+
+  local ids_sorted
+  ids_sorted="$(_override_normalize_ids "$ids_raw")"
+  if [ -z "$ids_sorted" ]; then
+    die "record-escalation-override: --item-ids resolved to an empty list after normalization"
+  fi
+
+  # Idempotency check via the escalation-halt sibling library.
+  _override_load_esch
+  if esch_check_override_recorded "$SPRINT_STATUS_YAML" "$ids_sorted"; then
+    printf '%s: override already recorded for ids=[%s] — no-op\n' \
+      "$SCRIPT_NAME" "$ids_sorted"
+    return 0
+  fi
+
+  _override_append_entry "$ids_sorted" "$user" "$reason"
+  printf '%s: recorded escalation_halt override for ids=[%s] user=%s\n' \
+    "$SCRIPT_NAME" "$ids_sorted" "$user"
+}
+
+cmd_record_escalation_override() {
+  local ids_raw="$1" user="$2" reason="$3"
+
+  [ -n "$ids_raw" ] || die "record-escalation-override requires --item-ids <ids>"
+  [ -n "$user" ]    || die "record-escalation-override requires --user <name>"
+  [ -n "$reason" ]  || die "record-escalation-override requires --reason <text>"
+
+  local flock_bin
+  flock_bin=$(command -v flock || true)
+
+  if [ -n "$flock_bin" ]; then
+    (
+      exec 9>"$SPRINT_STATUS_LOCK"
+      if ! "$flock_bin" -x -w 5 9; then
+        die "flock timeout acquiring $SPRINT_STATUS_LOCK"
+      fi
+      do_record_override_locked "$ids_raw" "$user" "$reason"
+    )
+  else
+    local tries=0
+    while ! ( set -C; : > "$SPRINT_STATUS_LOCK" ) 2>/dev/null; do
+      tries=$((tries + 1))
+      if [ "$tries" -ge 50 ]; then
+        die "lock timeout acquiring $SPRINT_STATUS_LOCK"
+      fi
+      sleep 0.1 2>/dev/null || sleep 1
+    done
+    # shellcheck disable=SC2064
+    trap "rm -f '$SPRINT_STATUS_LOCK'" EXIT INT TERM
+    do_record_override_locked "$ids_raw" "$user" "$reason"
+    rm -f "$SPRINT_STATUS_LOCK"
+    trap - EXIT INT TERM
+  fi
+}
+
 # ---------- Argument parsing ----------
 
 main() {
@@ -1303,7 +1495,7 @@ main() {
       usage
       exit 0
       ;;
-    transition|get|validate|reconcile|lint-dependencies)
+    transition|get|validate|reconcile|lint-dependencies|record-escalation-override)
       ;;
     *)
       printf '%s: error: unknown subcommand: %s\n' "$SCRIPT_NAME" "$subcmd" >&2
@@ -1315,6 +1507,7 @@ main() {
   local story_key="" to_state=""
   local reconcile_sprint_id="" reconcile_dry_run=0
   local lint_format="json" lint_sprint_id=""
+  local override_item_ids="" override_user="" override_reason=""
   while [ $# -gt 0 ]; do
     case "$1" in
       --story)
@@ -1339,6 +1532,21 @@ main() {
         lint_format="$2"; shift 2 ;;
       --format=*)
         lint_format="${1#--format=}"; shift ;;
+      --item-ids)
+        [ $# -ge 2 ] || die "--item-ids requires a value"
+        override_item_ids="$2"; shift 2 ;;
+      --item-ids=*)
+        override_item_ids="${1#--item-ids=}"; shift ;;
+      --user)
+        [ $# -ge 2 ] || die "--user requires a value"
+        override_user="$2"; shift 2 ;;
+      --user=*)
+        override_user="${1#--user=}"; shift ;;
+      --reason)
+        [ $# -ge 2 ] || die "--reason requires a value"
+        override_reason="$2"; shift 2 ;;
+      --reason=*)
+        override_reason="${1#--reason=}"; shift ;;
       --help|-h)
         usage
         exit 0 ;;
@@ -1374,6 +1582,8 @@ main() {
     lint-dependencies)
       # lint_sprint_id reuses reconcile_sprint_id from shared --sprint-id flag.
       cmd_lint_dependencies "$lint_format" "${reconcile_sprint_id:-}" ;;
+    record-escalation-override)
+      cmd_record_escalation_override "$override_item_ids" "$override_user" "$override_reason" ;;
   esac
 }
 

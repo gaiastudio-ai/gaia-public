@@ -12,10 +12,11 @@
 #
 # Invocation contract (stable for E28-S17 bats-core authors):
 #
-#   sprint-state.sh transition --story <key> --to <state>
-#   sprint-state.sh get        --story <key>
-#   sprint-state.sh validate   --story <key>
-#   sprint-state.sh reconcile  [--sprint-id <id>] [--dry-run]
+#   sprint-state.sh transition        --story <key> --to <state>
+#   sprint-state.sh get               --story <key>
+#   sprint-state.sh validate          --story <key>
+#   sprint-state.sh reconcile         [--sprint-id <id>] [--dry-run]
+#   sprint-state.sh lint-dependencies [--sprint-id <id>] [--format json|text]
 #   sprint-state.sh --help
 #
 # Reconcile (ADR-055 §10.29.1, E38-S1):
@@ -119,27 +120,36 @@ die() {
 usage() {
   cat <<'USAGE'
 Usage:
-  sprint-state.sh transition --story <key> --to <state>
-  sprint-state.sh get        --story <key>
-  sprint-state.sh validate   --story <key>
-  sprint-state.sh reconcile  [--sprint-id <id>] [--dry-run]
+  sprint-state.sh transition        --story <key> --to <state>
+  sprint-state.sh get               --story <key>
+  sprint-state.sh validate          --story <key>
+  sprint-state.sh reconcile         [--sprint-id <id>] [--dry-run]
+  sprint-state.sh lint-dependencies [--sprint-id <id>] [--format json|text]
   sprint-state.sh --help
 
 Subcommands:
-  transition  Atomically transition a story to <state>. Validates adjacency,
-              re-reads sprint-status.yaml under flock, rewrites story file
-              frontmatter + body Status line + sprint-status.yaml, and emits
-              one lifecycle event. Transitions to 'done' require all six
-              Review Gate rows to report PASSED (via review-gate.sh status).
-  get         Print the story's current status (from the story file) to
-              stdout and exit 0.
-  validate    Compare story file status to sprint-status.yaml. Exit 0 if
-              they agree, exit 1 with a drift description on stderr if not.
-  reconcile   Scan the target sprint's story files and reconcile
-              sprint-status.yaml to match authoritative frontmatter per
-              ADR-055 §10.29.1. NEVER modifies story files (NFR-SPQG-2).
-              Exit 0 on no-drift or drift-corrected, 2 on dry-run drift,
-              1 on error.
+  transition        Atomically transition a story to <state>. Validates
+                    adjacency, re-reads sprint-status.yaml under flock,
+                    rewrites story file frontmatter + body Status line +
+                    sprint-status.yaml, and emits one lifecycle event.
+                    Transitions to 'done' require all six Review Gate rows
+                    to report PASSED (via review-gate.sh status).
+  get               Print the story's current status (from the story file)
+                    to stdout and exit 0.
+  validate          Compare story file status to sprint-status.yaml. Exit 0
+                    if they agree, exit 1 with a drift description on stderr
+                    if not.
+  reconcile         Scan the target sprint's story files and reconcile
+                    sprint-status.yaml to match authoritative frontmatter
+                    per ADR-055 §10.29.1. NEVER modifies story files
+                    (NFR-SPQG-2). Exit 0 on no-drift or drift-corrected,
+                    2 on dry-run drift, 1 on error.
+  lint-dependencies Read-only analysis of the selected sprint's dependency
+                    graph. Detects forward-references (dependency inversions)
+                    where a story depends on a resource created by a later
+                    story in the sprint order. Per ADR-055 §10.29.2.
+                    Exit 0 = clean, 2 = inversions detected (advisory),
+                    1 = error.
 
 Canonical states (CLAUDE.md):
   backlog | validating | ready-for-dev | in-progress | blocked | review | done
@@ -153,8 +163,9 @@ Exit codes:
   0  success
   1  usage error, invalid state, illegal transition, missing file, lock
      failure, review gate failure, glob mismatch, drift (validate), or
-     reconcile error (missing story file, parse failure, write failure)
-  2  reconcile --dry-run detected drift but wrote nothing
+     reconcile/lint-dependencies error (missing story file, parse failure)
+  2  reconcile --dry-run detected drift but wrote nothing, OR
+     lint-dependencies detected inversions (advisory, non-blocking)
 USAGE
 }
 
@@ -897,6 +908,386 @@ cmd_reconcile() {
   exit 0
 }
 
+# ---------- Subcommand: lint-dependencies (E38-S3, ADR-055 §10.29.2) ----------
+#
+# Read-only analysis of the selected sprint's story dependency graph.
+# Detects forward-references (dependency inversions) where a story depends
+# on a resource created by a later story in the sprint order.
+#
+# The AC text regex uses an 80-char co-occurrence window for trigger verb +
+# target resource name matching. This bounds false positives from long-range
+# coincidental matches while still catching same-sentence references. The
+# window size is a design choice documented per Val INFO #2.
+#
+# Read-only guarantee: lint-dependencies MUST NOT write to any file.
+# It reads story files and sprint-status.yaml only. Safe for context:fork
+# subagent invocation and parallel CI pipelines (AC-EC7, AC-EC13).
+#
+# Exit codes: 0 = clean, 2 = inversions detected (advisory), 1 = error.
+
+# Extract the depends_on list from a story file's YAML frontmatter.
+# Outputs one dependency key per line. Returns empty for missing or empty
+# depends_on. Does not error on missing field (AC-EC2).
+lint_read_depends_on() {
+  local file="$1"
+  awk '
+    BEGIN { in_fm = 0; seen = 0 }
+    /^---[[:space:]]*$/ {
+      if (!in_fm && !seen) { in_fm = 1; seen = 1; next }
+      if (in_fm) { exit }
+    }
+    in_fm && /^depends_on:/ {
+      line = $0
+      sub(/^depends_on:[[:space:]]*/, "", line)
+      # Remove brackets
+      gsub(/[\[\]]/, "", line)
+      # Split on comma
+      n = split(line, items, /,/)
+      for (i = 1; i <= n; i++) {
+        v = items[i]
+        # Strip quotes and whitespace
+        gsub(/^[[:space:]"'\'']+|[[:space:]"'\'']+$/, "", v)
+        if (v != "") print v
+      }
+      exit
+    }
+  ' "$file"
+}
+
+# Scan AC text in a story file for heuristic dependency references.
+# Looks for trigger verbs (uses|consumes|reads from) co-occurring with
+# a sprint story key within an 80-char window. Outputs pipe-delimited
+# records: target_key|match_text
+#
+# Parameters:
+#   $1 — story file path
+#   $2 — space-separated list of sprint story keys to check against
+#
+# Returns empty if no heuristic matches found. Does not match bare key
+# mentions without a trigger verb (AC-EC6). Marks "reads from stdout"
+# style false positives as non-matches by requiring a story key or
+# resource name in the same window (AC-EC5).
+lint_scan_ac_text() {
+  local file="$1"
+  local sprint_keys="$2"
+
+  # Build a pipe-delimited alternation of sprint story keys for awk.
+  local key_pattern=""
+  local k
+  for k in $sprint_keys; do
+    key_pattern="${key_pattern:+${key_pattern}|}${k}"
+  done
+  [ -n "$key_pattern" ] || return 0
+
+  # Scan AC section for trigger verbs co-occurring with a sprint story key
+  # inside an 80-char window. The window size bounds false positives from
+  # long-range coincidental matches (INFO #2 design choice).
+  awk -v keys="$key_pattern" '
+    BEGIN { in_ac = 0 }
+    /^## Acceptance Criteria/ { in_ac = 1; next }
+    /^## / && in_ac { exit }
+    !in_ac { next }
+    {
+      line = $0
+      # Use match() to find trigger verbs; iterate via substring slicing.
+      pos = 1
+      while (pos <= length(line)) {
+        rest = substr(line, pos)
+        if (match(rest, /(uses|consumes|reads from)/)) {
+          start = pos + RSTART - 1
+          window = substr(line, start, 80)
+          nk = split(keys, karr, /\|/)
+          for (j = 1; j <= nk; j++) {
+            if (index(window, karr[j]) > 0) {
+              snippet = substr(line, start, 60)
+              gsub(/["\\\n\r\t]/, " ", snippet)
+              printf "%s|%s\n", karr[j], snippet
+            }
+          }
+          pos = start + RLENGTH
+        } else {
+          break
+        }
+      }
+    }
+  ' "$file"
+}
+
+# Build an order map from sprint-status.yaml: outputs key\tindex lines
+# where index is the 0-based position in the sprint story order.
+lint_build_order_map() {
+  reconcile_list_yaml_stories "$SPRINT_STATUS_YAML" | awk -F'\t' '
+    { printf "%s\t%d\n", $1, NR-1 }
+  '
+}
+
+# Look up a story key's 0-based sprint order index from the order map.
+# Outputs the index if found, empty if the key is not in the sprint.
+# Parameters:
+#   $1 — order_map (key\tindex lines)
+#   $2 — story key to look up
+lint_lookup_order() {
+  printf '%s\n' "$1" | awk -F'\t' -v k="$2" '$1 == k { print $2; exit }'
+}
+
+# Emit a single inversion record. Centralises the forward-ref vs external
+# classification so both the explicit and heuristic paths share the logic.
+# Parameters:
+#   $1 — story_key (dependent)
+#   $2 — dep_key (dependency)
+#   $3 — source (depends_on | ac_text_scan)
+#   $4 — story_idx (dependent's sprint position)
+#   $5 — order_map
+#   $6 — match_text (optional, for heuristic hits)
+_lint_emit_if_inversion() {
+  local story_key="$1" dep_key="$2" source="$3"
+  local story_idx="$4" order_map="$5" match_text="${6:-}"
+  local dep_idx confidence
+
+  dep_idx="$(lint_lookup_order "$order_map" "$dep_key")"
+  if [ -z "$dep_idx" ]; then
+    # External dependency — not in sprint (AC-EC3)
+    confidence="heuristic"
+    printf '%s|%s|%s|%s|%s|External dependency — %s not in current sprint\n' \
+      "$story_key" "$dep_key" "$source" "$confidence" "$match_text" "$dep_key"
+  elif [ "$dep_idx" -gt "$story_idx" ]; then
+    # Forward reference — inversion detected
+    if [ "$source" = "depends_on" ]; then
+      confidence="explicit"
+    else
+      confidence="heuristic"
+    fi
+    printf '%s|%s|%s|%s|%s|Move %s before %s\n' \
+      "$story_key" "$dep_key" "$source" "$confidence" "$match_text" "$dep_key" "$story_key"
+  fi
+}
+
+# Detect dependency inversions. Reads sprint-status.yaml and story files.
+# Outputs pipe-delimited inversion records:
+#   dependent|dependency|source|confidence|match_text|suggested_reorder
+# Returns empty if no inversions found.
+lint_detect_inversions() {
+  local order_map
+  order_map="$(lint_build_order_map)" || return 1
+  [ -n "$order_map" ] || return 0
+
+  # Collect all sprint keys for the AC text scanner.
+  local sprint_keys=""
+  local key idx
+  while IFS=$'\t' read -r key idx; do
+    [ -n "$key" ] || continue
+    sprint_keys="${sprint_keys:+${sprint_keys} }${key}"
+  done <<EOF
+$order_map
+EOF
+
+  # For each story, check depends_on and AC text.
+  local story_key story_idx dep_key story_file
+  while IFS=$'\t' read -r story_key story_idx; do
+    [ -n "$story_key" ] || continue
+
+    story_file="$(reconcile_locate_story_file "$story_key")" || {
+      printf '%s: error: story file not found: %s\n' "$SCRIPT_NAME" "$story_key" >&2
+      return 1
+    }
+
+    # Explicit depends_on edges.
+    local deps
+    deps="$(lint_read_depends_on "$story_file")"
+    if [ -n "$deps" ]; then
+      while IFS= read -r dep_key; do
+        [ -n "$dep_key" ] || continue
+        _lint_emit_if_inversion "$story_key" "$dep_key" "depends_on" \
+          "$story_idx" "$order_map"
+      done <<DEPS
+$deps
+DEPS
+    fi
+
+    # Heuristic AC text scan edges.
+    local ac_matches match_text
+    ac_matches="$(lint_scan_ac_text "$story_file" "$sprint_keys")"
+    if [ -n "$ac_matches" ]; then
+      while IFS='|' read -r dep_key match_text; do
+        [ -n "$dep_key" ] || continue
+        [ "$dep_key" != "$story_key" ] || continue
+        _lint_emit_if_inversion "$story_key" "$dep_key" "ac_text_scan" \
+          "$story_idx" "$order_map" "$match_text"
+      done <<AC_MATCHES
+$ac_matches
+AC_MATCHES
+    fi
+  done <<ORDER
+$order_map
+ORDER
+}
+
+# Format inversions as JSON. Parameters:
+#   $1 — sprint_id
+#   $2 — stories_analyzed count
+#   $3 — pipe-delimited inversions string (may be empty)
+lint_format_json() {
+  local sprint_id="$1" count="$2" inversions="$3"
+
+  if [ -z "$inversions" ]; then
+    printf '{\n'
+    printf '  "sprint_id": "%s",\n' "$sprint_id"
+    printf '  "stories_analyzed": %s,\n' "$count"
+    printf '  "inversions": [],\n'
+    printf '  "status": "clean"\n'
+    printf '}\n'
+    return 0
+  fi
+
+  printf '{\n'
+  printf '  "sprint_id": "%s",\n' "$sprint_id"
+  printf '  "stories_analyzed": %s,\n' "$count"
+  printf '  "inversions": [\n'
+
+  local first=1
+  local dependent dependency source confidence match_text suggested_reorder
+  while IFS='|' read -r dependent dependency source confidence match_text suggested_reorder; do
+    [ -n "$dependent" ] || continue
+    if [ "$first" -eq 1 ]; then
+      first=0
+    else
+      printf ',\n'
+    fi
+    printf '    {\n'
+    printf '      "dependent": "%s",\n' "$dependent"
+    printf '      "dependency": "%s",\n' "$dependency"
+    printf '      "source": "%s",\n' "$source"
+    printf '      "confidence": "%s",\n' "$confidence"
+    if [ -n "$match_text" ]; then
+      printf '      "match_text": "%s",\n' "$match_text"
+    fi
+    printf '      "suggested_reorder": "%s"\n' "$suggested_reorder"
+    printf '    }'
+  done <<INV
+$inversions
+INV
+  printf '\n  ],\n'
+  printf '  "status": "inversions_detected"\n'
+  printf '}\n'
+}
+
+# Format inversions as human-readable text. Parameters:
+#   $1 — sprint_id
+#   $2 — stories_analyzed count
+#   $3 — pipe-delimited inversions string (may be empty)
+lint_format_text() {
+  local sprint_id="$1" count="$2" inversions="$3"
+
+  printf 'Dependency Inversion Lint — %s\n' "$sprint_id"
+  printf 'Stories analyzed: %s\n\n' "$count"
+
+  if [ -z "$inversions" ]; then
+    printf 'Result: CLEAN — no dependency inversions detected.\n'
+    return 0
+  fi
+
+  printf 'INVERSIONS DETECTED:\n\n'
+  printf '%-12s %-12s %-15s %-12s %s\n' "Dependent" "Dependency" "Source" "Confidence" "Suggested Reorder"
+  printf '%-12s %-12s %-15s %-12s %s\n' "----------" "----------" "-------------" "----------" "-----------------"
+
+  local dependent dependency source confidence match_text suggested_reorder
+  while IFS='|' read -r dependent dependency source confidence match_text suggested_reorder; do
+    [ -n "$dependent" ] || continue
+    printf '%-12s %-12s %-15s %-12s %s\n' "$dependent" "$dependency" "$source" "$confidence" "$suggested_reorder"
+  done <<INV
+$inversions
+INV
+}
+
+# Main entry point for lint-dependencies subcommand.
+# Parameters:
+#   $1 — output format (json|text), defaults to json
+#   $2 — sprint_id filter (currently unused; accepted for forward-compat)
+cmd_lint_dependencies() {
+  local format="${1:-json}"
+  local sprint_id_filter="${2:-}"
+
+  # Validate format
+  case "$format" in
+    json|text) ;;
+    *) die "invalid --format value: '$format'. Allowed: json, text" ;;
+  esac
+
+  # Read sprint-status.yaml
+  if [ ! -r "$SPRINT_STATUS_YAML" ]; then
+    die "sprint-status.yaml not readable: $SPRINT_STATUS_YAML"
+  fi
+
+  # Validate basic yaml structure: must contain sprint_id or stories section.
+  # A file with neither is treated as malformed (AC-EC8).
+  if ! grep -qE '^(sprint_id:|stories:)' "$SPRINT_STATUS_YAML" 2>/dev/null; then
+    die "malformed sprint-status.yaml: no sprint_id or stories section found in $SPRINT_STATUS_YAML"
+  fi
+
+  # Extract sprint_id from yaml
+  local sprint_id
+  sprint_id="$(awk '
+    /^sprint_id:/ {
+      v = $0
+      sub(/^sprint_id:[[:space:]]*/, "", v)
+      gsub(/^["'\''[:space:]]+|["'\''[:space:]]+$/, "", v)
+      print v
+      exit
+    }
+  ' "$SPRINT_STATUS_YAML")"
+  sprint_id="${sprint_id:-unknown}"
+
+  # Count stories
+  local pairs
+  pairs="$(reconcile_list_yaml_stories "$SPRINT_STATUS_YAML")" || {
+    die "could not parse sprint-status.yaml: $SPRINT_STATUS_YAML"
+  }
+
+  local story_count=0
+  if [ -n "$pairs" ]; then
+    story_count="$(printf '%s\n' "$pairs" | grep -c . || true)"
+  fi
+
+  # Fast path: zero stories (AC-EC1)
+  if [ "$story_count" -eq 0 ]; then
+    if [ "$format" = "json" ]; then
+      lint_format_json "$sprint_id" 0 ""
+    else
+      lint_format_text "$sprint_id" 0 ""
+    fi
+    exit 0
+  fi
+
+  # Detect inversions. Capture stderr separately so error messages
+  # (e.g., "story file not found") surface to the caller even when
+  # stdout is being captured by a command substitution (AC-EC10).
+  local inversions lint_err_file
+  lint_err_file="$(mktemp "${SPRINT_STATUS_YAML}.lint-err.XXXXXX" 2>/dev/null || mktemp)"
+  inversions="$(lint_detect_inversions 2>"$lint_err_file")" || {
+    local lint_err
+    lint_err="$(cat "$lint_err_file" 2>/dev/null)"
+    rm -f "$lint_err_file"
+    if [ -n "$lint_err" ]; then
+      printf '%s\n' "$lint_err" >&2
+    fi
+    die "lint-dependencies analysis failed"
+  }
+  rm -f "$lint_err_file"
+
+  # Output
+  if [ "$format" = "json" ]; then
+    lint_format_json "$sprint_id" "$story_count" "$inversions"
+  else
+    lint_format_text "$sprint_id" "$story_count" "$inversions"
+  fi
+
+  # Exit code contract: 0 clean, 2 inversions, 1 error (already handled above)
+  if [ -n "$inversions" ]; then
+    exit 2
+  fi
+  exit 0
+}
+
 # ---------- Argument parsing ----------
 
 main() {
@@ -912,7 +1303,7 @@ main() {
       usage
       exit 0
       ;;
-    transition|get|validate|reconcile)
+    transition|get|validate|reconcile|lint-dependencies)
       ;;
     *)
       printf '%s: error: unknown subcommand: %s\n' "$SCRIPT_NAME" "$subcmd" >&2
@@ -923,6 +1314,7 @@ main() {
 
   local story_key="" to_state=""
   local reconcile_sprint_id="" reconcile_dry_run=0
+  local lint_format="json" lint_sprint_id=""
   while [ $# -gt 0 ]; do
     case "$1" in
       --story)
@@ -942,6 +1334,11 @@ main() {
         reconcile_sprint_id="${1#--sprint-id=}"; shift ;;
       --dry-run)
         reconcile_dry_run=1; shift ;;
+      --format)
+        [ $# -ge 2 ] || die "--format requires a value"
+        lint_format="$2"; shift 2 ;;
+      --format=*)
+        lint_format="${1#--format=}"; shift ;;
       --help|-h)
         usage
         exit 0 ;;
@@ -974,6 +1371,9 @@ main() {
       # Accepted for forward-compatibility but not yet consulted.
       : "${reconcile_sprint_id:=}"
       cmd_reconcile "$reconcile_dry_run" ;;
+    lint-dependencies)
+      # lint_sprint_id reuses reconcile_sprint_id from shared --sprint-id flag.
+      cmd_lint_dependencies "$lint_format" "${reconcile_sprint_id:-}" ;;
   esac
 }
 

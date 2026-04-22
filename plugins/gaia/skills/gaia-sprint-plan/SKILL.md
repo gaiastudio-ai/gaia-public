@@ -92,6 +92,34 @@ This skill is the native Claude Code conversion of the legacy `_gaia/lifecycle/w
   ```
   Invoke once per selected story to register it in the sprint. If `sprint-state.sh` exits non-zero, abort cleanly and surface the error to the user. Do NOT fall back to direct YAML writes.
 
+### Step 6b -- Dependency Inversion Lint (E38-S3, ADR-055 §10.29.2)
+
+- After committing the sprint, run the dependency inversion lint to detect forward-references in the selected story order:
+  ```bash
+  ${CLAUDE_PLUGIN_ROOT}/scripts/sprint-state.sh lint-dependencies --format json
+  ```
+- The lint is **read-only** and never mutates any file. It analyzes the ordered story list in `sprint-status.yaml` and each story file's `depends_on` frontmatter and AC text.
+- **Detection sources:**
+  - **Explicit** (high confidence): `depends_on` frontmatter field referencing a story that appears later in sprint order.
+  - **Heuristic** (advisory): AC text containing trigger verbs (`uses`, `consumes`, `reads from`) co-occurring with a sprint story key within an 80-character window.
+- **Exit code interpretation:**
+  - `0` — clean, no inversions. Proceed to Step 7.
+  - `2` — inversions detected (advisory). Present the findings table and offer choices.
+  - `1` — error (missing story file, parse failure). Surface the error and halt.
+- **If inversions detected (exit 2):** present a table to the user showing each inversion (dependent, dependency, source, confidence, suggested reorder). Offer two choices:
+  - **Accept reorder (AC3):** apply the suggested reorder — move the dependency story before the dependent story in `sprint-status.yaml`. Other positions remain stable. No override entry is recorded. Re-run the lint after reorder to confirm clean.
+  - **Override and keep original order (AC4):** record an `overrides` entry in sprint metadata with the date, user, and specific inversion pair(s) acknowledged. Format:
+    ```yaml
+    overrides:
+      - date: "{date}"
+        user: "{user_name}"
+        inversions:
+          - dependent: "{story_key}"
+            dependency: "{dep_key}"
+        reason: "Acknowledged by user during sprint planning"
+    ```
+    Proceed to Step 7 with the original order preserved.
+
 ### Step 7 -- Save Sprint Plan Document
 
 - Write the sprint plan document to `docs/implementation-artifacts/{sprint_id}-plan.md`.

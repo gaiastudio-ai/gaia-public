@@ -830,23 +830,30 @@ cmd_reconcile() {
 
   mkdir -p "$(dirname "$SPRINT_STATUS_LOCK")" 2>/dev/null || true
 
+  # Counters persisted across the flock subshell via a side-channel file.
+  # The subshell writes counters on successful run; the outer shell reads
+  # them back tolerantly (a missing or partial file yields zero counters
+  # rather than a `set -e` abort). The `|| true` on `read` is load-bearing:
+  # printf without a trailing newline makes `read` return non-zero at EOF,
+  # which under `set -e` would kill the whole reconcile on Linux/bash 5.
   if [ -n "$flock_bin" ]; then
+    set +e
     (
-      exec 9>"$SPRINT_STATUS_LOCK" || {
-        die "could not open lock file: $SPRINT_STATUS_LOCK"
-      }
-      if ! "$flock_bin" -x -w 10 9; then
-        die "flock timeout acquiring $SPRINT_STATUS_LOCK"
-      fi
+      exec 9>"$SPRINT_STATUS_LOCK" || exit 1
+      "$flock_bin" -x -w 10 9 || exit 1
       do_reconcile_locked "$dry_run"
-      # Hoist result counters out of the subshell via a side-channel file.
-      printf '%s %s %s' "$RECONCILE_CHECKED" "$RECONCILE_DIVERGENCES" "$RECONCILE_ERRORS" \
+      printf '%s %s %s\n' "$RECONCILE_CHECKED" "$RECONCILE_DIVERGENCES" "$RECONCILE_ERRORS" \
         > "${SPRINT_STATUS_LOCK}.result"
     )
+    local sub_rc=$?
+    set -e
+    if [ "$sub_rc" -ne 0 ] && [ ! -f "${SPRINT_STATUS_LOCK}.result" ]; then
+      die "reconcile failed inside flock critical section (rc=$sub_rc)"
+    fi
     if [ -f "${SPRINT_STATUS_LOCK}.result" ]; then
       # shellcheck disable=SC2034
       read -r RECONCILE_CHECKED RECONCILE_DIVERGENCES RECONCILE_ERRORS \
-        < "${SPRINT_STATUS_LOCK}.result"
+        < "${SPRINT_STATUS_LOCK}.result" || true
       rm -f "${SPRINT_STATUS_LOCK}.result"
     fi
   else

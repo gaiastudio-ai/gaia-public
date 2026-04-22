@@ -137,9 +137,33 @@ setup() {
   # Export the path variables that sprint-state.sh respects.
   export PROJECT_PATH="$TEST_TMP"
   export IMPLEMENTATION_ARTIFACTS="$ARTIFACTS_DIR"
+  # Hermeticity: CATALOG points at the real plugin path because the
+  # dashboard resolves the bundled catalog relative to its own script dir.
+  # Back up the on-disk catalog, then REMOVE it so each test starts with a
+  # clean slate — AC5/AC6 create it via mk_catalog, AC-EC7 writes an inline
+  # variant, and AC-EC6 relies on its absence. Teardown restores the original
+  # contents so the repo tree is byte-identical after the suite runs.
+  if [ -f "$CATALOG" ]; then
+    export CATALOG_BACKUP="$TEST_TMP/.catalog-backup.yaml"
+    cp "$CATALOG" "$CATALOG_BACKUP"
+    rm -f "$CATALOG"
+  else
+    export CATALOG_BACKUP=""
+  fi
 }
 
-teardown() { common_teardown; }
+teardown() {
+  # Restore the bundled catalog to the state captured in setup(), or remove
+  # any leftover file if none existed originally. Load-bearing for tests that
+  # run after this suite: without restoration, mk_catalog / inline cat writes
+  # from AC5/AC6/AC-EC7 would leak into production.
+  if [ -n "${CATALOG_BACKUP:-}" ] && [ -f "$CATALOG_BACKUP" ]; then
+    cp "$CATALOG_BACKUP" "$CATALOG"
+  else
+    rm -f "$CATALOG" 2>/dev/null || true
+  fi
+  common_teardown
+}
 
 # ===========================================================================
 # AC1 — No-drift state reports "no drift"

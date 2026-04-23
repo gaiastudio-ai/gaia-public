@@ -217,6 +217,40 @@ If any stories were marked as NOW (inject into current sprint):
 If any stories were marked as NEXT SPRINT (P0):
 - Note they will be prioritized in `/gaia-sprint-plan`.
 
+### Step 7 — Persist to Val Sidecar (E34-S2)
+
+Final step. Delegates Val-decision persistence to the shared Val sidecar writer helper (`val-sidecar-write.sh`, E34-S1, architecture §10.10). Placing this last satisfies AC3 atomicity — any upstream failure (spawn-guard rejection, `/gaia-create-story` subagent failure, findings-table write error) short-circuits before the helper runs, so no partial sidecar entry can appear.
+
+Derive a deterministic `triage_session_id` of the form `triage-YYYY-MM-DD-<seq>`. The `<seq>` counter is a zero-padded monotonic index per day, computed by scanning existing triage markers in the current session's source stories:
+
+```bash
+today="$(date -u +%Y-%m-%d)"
+seq="$(printf '%03d' "$(( $(ls docs/implementation-artifacts/ 2>/dev/null | grep -c "^triage-${today}-" || echo 0) + 1 ))")"
+triage_session_id="triage-${today}-${seq}"
+```
+
+If no triage-artifact naming scheme is in use yet, `seq` defaults to `001`. This identifier is documented in the triage artifact header so downstream consumers can correlate the sidecar entry back to the source findings.
+
+Build the decision payload as `{verdict, findings[], artifact_path}` — the `findings[]` list holds the triaged finding IDs (CREATE STORY / ADD TO EXISTING / DISMISS decisions) sorted by id.
+
+Invoke the helper:
+
+```bash
+${CLAUDE_PLUGIN_ROOT}/scripts/val-sidecar-write.sh \
+  --command-name "/gaia-triage-findings" \
+  --input-id     "${triage_session_id}" \
+  --sprint-id    "${sprint_id:-N/A}" \
+  --decision-payload "$(jq -cn \
+    --arg verdict       "${verdict:-recorded}" \
+    --arg artifact_path "${triage_artifact_path}" \
+    --argjson findings  "${findings_json:-[]}" \
+    '{verdict: $verdict, findings: $findings, artifact_path: $artifact_path}')"
+```
+
+The helper enforces the two-file allowlist (NFR-VSP-2) and idempotency by composite `(command_name, input_id, decision_hash)` key (FR-VSP-2) — re-runs with identical payload yield `status=skipped_duplicate` and must be treated as success.
+
+Failure posture: if the helper rejects or errors, log a warning and continue — memory persistence is best-effort and MUST NOT fail the skill.
+
 ## Finalize
 
 !${CLAUDE_PLUGIN_ROOT}/skills/gaia-triage-findings/scripts/finalize.sh

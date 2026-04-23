@@ -70,6 +70,30 @@ This skill is the native Claude Code conversion of the legacy validate-story wor
 - If verdict is `UNVERIFIED`: report "Story {story_key} validation UNVERIFIED -- Val subagent was unavailable: {reason}."
 - Exit with code 0 for PASSED, non-zero for FAILED or UNVERIFIED.
 
+### Step 5 — Persist to Val Sidecar (E34-S2)
+
+Final step. Delegates Val-decision persistence to the shared Val sidecar writer helper (`val-sidecar-write.sh`, E34-S1, architecture §10.10). Placing this last satisfies AC3 atomicity — any upstream failure (Val unavailable, `review-gate.sh` rejection, story file missing) short-circuits before the helper runs, so no partial sidecar entry can appear.
+
+Build the decision payload as `{verdict, findings[], artifact_path}` from the Val subagent's structured response captured in Step 2.
+
+Invoke the helper:
+
+```bash
+${CLAUDE_PLUGIN_ROOT}/scripts/val-sidecar-write.sh \
+  --command-name "/gaia-validate-story" \
+  --input-id     "${story_key}" \
+  --sprint-id    "${sprint_id:-N/A}" \
+  --decision-payload "$(jq -cn \
+    --arg verdict       "${verdict}" \
+    --arg artifact_path "${story_file_path}" \
+    --argjson findings  "${findings_json:-[]}" \
+    '{verdict: $verdict, findings: $findings, artifact_path: $artifact_path}')"
+```
+
+The helper enforces the two-file allowlist (NFR-VSP-2) and idempotency by composite `(command_name, input_id, decision_hash)` key (FR-VSP-2) — re-runs with identical payload yield `status=skipped_duplicate` and must be treated as success.
+
+Failure posture: if the helper rejects or errors, log a warning and continue — memory persistence is best-effort and MUST NOT fail the skill.
+
 ## Finalize
 
 !${CLAUDE_PLUGIN_ROOT}/skills/gaia-validate-story/scripts/finalize.sh

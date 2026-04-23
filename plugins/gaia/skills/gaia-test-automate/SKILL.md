@@ -164,7 +164,7 @@ This step gates progression from Phase 1 to Phase 2. The user (or YOLO auto-appr
   1. Exit cleanly without recording any verdict. Do NOT invoke Phase 2.
 
 **7.6 — Handoff to Phase 2:**
-- After a PASSED verdict, proceed directly to Phase 2 (Step 8) in the same main context.
+- After a successful approval, proceed directly to Phase 2 (Step 8) in the same main context.
 - Phase 2 runs inline -- NOT as a `context: fork` subagent. The tool surface expands to `[Read, Write, Edit, Bash, Grep, Glob]`.
 
 ### Step 8 -- Phase 2: Main-Context Execution (E35-S3, ADR-051)
@@ -183,11 +183,11 @@ ${CLAUDE_PLUGIN_ROOT}/skills/gaia-test-automate/scripts/phase2-execute.sh \
   --project-root "{project_root}"
 ```
 
-**8.0 — Triple-source verdict verification (AC1, AC2, AC3):**
+**8.0 — Triple-source verification (AC1, AC2, AC3):**
 Three sources must agree before any writes occur:
-1. Plan frontmatter `approval.verdict` must equal `"PASSED"`
+1. Plan frontmatter `approval.verdict` must be the success value
 2. Plan frontmatter `approval.verdict_plan_id` must equal plan's top-level `plan_id`
-3. Ledger lookup for `(story_key, test-automate-plan, plan_id)` must return `PASSED`
+3. Ledger lookup for `(story_key, test-automate-plan, plan_id)` must return the success value
 
 HALT taxonomy:
 - `plan_id_mismatch` -- ledger plan_id differs from on-disk plan_id (AC2, concurrent-execution race)

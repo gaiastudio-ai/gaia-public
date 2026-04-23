@@ -13,6 +13,7 @@
 #   - esch_check_blocking            — top-level predicate (proceed/halt)
 #
 # Functions under test (sprint-state.sh record-escalation-override):
+#   - do_record_override_locked      — inner logic sans flock wrapper
 #   - cmd_record_escalation_override — atomic append to overrides: block
 #
 # Pattern: source the script as a library (extract function definitions
@@ -470,4 +471,114 @@ EOF
   SPRINT_STATUS_YAML="$ss" run "$SPRINT_STATE_SH" record-escalation-override \
     --user "alice" --reason "ack"
   [ "$status" -ne 0 ]
+}
+
+# ===========================================================================
+# do_record_override_locked — inner logic sans flock wrapper (NFR-052)
+#
+# Directly exercises the public function that cmd_record_escalation_override
+# delegates to after acquiring a lock. Sourced via awk extraction so we can
+# call it in-process without the flock/spin-lock wrapper.
+# ===========================================================================
+
+_load_sprint_state_override_helpers() {
+  local tmp
+  tmp="$(mktemp -t sprint-state-override-helpers.XXXXXX)"
+  awk '
+    /^die\(\) \{/,/^\}/ { print; next }
+    /^_override_normalize_ids\(\) \{/,/^\}/ { print; next }
+    /^_override_load_esch\(\) \{/,/^\}/ { print; next }
+    /^_override_append_entry\(\) \{/,/^\}/ { print; next }
+    /^do_record_override_locked\(\) \{/,/^\}/ { print; next }
+  ' "$SPRINT_STATE_SH" > "$tmp"
+  # shellcheck disable=SC1090
+  source "$tmp"
+  rm -f "$tmp"
+}
+
+@test "do_record_override_locked: appends override entry to sprint-status.yaml" {
+  _load_sprint_state_override_helpers
+  local ss="$TEST_TMP/sprint-status.yaml"
+  _make_sprint_status_yaml "$ss"
+
+  SPRINT_STATUS_YAML="$ss"
+  SPRINT_STATE_SCRIPT_DIR="$(cd "$BATS_TEST_DIRNAME/../scripts" && pwd)"
+  SCRIPT_NAME="sprint-state.sh"
+  export SPRINT_STATUS_YAML SPRINT_STATE_SCRIPT_DIR SCRIPT_NAME
+
+  do_record_override_locked "AI-42" "alice" "Acknowledged by lead"
+
+  grep -q "overrides:" "$ss"
+  grep -q "AI-42" "$ss"
+  grep -q "alice" "$ss"
+  grep -q "escalation_halt" "$ss"
+  grep -q "Acknowledged by lead" "$ss"
+}
+
+@test "do_record_override_locked: idempotent — second call with same ids is a no-op" {
+  _load_sprint_state_override_helpers
+  local ss="$TEST_TMP/sprint-status.yaml"
+  _make_sprint_status_yaml "$ss"
+
+  SPRINT_STATUS_YAML="$ss"
+  SPRINT_STATE_SCRIPT_DIR="$(cd "$BATS_TEST_DIRNAME/../scripts" && pwd)"
+  SCRIPT_NAME="sprint-state.sh"
+  export SPRINT_STATUS_YAML SPRINT_STATE_SCRIPT_DIR SCRIPT_NAME
+
+  do_record_override_locked "AI-42" "alice" "first"
+  local lines_after_first
+  lines_after_first="$(wc -l < "$ss")"
+
+  do_record_override_locked "AI-42" "bob" "second"
+  local lines_after_second
+  lines_after_second="$(wc -l < "$ss")"
+
+  [ "$lines_after_first" = "$lines_after_second" ]
+}
+
+@test "do_record_override_locked: normalizes and sorts comma-separated ids" {
+  _load_sprint_state_override_helpers
+  local ss="$TEST_TMP/sprint-status.yaml"
+  _make_sprint_status_yaml "$ss"
+
+  SPRINT_STATUS_YAML="$ss"
+  SPRINT_STATE_SCRIPT_DIR="$(cd "$BATS_TEST_DIRNAME/../scripts" && pwd)"
+  SCRIPT_NAME="sprint-state.sh"
+  export SPRINT_STATUS_YAML SPRINT_STATE_SCRIPT_DIR SCRIPT_NAME
+
+  do_record_override_locked "AI-99,AI-7" "alice" "multi"
+
+  # The ids should be sorted: AI-7 before AI-99 in the yaml
+  grep -q "AI-7" "$ss"
+  grep -q "AI-99" "$ss"
+}
+
+@test "do_record_override_locked: dies on empty sprint-status.yaml" {
+  _load_sprint_state_override_helpers
+  local ss="$TEST_TMP/sprint-status.yaml"
+  : > "$ss"
+
+  SPRINT_STATUS_YAML="$ss"
+  SPRINT_STATE_SCRIPT_DIR="$(cd "$BATS_TEST_DIRNAME/../scripts" && pwd)"
+  SCRIPT_NAME="sprint-state.sh"
+  export SPRINT_STATUS_YAML SPRINT_STATE_SCRIPT_DIR SCRIPT_NAME
+
+  run do_record_override_locked "AI-42" "alice" "ack"
+  [ "$status" -ne 0 ]
+  echo "$output" | grep -q "missing or empty"
+}
+
+@test "do_record_override_locked: dies on empty ids after normalization" {
+  _load_sprint_state_override_helpers
+  local ss="$TEST_TMP/sprint-status.yaml"
+  _make_sprint_status_yaml "$ss"
+
+  SPRINT_STATUS_YAML="$ss"
+  SPRINT_STATE_SCRIPT_DIR="$(cd "$BATS_TEST_DIRNAME/../scripts" && pwd)"
+  SCRIPT_NAME="sprint-state.sh"
+  export SPRINT_STATUS_YAML SPRINT_STATE_SCRIPT_DIR SCRIPT_NAME
+
+  run do_record_override_locked ",," "alice" "ack"
+  [ "$status" -ne 0 ]
+  echo "$output" | grep -q "empty list"
 }

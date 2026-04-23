@@ -1,0 +1,18 @@
+name: commitlint
+
+on:
+  pull_request:
+    branches: [main, staging]
+
+jobs:
+  lint-pr-title:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: wagoid/commitlint-github-action@v6
+        with:
+          configFile: commitlint.config.js
+          # Validate PR title (squash-merge normalizes individual commits)
+          # The action validates the PR title as the commit message
+          failOnWarnings: true

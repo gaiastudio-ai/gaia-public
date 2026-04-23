@@ -7,10 +7,9 @@
  * AC4: Non-conforming PR titles (e.g., "fix stuff") fail the check.
  *      Conforming titles (e.g., "fix(skill): repair broken reference") pass.
  */
-module.exports = {
+export default {
   extends: ["@commitlint/config-conventional"],
   rules: {
-    // Allowed Conventional Commit types
     "type-enum": [
       2,
       "always",
@@ -27,11 +26,8 @@ module.exports = {
         "style",
       ],
     ],
-    // Subject must not be empty
     "subject-empty": [2, "never"],
-    // Subject max length
     "subject-max-length": [2, "always", 100],
-    // Type must not be empty
     "type-empty": [2, "never"],
   },
 };

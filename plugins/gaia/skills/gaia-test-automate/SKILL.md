@@ -148,6 +148,11 @@ This step gates progression from Phase 1 to Phase 2. The user (or YOLO auto-appr
   3. Use atomic write (temp file + mv) for the plan file patch.
   4. Post-write verification: re-read the plan file and confirm `approval.verdict` = PASSED and `approval.verdict_plan_id` = `{plan_id}`. If divergence, HALT with message pointing at AC4.
   5. Report: "Plan approved. Verdict PASSED recorded for plan_id={plan_id}. Ready for Phase 2 execution (E35-S3)."
+  6. Invoke the composite review-gate-check to show the overall story review status:
+     ```bash
+     ${CLAUDE_PLUGIN_ROOT}/scripts/review-gate.sh review-gate-check --story "{story_key}"
+     ```
+     Capture stdout and include the Review Gate table and summary line (`Review Gate: COMPLETE|PENDING|BLOCKED`) in the command's output. This check is informational only -- do not halt on non-zero exit codes. Exit codes 0/1/2 correspond to COMPLETE/BLOCKED/PENDING per ADR-054. Log the result and continue regardless of exit code.
 
 - On **FAILED** (user rejects, AC-EC7):
   1. Invoke: `review-gate.sh update --story {story_key} --gate test-automate-plan --verdict FAILED --plan-id {plan_id}`

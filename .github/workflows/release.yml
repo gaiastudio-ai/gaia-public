@@ -1,5 +1,11 @@
 name: release
 
+# Pivot per ADR-056 amendment (2026-04-23): main has branch protection
+# requiring PR + status checks, so the release bot cannot push directly.
+# Instead, the workflow opens a release PR. Merging that PR re-fires the
+# workflow, which detects the release commit on main and cuts tag + GitHub
+# Release.
+
 on:
   push:
     branches: [main]
@@ -9,11 +15,41 @@ on:
 
 permissions:
   contents: write
+  pull-requests: write
 
 jobs:
-  release:
-    # AC3: skip the bot's own release commit to prevent infinite retrigger
-    if: "!contains(github.event.head_commit.message, '[skip ci]')"
+  # Mode detection: is the head commit on main already a release commit?
+  # If yes → publish (tag + Release). If no → prepare (open release PR).
+  detect-mode:
+    runs-on: ubuntu-latest
+    outputs:
+      mode: ${{ steps.mode.outputs.mode }}
+      new_version: ${{ steps.mode.outputs.new_version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect mode
+        id: mode
+        run: |
+          HEAD_MSG=$(git log -1 --format=%s HEAD)
+          echo "Head commit: $HEAD_MSG"
+
+          # Release commits start with "chore(release): v" followed by semver
+          if echo "$HEAD_MSG" | grep -qE '^chore\(release\): v[0-9]+\.[0-9]+\.[0-9]+'; then
+            VERSION=$(echo "$HEAD_MSG" | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' | head -1 | sed 's/^v//')
+            echo "mode=publish" >> "$GITHUB_OUTPUT"
+            echo "new_version=$VERSION" >> "$GITHUB_OUTPUT"
+            echo "Mode: publish (v$VERSION)"
+          else
+            echo "mode=prepare" >> "$GITHUB_OUTPUT"
+            echo "Mode: prepare"
+          fi
+
+  prepare:
+    needs: detect-mode
+    if: needs.detect-mode.outputs.mode == 'prepare'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -24,43 +60,35 @@ jobs:
         with:
           node-version: '20'
 
-      # AC1: Classify commits in the push range and compute bump
       - name: Classify commits and compute bump
         id: bump
         run: |
           BEFORE="${{ github.event.before }}"
           AFTER="${{ github.sha }}"
 
-          # Handle initial push (before is all zeros)
           if echo "$BEFORE" | grep -qE '^0+$'; then
-            echo "Initial push detected — using HEAD~1 as base."
             BEFORE="$(git rev-parse HEAD~1 2>/dev/null || echo "")"
             if [ -z "$BEFORE" ]; then
               echo "has_commits=false" >> "$GITHUB_OUTPUT"
-              echo "No previous commit to compare — skipping release."
               exit 0
             fi
           fi
 
-          # Get commits in range, filtering to those touching plugins/gaia/
           COMMITS=$(git log --format="%s" "$BEFORE".."$AFTER" -- plugins/gaia/ 2>/dev/null || echo "")
-
           if [ -z "$COMMITS" ]; then
             echo "has_commits=false" >> "$GITHUB_OUTPUT"
-            echo "No qualifying commits under plugins/gaia/ — skipping release."
+            echo "No qualifying commits under plugins/gaia/ — skipping."
             exit 0
           fi
 
-          # Filter out [skip ci] commits
-          FILTERED=$(echo "$COMMITS" | grep -v '\[skip ci\]' || true)
-
+          # Filter out prior release commits (defensive — they shouldn't match paths anyway)
+          FILTERED=$(echo "$COMMITS" | grep -vE '^chore\(release\):' || true)
           if [ -z "$FILTERED" ]; then
             echo "has_commits=false" >> "$GITHUB_OUTPUT"
-            echo "All commits in range are [skip ci] — skipping release."
+            echo "Only release commits in range — skipping."
             exit 0
           fi
 
-          # Classify using our Node script
           ESCAPED=$(echo "$FILTERED" | sed ':a;N;$!ba;s/\n/\\n/g')
           RESULT=$(node scripts/classify-commits.js "$ESCAPED")
           BUMP_SIZE=$(echo "$RESULT" | grep "bump_size=" | cut -d= -f2)
@@ -68,43 +96,31 @@ jobs:
 
           echo "bump_size=$BUMP_SIZE" >> "$GITHUB_OUTPUT"
           echo "has_commits=$HAS_COMMITS" >> "$GITHUB_OUTPUT"
-
-          # Save full commit list for changelog generation
           echo "$FILTERED" > /tmp/commit-messages.txt
 
-          echo "Bump type: $BUMP_SIZE"
-          echo "Qualifying commits: $(echo "$FILTERED" | wc -l | tr -d ' ')"
+          echo "Bump: $BUMP_SIZE | Commits: $(echo "$FILTERED" | wc -l | tr -d ' ')"
 
-      # AC3: Halt if no qualifying commits
-      - name: Skip if no qualifying commits
+      - name: Stop if nothing to release
         if: steps.bump.outputs.has_commits != 'true'
-        run: echo "No Conventional Commits in range — skipping release."
+        run: echo "No qualifying commits — no release PR will be opened."
 
-      # AC2: Run version bump
       - name: Run version bump
         if: steps.bump.outputs.has_commits == 'true'
         id: version
         run: |
           OUTPUT=$(node scripts/version-bump.js ${{ steps.bump.outputs.bump_size }})
           echo "$OUTPUT"
-
-          # Extract new version from output
           NEW_VERSION=$(echo "$OUTPUT" | grep "Version bumped:" | sed 's/.*-> //')
           echo "new_version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
-          echo "New version: $NEW_VERSION"
 
-      # AC5: Update CHANGELOG.md
       - name: Update CHANGELOG
         if: steps.bump.outputs.has_commits == 'true'
         run: |
           NEW_VERSION="${{ steps.version.outputs.new_version }}"
           CHANGELOG_PATH="plugins/gaia/CHANGELOG.md"
-
-          # Read commit messages
           COMMITS=$(cat /tmp/commit-messages.txt)
           ESCAPED=$(echo "$COMMITS" | sed ':a;N;$!ba;s/\n/\\n/g')
 
-          # Generate changelog delta using our classify script internals
           node -e "
             const { generateChangelog } = require('./scripts/classify-commits.js');
             const commits = process.argv[1].split('\\\\n').filter(Boolean);
@@ -112,52 +128,97 @@ jobs:
             process.stdout.write(delta);
           " "$ESCAPED" > /tmp/changelog-delta.md
 
-          # Prepend delta to CHANGELOG.md
           if [ -f "$CHANGELOG_PATH" ]; then
-            # Insert after the header line
             HEAD=$(head -n 4 "$CHANGELOG_PATH")
             TAIL=$(tail -n +5 "$CHANGELOG_PATH")
-            echo "$HEAD" > "$CHANGELOG_PATH"
-            echo "" >> "$CHANGELOG_PATH"
-            cat /tmp/changelog-delta.md >> "$CHANGELOG_PATH"
-            echo "$TAIL" >> "$CHANGELOG_PATH"
+            {
+              echo "$HEAD"
+              echo ""
+              cat /tmp/changelog-delta.md
+              echo "$TAIL"
+            } > "$CHANGELOG_PATH"
           else
-            echo "# Changelog" > "$CHANGELOG_PATH"
-            echo "" >> "$CHANGELOG_PATH"
-            echo "All notable changes to this project will be documented in this file." >> "$CHANGELOG_PATH"
-            echo "" >> "$CHANGELOG_PATH"
-            cat /tmp/changelog-delta.md >> "$CHANGELOG_PATH"
+            {
+              echo "# Changelog"
+              echo ""
+              echo "All notable changes to this project will be documented in this file."
+              echo ""
+              cat /tmp/changelog-delta.md
+            } > "$CHANGELOG_PATH"
           fi
 
-      # AC2: Commit, tag, push
-      - name: Commit, tag, push
-        if: steps.bump.outputs.has_commits == 'true'
-        run: |
-          NEW_VERSION="${{ steps.version.outputs.new_version }}"
-
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-          # Stage files reported by version-bump.js
-          git add plugins/gaia/.claude-plugin/plugin.json
-          git add plugins/gaia/CHANGELOG.md
-
-          # AC2: Commit with [skip ci] to prevent infinite retrigger
-          git commit -m "chore(release): v${NEW_VERSION} [skip ci]"
-
-          # AC2: Create annotated tag
-          git tag -a "v${NEW_VERSION}" -m "v${NEW_VERSION}"
-
-          # Push commit and tag
-          git push origin main --follow-tags
-
-      # AC2: Create GitHub Release
-      - name: Create GitHub Release
+      - name: Open release PR
         if: steps.bump.outputs.has_commits == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           NEW_VERSION="${{ steps.version.outputs.new_version }}"
-          gh release create "v${NEW_VERSION}" \
-            --title "v${NEW_VERSION}" \
-            --notes-file /tmp/changelog-delta.md
+          BRANCH="release/v${NEW_VERSION}"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # Force-create the branch (overwrite any stale one from a previous failed attempt)
+          git checkout -B "$BRANCH"
+          git add plugins/gaia/.claude-plugin/plugin.json plugins/gaia/CHANGELOG.md
+          git commit -m "chore(release): v${NEW_VERSION}"
+          git push -f origin "$BRANCH"
+
+          # Open or update the PR
+          EXISTING=$(gh pr list --head "$BRANCH" --base main --json number --jq '.[0].number' || echo "")
+          if [ -n "$EXISTING" ]; then
+            echo "Updating existing PR #$EXISTING"
+            gh pr edit "$EXISTING" \
+              --title "chore(release): v${NEW_VERSION}" \
+              --body-file /tmp/changelog-delta.md
+          else
+            gh pr create \
+              --base main \
+              --head "$BRANCH" \
+              --title "chore(release): v${NEW_VERSION}" \
+              --body-file /tmp/changelog-delta.md
+          fi
+
+  publish:
+    needs: detect-mode
+    if: needs.detect-mode.outputs.mode == 'publish'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Tag and release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          NEW_VERSION="${{ needs.detect-mode.outputs.new_version }}"
+          TAG="v${NEW_VERSION}"
+
+          # Idempotency: skip if tag already exists
+          if git rev-parse "$TAG" >/dev/null 2>&1 || git ls-remote --tags origin "$TAG" | grep -q "$TAG"; then
+            echo "Tag $TAG already exists — skipping."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git tag -a "$TAG" -m "$TAG"
+          git push origin "$TAG"
+
+          # Extract release notes from CHANGELOG section for this version
+          CHANGELOG_PATH="plugins/gaia/CHANGELOG.md"
+          awk -v ver="$NEW_VERSION" '
+            $0 ~ "^## \\[" ver "\\]" { inblock=1; print; next }
+            inblock && /^## \[/ { exit }
+            inblock { print }
+          ' "$CHANGELOG_PATH" > /tmp/release-notes.md
+
+          if [ ! -s /tmp/release-notes.md ]; then
+            echo "Release $TAG" > /tmp/release-notes.md
+          fi
+
+          gh release create "$TAG" \
+            --title "$TAG" \
+            --notes-file /tmp/release-notes.md

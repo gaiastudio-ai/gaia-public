@@ -154,6 +154,20 @@ The machine-readable summary line `audit-v2-migration: result=<PASS|FAIL> total=
 
 Contributors: your PR will be audited automatically. If the job fails, open the run page, download the `audit-v2-migration-csv` artifact, and inspect the bucket column to identify which regression class was hit.
 
+## Updating
+
+GAIA updates are delivered automatically. When Claude Code starts a new session, its background auto-update mechanism checks the marketplace for a newer `plugin.json` version. If one exists, Claude Code pulls the update silently. No user action is required in the normal case.
+
+**Force refresh (if auto-update seems stuck):**
+
+```
+/plugin marketplace update gaiastudio-ai-gaia-public
+```
+
+Then restart Claude Code. After restart, `/plugin` should report the new version.
+
+**Private-repo users:** set `GITHUB_TOKEN` in your shell environment before launching Claude Code. The marketplace clone step requires read access to the repository. If `gh auth status` shows you are authenticated with read access, updates work automatically.
+
 ## Documentation
 
 For a discovery entry point into the GAIA artifact directories

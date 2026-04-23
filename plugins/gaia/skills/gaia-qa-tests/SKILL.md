@@ -98,6 +98,15 @@ This skill is the native Claude Code conversion of the legacy `_gaia/lifecycle/w
 - Report the final status to the user.
 - Note: sprint-status.yaml may now be out of sync. Run `/gaia-sprint-status` to reconcile.
 
+### Step 9 -- Composite Review Gate Check
+
+- After the individual gate update completes successfully, invoke the composite review-gate-check to show the overall story review status:
+  ```bash
+  ${CLAUDE_PLUGIN_ROOT}/scripts/review-gate.sh review-gate-check --story "{story_key}"
+  ```
+- Capture stdout and include the Review Gate table and summary line (`Review Gate: COMPLETE|PENDING|BLOCKED`) in the command's output.
+- This check is informational only -- do not halt on non-zero exit codes. Exit codes 0/1/2 correspond to COMPLETE/BLOCKED/PENDING per ADR-054. Log the result and continue regardless of exit code.
+
 ## Finalize
 
 !${CLAUDE_PLUGIN_ROOT}/skills/gaia-qa-tests/scripts/finalize.sh

@@ -1,0 +1,163 @@
+name: release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'plugins/gaia/**'
+      - '.github/workflows/release.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    # AC3: skip the bot's own release commit to prevent infinite retrigger
+    if: "!contains(github.event.head_commit.message, '[skip ci]')"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # AC1: Classify commits in the push range and compute bump
+      - name: Classify commits and compute bump
+        id: bump
+        run: |
+          BEFORE="${{ github.event.before }}"
+          AFTER="${{ github.sha }}"
+
+          # Handle initial push (before is all zeros)
+          if echo "$BEFORE" | grep -qE '^0+$'; then
+            echo "Initial push detected — using HEAD~1 as base."
+            BEFORE="$(git rev-parse HEAD~1 2>/dev/null || echo "")"
+            if [ -z "$BEFORE" ]; then
+              echo "has_commits=false" >> "$GITHUB_OUTPUT"
+              echo "No previous commit to compare — skipping release."
+              exit 0
+            fi
+          fi
+
+          # Get commits in range, filtering to those touching plugins/gaia/
+          COMMITS=$(git log --format="%s" "$BEFORE".."$AFTER" -- plugins/gaia/ 2>/dev/null || echo "")
+
+          if [ -z "$COMMITS" ]; then
+            echo "has_commits=false" >> "$GITHUB_OUTPUT"
+            echo "No qualifying commits under plugins/gaia/ — skipping release."
+            exit 0
+          fi
+
+          # Filter out [skip ci] commits
+          FILTERED=$(echo "$COMMITS" | grep -v '\[skip ci\]' || true)
+
+          if [ -z "$FILTERED" ]; then
+            echo "has_commits=false" >> "$GITHUB_OUTPUT"
+            echo "All commits in range are [skip ci] — skipping release."
+            exit 0
+          fi
+
+          # Classify using our Node script
+          ESCAPED=$(echo "$FILTERED" | sed ':a;N;$!ba;s/\n/\\n/g')
+          RESULT=$(node scripts/classify-commits.js "$ESCAPED")
+          BUMP_SIZE=$(echo "$RESULT" | grep "bump_size=" | cut -d= -f2)
+          HAS_COMMITS=$(echo "$RESULT" | grep "has_commits=" | cut -d= -f2)
+
+          echo "bump_size=$BUMP_SIZE" >> "$GITHUB_OUTPUT"
+          echo "has_commits=$HAS_COMMITS" >> "$GITHUB_OUTPUT"
+
+          # Save full commit list for changelog generation
+          echo "$FILTERED" > /tmp/commit-messages.txt
+
+          echo "Bump type: $BUMP_SIZE"
+          echo "Qualifying commits: $(echo "$FILTERED" | wc -l | tr -d ' ')"
+
+      # AC3: Halt if no qualifying commits
+      - name: Skip if no qualifying commits
+        if: steps.bump.outputs.has_commits != 'true'
+        run: echo "No Conventional Commits in range — skipping release."
+
+      # AC2: Run version bump
+      - name: Run version bump
+        if: steps.bump.outputs.has_commits == 'true'
+        id: version
+        run: |
+          OUTPUT=$(node scripts/version-bump.js ${{ steps.bump.outputs.bump_size }})
+          echo "$OUTPUT"
+
+          # Extract new version from output
+          NEW_VERSION=$(echo "$OUTPUT" | grep "Version bumped:" | sed 's/.*-> //')
+          echo "new_version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
+          echo "New version: $NEW_VERSION"
+
+      # AC5: Update CHANGELOG.md
+      - name: Update CHANGELOG
+        if: steps.bump.outputs.has_commits == 'true'
+        run: |
+          NEW_VERSION="${{ steps.version.outputs.new_version }}"
+          CHANGELOG_PATH="plugins/gaia/CHANGELOG.md"
+
+          # Read commit messages
+          COMMITS=$(cat /tmp/commit-messages.txt)
+          ESCAPED=$(echo "$COMMITS" | sed ':a;N;$!ba;s/\n/\\n/g')
+
+          # Generate changelog delta using our classify script internals
+          node -e "
+            const { generateChangelog } = require('./scripts/classify-commits.js');
+            const commits = process.argv[1].split('\\\\n').filter(Boolean);
+            const delta = generateChangelog(commits, '$NEW_VERSION');
+            process.stdout.write(delta);
+          " "$ESCAPED" > /tmp/changelog-delta.md
+
+          # Prepend delta to CHANGELOG.md
+          if [ -f "$CHANGELOG_PATH" ]; then
+            # Insert after the header line
+            HEAD=$(head -n 4 "$CHANGELOG_PATH")
+            TAIL=$(tail -n +5 "$CHANGELOG_PATH")
+            echo "$HEAD" > "$CHANGELOG_PATH"
+            echo "" >> "$CHANGELOG_PATH"
+            cat /tmp/changelog-delta.md >> "$CHANGELOG_PATH"
+            echo "$TAIL" >> "$CHANGELOG_PATH"
+          else
+            echo "# Changelog" > "$CHANGELOG_PATH"
+            echo "" >> "$CHANGELOG_PATH"
+            echo "All notable changes to this project will be documented in this file." >> "$CHANGELOG_PATH"
+            echo "" >> "$CHANGELOG_PATH"
+            cat /tmp/changelog-delta.md >> "$CHANGELOG_PATH"
+          fi
+
+      # AC2: Commit, tag, push
+      - name: Commit, tag, push
+        if: steps.bump.outputs.has_commits == 'true'
+        run: |
+          NEW_VERSION="${{ steps.version.outputs.new_version }}"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # Stage files reported by version-bump.js
+          git add plugins/gaia/.claude-plugin/plugin.json
+          git add plugins/gaia/CHANGELOG.md
+
+          # AC2: Commit with [skip ci] to prevent infinite retrigger
+          git commit -m "chore(release): v${NEW_VERSION} [skip ci]"
+
+          # AC2: Create annotated tag
+          git tag -a "v${NEW_VERSION}" -m "v${NEW_VERSION}"
+
+          # Push commit and tag
+          git push origin main --follow-tags
+
+      # AC2: Create GitHub Release
+      - name: Create GitHub Release
+        if: steps.bump.outputs.has_commits == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          NEW_VERSION="${{ steps.version.outputs.new_version }}"
+          gh release create "v${NEW_VERSION}" \
+            --title "v${NEW_VERSION}" \
+            --notes-file /tmp/changelog-delta.md

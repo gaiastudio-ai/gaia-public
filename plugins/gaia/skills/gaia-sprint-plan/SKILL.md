@@ -220,6 +220,36 @@ The override is **idempotent** on the dedup key `(sprint_id, sorted-unique(overr
 - Display the finalized sprint summary: sprint ID, duration, velocity, stories selected, total points, capacity utilization.
 - Suggest next step: `/gaia-dev-story {first_story_key}` to begin the first story.
 
+### Step 11 — Persist to Val Sidecar (E34-S2)
+
+Final step. Delegates Val-decision persistence to the shared Val sidecar writer helper (`val-sidecar-write.sh`, E34-S1, architecture §10.10). Placing this last satisfies AC3 atomicity — any upstream failure (sprint-state transition, dependency-inversion lint error, Val validation failure in Step 8) short-circuits before the helper runs, so no partial sidecar entry can appear.
+
+Read `sprint_id` via the shared `sprint-state.sh` foundation script — never parse `sprint-status.yaml` directly (project hard rule):
+
+```bash
+sprint_id="$(${CLAUDE_PLUGIN_ROOT}/scripts/sprint-state.sh current-sprint --field sprint_id 2>/dev/null || echo 'N/A')"
+```
+
+Build the decision payload as `{verdict, findings[], artifact_path}` using the Step 8 Val verdict (or `verdict: "skipped"` if Val was unavailable) and the sprint-plan artifact path from Step 7.
+
+Invoke the helper:
+
+```bash
+${CLAUDE_PLUGIN_ROOT}/scripts/val-sidecar-write.sh \
+  --command-name "/gaia-sprint-plan" \
+  --input-id     "${sprint_id}" \
+  --sprint-id    "${sprint_id}" \
+  --decision-payload "$(jq -cn \
+    --arg verdict       "${verdict:-skipped}" \
+    --arg artifact_path "docs/implementation-artifacts/${sprint_id}-plan.md" \
+    --argjson findings  "${findings_json:-[]}" \
+    '{verdict: $verdict, findings: $findings, artifact_path: $artifact_path}')"
+```
+
+The helper enforces the two-file allowlist (NFR-VSP-2) and idempotency by composite `(command_name, input_id, decision_hash)` key (FR-VSP-2) — re-runs with identical payload yield `status=skipped_duplicate` and must be treated as success.
+
+Failure posture: if the helper rejects or errors, log a warning and continue — memory persistence is best-effort and MUST NOT fail the skill.
+
 ## Finalize
 
 !${CLAUDE_PLUGIN_ROOT}/skills/gaia-sprint-plan/scripts/finalize.sh

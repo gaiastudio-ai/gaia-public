@@ -154,6 +154,30 @@ Canonical vocabulary is strict: exactly `PASSED`, `FAILED`, or `UNVERIFIED`. No 
 
 **Token budget (NFR-055).** Log per-attempt Val token usage to Dev Agent Record. Total loop overhead MUST NOT exceed 3x a single-pass Val budget.
 
+### Step 7 — Persist to Val Sidecar (E34-S2)
+
+Final step. Delegates Val-decision persistence to the shared Val sidecar writer helper (`val-sidecar-write.sh`, E34-S1, architecture §10.10). This step MUST be the final action of the skill — placing it last guarantees AC3 atomicity: any upstream failure short-circuits before the helper runs, so no partial sidecar entry can appear.
+
+Build the decision payload as `{verdict, findings[], artifact_path}` using the terminal verdict recorded by Step 6 (via `review-gate.sh`). If Step 6 was skipped (no validation ran), use `verdict: "skipped"` and an empty findings list so the command invocation is still recorded.
+
+Invoke the helper:
+
+```bash
+${CLAUDE_PLUGIN_ROOT}/scripts/val-sidecar-write.sh \
+  --command-name "/gaia-create-story" \
+  --input-id     "${story_key}" \
+  --sprint-id    "${sprint_id:-N/A}" \
+  --decision-payload "$(jq -cn \
+    --arg verdict       "${verdict}" \
+    --arg artifact_path "${story_file_path}" \
+    --argjson findings  "${findings_json:-[]}" \
+    '{verdict: $verdict, findings: $findings, artifact_path: $artifact_path}')"
+```
+
+The helper enforces the two-file allowlist (NFR-VSP-2) and idempotency by composite `(command_name, input_id, decision_hash)` key (FR-VSP-2) — re-runs with identical payload yield `status=skipped_duplicate` and must be treated as success.
+
+Failure posture: if the helper rejects or errors, log a warning and continue — memory persistence is best-effort and MUST NOT fail the skill.
+
 ## Finalize
 
 !${CLAUDE_PLUGIN_ROOT}/skills/gaia-create-story/scripts/finalize.sh

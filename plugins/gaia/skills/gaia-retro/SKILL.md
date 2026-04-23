@@ -342,37 +342,40 @@ Write the artifact to the determined path.
 
 Report the output path to the facilitator.
 
-### Step 7 --- Val Memory Persistence (FR-RIM-8)
+### Step 7 --- Val Memory Persistence (FR-RIM-8, E34-S2)
 
-After the retro artifact is written, persist the retro's decisions and rolling context to the validator sidecar so Val can cross-reference retro outcomes in subsequent validations. This delegates to the Shared Val Sidecar Writer (architecture §10.10) — the shared retro writer helper is used as the transport (ADR-052, architecture §10.28.2 "Relationship to Shared Val Sidecar Writer") so the NFR-RIM-2 allowlist and NFR-RIM-3 idempotency apply uniformly.
+Final step. After the retro artifact is written, persist the retro's decisions and rolling context to the validator sidecar so Val can cross-reference retro outcomes in subsequent validations. Per architecture §10.28.2 "Relationship to Shared Val Sidecar Writer", this delegation is made concrete by invoking the shared Val sidecar writer helper (`val-sidecar-write.sh`, E34-S1, architecture §10.10). The helper's two-file allowlist (NFR-VSP-2) and composite-key idempotency (NFR-VSP-3) apply uniformly. Placing the helper invocation as the FINAL step satisfies AC3 atomicity — any upstream failure short-circuits before the helper runs, so no partial sidecar entry can appear.
 
-Targets:
+Targets (enforced by the helper allowlist — no other paths are writable):
 
 - `${CLAUDE_PROJECT_ROOT}/_memory/validator-sidecar/decision-log.md` — append one ADR-016-formatted entry per retro (sprint-ID tagged).
 - `${CLAUDE_PROJECT_ROOT}/_memory/validator-sidecar/conversation-context.md` — refresh the rolling body with a one-line summary of the current retro per FR-VSP-2.
 
-Invocation:
+Build the decision payload as `{verdict, findings[], artifact_path}` — the `findings[]` list holds the action-item IDs produced in Step 5 sorted by id; `artifact_path` is the retro artifact written in Step 6.
+
+Invoke the helper (a single call writes both allowlisted targets atomically under a composite dedup key):
 
 ```bash
-# decision-log append
-${CLAUDE_PLUGIN_ROOT}/../../scripts/retro-sidecar-write.sh \
-  --root       "${CLAUDE_PROJECT_ROOT}" \
-  --sprint-id  "${sprint_id}" \
-  --target     "${CLAUDE_PROJECT_ROOT}/_memory/validator-sidecar/decision-log.md" \
-  --payload    "$(emit_val_retro_decision)"
-
-# conversation-context refresh
-${CLAUDE_PLUGIN_ROOT}/../../scripts/retro-sidecar-write.sh \
-  --root       "${CLAUDE_PROJECT_ROOT}" \
-  --sprint-id  "${sprint_id}" \
-  --target     "${CLAUDE_PROJECT_ROOT}/_memory/validator-sidecar/conversation-context.md" \
-  --payload    "$(emit_val_conversation_summary)"
+${CLAUDE_PLUGIN_ROOT}/scripts/val-sidecar-write.sh \
+  --command-name "/gaia-retro" \
+  --input-id     "${sprint_id}" \
+  --sprint-id    "${sprint_id}" \
+  --decision-payload "$(jq -cn \
+    --arg verdict       "${verdict:-recorded}" \
+    --arg artifact_path "${retro_artifact_path}" \
+    --argjson findings  "${action_items_json:-[]}" \
+    '{verdict: $verdict, findings: $findings, artifact_path: $artifact_path}')"
 ```
+
+Re-runs with identical payload yield `status=skipped_duplicate` and must be treated as success.
 
 Failure posture:
 
-- Missing `_memory/validator-sidecar/` directory → the shared writer creates the directory and seeds both files with canonical ADR-016 headers before the first append (AC-EC10).
+- Missing `_memory/validator-sidecar/` directory → the shared helper creates the directory and seeds both files with canonical ADR-016 headers before the first append (AC-EC10).
 - Degraded-mode running: if Step 5c / 5d / 5 failed earlier, Step 7 still runs so the validator sidecar records the partial-success outcome — retro mandate per architecture §10.28.2.
+- Helper rejection or error → log a warning and continue. Memory persistence is best-effort and MUST NOT fail the skill (FR-RIM-8 non-blocking).
+
+> **Note (E34-S2).** This Step 7 invocation was retargeted from `retro-sidecar-write.sh` to `val-sidecar-write.sh` to realize the architecture §10.28.2 delegation. Other retro writes (action-items, skill_overrides proposals) continue to use `retro-sidecar-write.sh` — only the two validator-sidecar targets route through the shared Val helper here.
 
 ## Finalize
 

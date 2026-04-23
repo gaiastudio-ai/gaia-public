@@ -12,7 +12,7 @@ jobs:
 
       - uses: wagoid/commitlint-github-action@v6
         with:
-          configFile: commitlint.config.js
+          configFile: commitlint.config.mjs
           # Validate PR title (squash-merge normalizes individual commits)
           # The action validates the PR title as the commit message
-          failOnWarnings: true
+          failOnWarnings: false

@@ -77,15 +77,77 @@ For stories **removed** from the sprint (moved back to backlog):
 PROJECT_PATH="${CLAUDE_PROJECT_ROOT}" "${CLAUDE_PLUGIN_ROOT}/scripts/sprint-state.sh" transition --story {story_key} --to backlog
 ```
 
-For stories **injected** into the sprint:
+For stories **injected** into the sprint that **already have a story file**:
 ```bash
 PROJECT_PATH="${CLAUDE_PROJECT_ROOT}" "${CLAUDE_PLUGIN_ROOT}/scripts/sprint-state.sh" transition --story {story_key} --to {target_status}
 ```
+
+For stories **injected** into the sprint that **need a new story file** (Skill-to-Skill Delegation, FR-FITP-2):
+
+Story creation is delegated to `/gaia-create-story` via subagent spawn. This replaces all inline story-creation logic -- delegation is authoritative.
+
+1. **Pre-spawn validation:** validate `origin_ref` using `spawn-guard.sh`:
+```bash
+"${CLAUDE_PLUGIN_ROOT}/scripts/spawn-guard.sh" validate-ref "${sprint_id}"
+```
+If validation fails, halt with guidance. Do not spawn the subagent.
+
+2. **Collision check:** verify no story file already exists at the canonical path:
+```bash
+"${CLAUDE_PLUGIN_ROOT}/scripts/spawn-guard.sh" check-collision "${CLAUDE_PROJECT_ROOT}/docs/implementation-artifacts" "${story_key}"
+```
+If collision detected, halt with guidance to delete or rename before retry. Do not spawn the subagent.
+
+3. **Spawn `/gaia-create-story`:** invoke as a subagent with origin context:
+```
+/gaia-create-story {story_key} with origin="correct-course" origin_ref="{sprint_id}"
+```
+The spawned `/gaia-create-story` populates the story frontmatter with `origin: "correct-course"` and `origin_ref: "{sprint_id}"` and produces the full elaboration (AC, tasks, test scenarios).
+
+4. **Post-spawn verification:** after the subagent completes, verify the story file exists and frontmatter is correct:
+```bash
+"${CLAUDE_PLUGIN_ROOT}/scripts/spawn-guard.sh" verify "${CLAUDE_PROJECT_ROOT}/docs/implementation-artifacts/${story_key}-*.md" "correct-course" "${sprint_id}"
+```
+If verification fails (schema drift), halt with actionable guidance referencing NFR-FITP-1.
+
+5. **On subagent failure** (timeout, context overflow, crash): halt with actionable guidance (failure reason, retry instructions). Clean up any partial file:
+```bash
+"${CLAUDE_PLUGIN_ROOT}/scripts/spawn-guard.sh" cleanup "${CLAUDE_PROJECT_ROOT}/docs/implementation-artifacts/${story_key}-*.md"
+```
+No partial story stubs may persist on disk after a failed spawn.
 
 For stories that **changed status** but remain in the sprint:
 ```bash
 PROJECT_PATH="${CLAUDE_PROJECT_ROOT}" "${CLAUDE_PLUGIN_ROOT}/scripts/sprint-state.sh" transition --story {story_key} --to {new_status}
 ```
+
+### Step 5b --- Record Action Items for Drop/Defer Decisions (E39-S3, FR-FITP-3)
+
+After the sprint-state mutation in Step 5, for every story that was **dropped** or **deferred** (moved back to backlog), persist a structured action-items entry so retrospectives and `/gaia-action-items` have a complete record. Both drop and defer are process-class decisions per FR-FITP-3.
+
+1. Source the action-items writer:
+```bash
+source "${CLAUDE_PLUGIN_ROOT}/scripts/action-items-write.sh"
+```
+
+2. For each dropped or deferred story, invoke the writer:
+```bash
+aiw_write \
+  --target "${CLAUDE_PROJECT_ROOT}/docs/planning-artifacts/action-items.yaml" \
+  --sprint-id "{current_sprint_id}" \
+  --classification "process" \
+  --text "Dropped/deferred {story_key}: {reason}" \
+  --ref-key "story_key" \
+  --ref-value "{story_key}"
+```
+
+The writer handles:
+- **Bootstrap:** creates `action-items.yaml` with the architecture §10.28.6 schema header if the file does not exist.
+- **Auto-increment:** computes the next `AI-{n}` id from existing entries.
+- **Idempotency:** dedup key is `(story_key, sprint_id, classification=process)` -- re-running the same drop/defer does not duplicate.
+- **Schema compliance:** entry fields match architecture §10.28.6 exactly (`id`, `sprint_id`, `text`, `classification`, `status: open`, `escalation_count: 0`, `created_at`, `theme_hash`, `story_key`).
+
+> **TODO (E36-S2 swap-in):** When E36-S2 ships the shared action-items writer, replace the inline `action-items-write.sh` source with the E36-S2 shared writer invocation. The inline writer is byte-compatible with the E36-S2 schema, so swap-in is a pure deletion of the source line above.
 
 ### Step 6 --- Log Course Correction
 

@@ -34,6 +34,22 @@ Otherwise, read `${CLAUDE_PROJECT_ROOT}/docs/implementation-artifacts/sprint-sta
 
 If sprint-status.yaml is missing or unreadable, ask the user for the sprint ID.
 
+### Step 1b --- Review Report Extraction (FR-RIM-2)
+
+Extract verdicts and key findings from review artifacts for the resolved sprint. This produces a "data-driven findings" block that seeds Steps 3 and 4.
+
+Invoke:
+
+```bash
+${CLAUDE_PLUGIN_ROOT}/skills/gaia-retro/scripts/review-extract.sh \
+  --impl-dir "${CLAUDE_PROJECT_ROOT}/docs/implementation-artifacts" \
+  --sprint-id "${sprint_id}"
+```
+
+The scanner globs `code-review-*.md`, `security-review-*.md`, `qa-tests-*.md`, and `performance-review-*.md`, filters to artifacts whose YAML frontmatter `sprint_id` matches the resolved sprint, and parses the `**Verdict:**` line from each. Malformed or truncated artifacts yield a `UNKNOWN` verdict with a `parse-warning` note (AC-EC4). When no artifacts match the current sprint, the scanner emits an explicit `no review artifacts for sprint {id}` note (AC-EC5) so prior-sprint review files do not leak into the current retro's findings.
+
+Hold the scanner output in session memory — do NOT copy it verbatim into the final retro artifact. Surface it as context to the facilitator during Steps 3 and 4.
+
 ### Step 2 --- Load Sprint Data
 
 Read `${CLAUDE_PROJECT_ROOT}/docs/implementation-artifacts/sprint-status.yaml` to extract:
@@ -84,7 +100,7 @@ Then prompt the facilitator:
 
 Collect the facilitator's input and compile the final improvements list.
 
-### Step 5 --- Action Items
+### Step 5 --- Action Items (structured YAML write — FR-RIM-5)
 
 For each improvement area identified in Step 4, propose a concrete action item with:
 - Description of the action
@@ -96,7 +112,217 @@ Prompt the facilitator:
 
 > Review the proposed action items. Add, remove, or modify items. Each action item needs an owner and target sprint.
 
-Collect the facilitator's input and compile the final action items list.
+Collect the facilitator's input and compile the final action items list, then persist each item to `${CLAUDE_PROJECT_ROOT}/docs/planning-artifacts/action-items.yaml` using the shared retro writer helper (ADR-052). The YAML schema is authoritative — see architecture §10.28.6.
+
+Per-item payload (one YAML list element per action, FR-RIM-5):
+
+```yaml
+- id: AI-{auto-inc}
+  sprint_id: "{sprint_id}"
+  text: "{action text}"
+  classification: clarification|implementation|process|automation
+  status: open
+  escalation_count: 0
+  created_at: "{ISO 8601 timestamp}"
+  theme_hash: "sha256:{hex of lowercase(trim(text))}"
+```
+
+Invoke the shared writer once per action item:
+
+```bash
+${CLAUDE_PLUGIN_ROOT}/../../scripts/retro-sidecar-write.sh \
+  --root       "${CLAUDE_PROJECT_ROOT}" \
+  --sprint-id  "${sprint_id}" \
+  --target     "${CLAUDE_PROJECT_ROOT}/docs/planning-artifacts/action-items.yaml" \
+  --payload    "$(emit_action_item_yaml)"
+```
+
+Failure posture:
+
+- Missing `action-items.yaml` → writer seeds the file with the schema header from architecture §10.28.6 before appending (AC-EC3).
+- Malformed existing YAML → writer HALTs with a line-pointer error; fix the YAML manually and re-run (AC-EC3).
+- Dedup by stable `AI-{n}` ID when the prose retro already referenced an item — in-place `text` update rather than duplicate row (AC-EC8).
+- `flock` on the YAML file serializes auto-increment across concurrent writers (AC-EC9).
+
+The prose retrospective artifact written in Step 6 references each item by `AI-{n}` ID rather than duplicating text — `action-items.yaml` is the source of truth.
+
+### Step 5c --- Agent Memory Updates (FR-RIM-3, ADR-016, ADR-052)
+
+After Step 5 completes, persist the sprint's lessons to each of the six canonical agent memory sidecars so the next sprint's planning and dev agents carry the institutional memory forward. Writes go through the shared retro writer helper (ADR-052, architecture §10.28.2) which enforces the NFR-RIM-2 allowlist, NFR-RIM-3 idempotency, and atomic backup/verify.
+
+Target sidecars (six fan-out, one entry per agent per sprint):
+
+1. `${CLAUDE_PROJECT_ROOT}/_memory/architect-sidecar/decision-log.md` — architecture-level lessons.
+2. `${CLAUDE_PROJECT_ROOT}/_memory/test-architect-sidecar/decision-log.md` — test strategy lessons.
+3. `${CLAUDE_PROJECT_ROOT}/_memory/security-sidecar/decision-log.md` — security findings.
+4. `${CLAUDE_PROJECT_ROOT}/_memory/devops-sidecar/decision-log.md` — deployment / pipeline lessons.
+5. `${CLAUDE_PROJECT_ROOT}/_memory/sm-sidecar/decision-log.md` — process lessons.
+6. `${CLAUDE_PROJECT_ROOT}/_memory/pm-sidecar/decision-log.md` — stakeholder / prioritization lessons.
+
+For each sidecar, compose a payload in ADR-016 decision-log format tagged with the sprint ID, then invoke:
+
+```bash
+${CLAUDE_PLUGIN_ROOT}/../../scripts/retro-sidecar-write.sh \
+  --root       "${CLAUDE_PROJECT_ROOT}" \
+  --sprint-id  "${sprint_id}" \
+  --target     "${CLAUDE_PROJECT_ROOT}/_memory/${agent}-sidecar/decision-log.md" \
+  --payload    "$(emit_adr016_lesson ${agent})"
+```
+
+Failure posture:
+
+- Missing sidecar file → writer creates the parent dir and seeds the canonical ADR-016 header before appending (AC-EC2).
+- Re-run for the same sprint → composite dedup key (`sprint_id + sha256(payload)`) causes the writer to return `skipped_idempotent`; sidecar is byte-identical (AC2 / TC-RIM-4).
+- Partial fan-out failure (e.g., one sidecar is read-only) → the failing sidecar is restored from `.bak`; already-successful sidecars keep their appended entry (they are valid organizational memory); retro halts before proceeding to Step 5d (AC-EC7).
+- Symlink bypass attempt → writer resolves via `realpath` before the allowlist check and rejects with `status=unauthorized` (AC-EC5).
+
+### Step 5d --- Velocity Data Persistence (FR-RIM-4, architecture §10.28.5)
+
+Append a velocity row to `${CLAUDE_PROJECT_ROOT}/_memory/sm-sidecar/velocity-data.md`. This runs **unconditionally** on every retro invocation — it is the velocity mandate per architecture §10.28.5. Idempotency key is `sprint_id` alone (one row per sprint).
+
+Payload schema (architecture §10.28.5):
+
+```
+| Planned points   | {planned}   |
+| Completed points | {completed} |
+| Story count (done)     | {done_count}     |
+| Story count (rollover) | {rollover_count} |
+| Velocity %             | {pct}            |
+```
+
+Invocation:
+
+```bash
+${CLAUDE_PLUGIN_ROOT}/../../scripts/retro-sidecar-write.sh \
+  --root       "${CLAUDE_PROJECT_ROOT}" \
+  --sprint-id  "${sprint_id}" \
+  --target     "${CLAUDE_PROJECT_ROOT}/_memory/sm-sidecar/velocity-data.md" \
+  --payload    "$(emit_velocity_row)"
+```
+
+Failure posture:
+
+- Missing sprint ID → writer exits with `status=missing_sprint_id` and a non-zero code; prior Step 5c sidecar entries are NOT rolled back (they are valid memory), but the retro halts before Step 5 / Step 7 so no partial action-items / validator state lands (AC-EC4).
+- Second retro invocation for the same sprint → writer sees the existing `### Sprint {id}` row and returns `skipped_idempotent`; velocity-data.md is byte-identical (AC2 / TC-RIM-4).
+- Missing file → writer creates and seeds with the canonical "SM Velocity Data" header before appending (AC-EC2).
+
+### Step 5e --- Tech Debt Reflection (FR-RIM-7, architecture §10.28.8)
+
+Read `${CLAUDE_PROJECT_ROOT}/docs/implementation-artifacts/tech-debt-dashboard.md` and extract a Tech Debt Reflection block for the retro artifact. This step is **read-only** — it MUST NOT modify the dashboard file.
+
+Invoke:
+
+```bash
+source "${CLAUDE_PLUGIN_ROOT}/skills/gaia-retro/scripts/skill-proposal.sh"
+extract_tech_debt_reflection "${CLAUDE_PROJECT_ROOT}" "${sprint_id}"
+```
+
+The function extracts:
+- **Debt ratio delta:** current sprint vs. prior sprint (percentage change)
+- **Aging delta:** mean age of open debt items (days change)
+- **Category breakdown:** architecture, code, test, documentation, process (count and delta per category)
+
+Hold the output in session memory for inclusion in the retro artifact at Step 6.
+
+Failure posture:
+
+- Missing `tech-debt-dashboard.md` → renders "No tech debt data available" note and retro continues without failing (AC-EC1, architecture §10.28.8 edge case).
+- Malformed dashboard (ratio/aging/categories unparseable) → logs a warning to retro Dev Notes, skips extraction, and writes "tech-debt reflection unavailable: {reason}" without halting (AC-EC2).
+- First sprint (no prior dashboard snapshot to diff against) → ratio/aging deltas render as "baseline" markers; category breakdown uses absolute counts; no divide-by-zero (AC-EC3).
+- Older-format dashboard without category breakdown → renders ratio/aging blocks and emits "category breakdown unavailable (older dashboard format)" rather than failing (AC-EC10).
+- Dashboard file byte-identical after step completes (read-only contract — architecture §10.28.8).
+
+### Step 5b --- Cross-Retro Pattern Detection (FR-RIM-1)
+
+After action items are drafted in Step 5, scan prior retrospective files for recurring themes. Themes appearing in 2+ distinct sprints are flagged systemic, and their parent `action-items.yaml` entry receives an `escalation_count` increment.
+
+Invoke:
+
+```bash
+${CLAUDE_PLUGIN_ROOT}/skills/gaia-retro/scripts/cross-retro-detect.sh \
+  --retros-dir     "${CLAUDE_PROJECT_ROOT}/docs/implementation-artifacts" \
+  --action-items   "${CLAUDE_PROJECT_ROOT}/docs/implementation-artifacts/action-items.yaml" \
+  --current-sprint "${sprint_id}"
+```
+
+The scanner:
+
+1. Globs `retrospective-*.md` under the retros dir.
+2. Extracts action-item lines under `## Action Items` sections (or resolves `AI-{n}` references in `action-items.yaml`).
+3. Normalizes each line (`lowercase(trim(text))`) and computes `SHA-256(norm)`.
+4. Flags themes seen in 2+ distinct sprint IDs as systemic.
+5. For each systemic theme, delegates to `action-items-increment.sh` using `(current_sprint, theme_hash)` as the idempotency key so re-running the same retro never double-increments (NFR-RIM-3).
+
+All edge paths are non-blocking (per the story's "Failure posture"):
+
+- No prior retros → success, zero escalations (AC3 / AC-EC9).
+- Missing or unreadable `action-items.yaml` → warn on stderr, continue (AC-EC2).
+- Orphan `AI-{n}` reference → log orphan, skip that item, continue (AC-EC6).
+- Empty / zero-byte retro file → contributes zero themes (AC-EC9).
+- Mixed-case or whitespace variants → normalize to the same hash (AC-EC10).
+- 100+ prior retros → bounded per-file read (`MAX_BYTES=65536`) caps token usage (NFR-RIM-1).
+
+> **Note (E36-S2 coupling):** the increment writer is an inline, byte-compatible stand-in for the ADR-052 shared retro writer helper delivered by E36-S2. When E36-S2 lands, replace the body of `action-items-increment.sh` with a delegation to the helper — the CLI contract stays stable, so callers in this skill do not need to change.
+
+### Step 5f --- Skill Improvement Proposals (FR-RIM-6, ADR-053, architecture §10.28.7)
+
+Map each retro finding from Steps 3-4 to existing shared skills by scanning `${CLAUDE_PLUGIN_ROOT}/skills/` and `${CLAUDE_PROJECT_ROOT}/custom/skills/` registries. For each matched finding, build a structured proposal object per architecture §10.28.7 schema.
+
+Invoke:
+
+```bash
+source "${CLAUDE_PLUGIN_ROOT}/skills/gaia-retro/scripts/skill-proposal.sh"
+build_proposal "${finding_ref}" "${target_skill}" "${rationale}" "${diff_text}"
+```
+
+**Stage 1: Proposal.** The proposal is a structured YAML object held in-session:
+
+```yaml
+proposal:
+  finding_ref: "retro-{sprint_id}-finding-{n}"
+  target_skill: "{skill-name}"
+  target_path: "custom/skills/{skill-name}.md"
+  rationale: "Sprint {N} retro found {theme} ..."
+  diff: |
+    + ## New Section
+    + ...
+```
+
+**Stage 2: Approval.** Present each proposal to the user for interactive approval. YOLO auto-approve is explicitly out of scope (architecture §10.28.7 Stage 2). For each proposal:
+- Display the target skill, rationale, and diff preview
+- If `target_path` already exists with divergent content, present a merge-preview diff and require explicit overwrite confirmation (AC-EC6)
+- Wait for user approval or rejection
+
+**Stage 3: Write.** Only upon explicit user approval, delegate to the shared retro writer (ADR-052):
+
+```bash
+source "${CLAUDE_PLUGIN_ROOT}/skills/gaia-retro/scripts/skill-proposal.sh"
+write_approved_proposal \
+  "${CLAUDE_PROJECT_ROOT}" \
+  "${sprint_id}" \
+  "${target_skill}" \
+  "custom/skills/${target_skill}.md" \
+  "${rationale}" \
+  "${diff_content}" \
+  "${CLAUDE_PLUGIN_ROOT}/../../scripts/retro-sidecar-write.sh"
+```
+
+The function:
+1. Writes `custom/skills/{skill-name}.md` with the proposed content via the shared writer
+2. Registers the `skill_overrides` entry in `custom/skills/all-dev.customize.yaml` via the shared writer
+3. The plugin loader reads `custom/skills/` with higher precedence than bundled skills (ADR-020)
+
+**Hard constraint:** Proposals MUST NOT write to `plugins/gaia/skills/` directly. The retro writer's NFR-RIM-2 allowlist rejects any such path with `status=unauthorized` (AC-EC8, TC-RIM-9).
+
+Failure posture:
+
+- Finding maps to multiple existing skills → `target_skill` field is a list of candidates; user selects one at approval; non-selected candidates produce no writes (AC-EC4).
+- Finding maps to NO existing skill → Step 5f yields zero proposals for that finding; retro Dev Notes record "no skill match for finding #{n}"; no error (AC-EC5).
+- Pre-write validation rejects proposals whose diff is non-UTF-8 or > 100 KB with an explicit error; proposal remains in session for editing (AC-EC11).
+- Missing `.customize.yaml` → writer seeds the file with canonical header before registering the `skill_overrides` entry; no error (AC-EC7).
+- Proposal write path attempts `gaia-public/plugins/gaia/skills/` bypass → shared retro writer rejects via NFR-RIM-2 allowlist; retro halts with authorization error; `plugins/gaia/skills/` byte-identical (AC-EC8).
+- User rejects a proposal → clear session cache; zero filesystem writes; rejection logged in retro artifact's "Proposals" section as `{finding_ref}: REJECTED` (AC4, AC-EC9).
+- Concurrent retro invocations each approve targeting same file → `flock` serializes; second writer re-presents a fresh merge preview (AC-EC12).
 
 ### Step 6 --- Write Retro Artifact
 
@@ -105,6 +331,8 @@ Compose the retrospective artifact with the following sections:
 - What Went Well (from Step 3)
 - What Could Improve (from Step 4)
 - Action Items (from Step 5)
+- Tech Debt Reflection (from Step 5e)
+- Skill Improvement Proposals (from Step 5f — approved, rejected, and skipped proposals)
 
 Determine the output file path:
 - Default: `${CLAUDE_PROJECT_ROOT}/docs/implementation-artifacts/retrospective-{sprint_id}-{YYYY-MM-DD}.md`
@@ -113,6 +341,41 @@ Determine the output file path:
 Write the artifact to the determined path.
 
 Report the output path to the facilitator.
+
+### Step 7 --- Val Memory Persistence (FR-RIM-8, E34-S2)
+
+Final step. After the retro artifact is written, persist the retro's decisions and rolling context to the validator sidecar so Val can cross-reference retro outcomes in subsequent validations. Per architecture §10.28.2 "Relationship to Shared Val Sidecar Writer", this delegation is made concrete by invoking the shared Val sidecar writer helper (`val-sidecar-write.sh`, E34-S1, architecture §10.10). The helper's two-file allowlist (NFR-VSP-2) and composite-key idempotency (NFR-VSP-3) apply uniformly. Placing the helper invocation as the FINAL step satisfies AC3 atomicity — any upstream failure short-circuits before the helper runs, so no partial sidecar entry can appear.
+
+Targets (enforced by the helper allowlist — no other paths are writable):
+
+- `${CLAUDE_PROJECT_ROOT}/_memory/validator-sidecar/decision-log.md` — append one ADR-016-formatted entry per retro (sprint-ID tagged).
+- `${CLAUDE_PROJECT_ROOT}/_memory/validator-sidecar/conversation-context.md` — refresh the rolling body with a one-line summary of the current retro per FR-VSP-2.
+
+Build the decision payload as `{verdict, findings[], artifact_path}` — the `findings[]` list holds the action-item IDs produced in Step 5 sorted by id; `artifact_path` is the retro artifact written in Step 6.
+
+Invoke the helper (a single call writes both allowlisted targets atomically under a composite dedup key):
+
+```bash
+${CLAUDE_PLUGIN_ROOT}/scripts/val-sidecar-write.sh \
+  --command-name "/gaia-retro" \
+  --input-id     "${sprint_id}" \
+  --sprint-id    "${sprint_id}" \
+  --decision-payload "$(jq -cn \
+    --arg verdict       "${verdict:-recorded}" \
+    --arg artifact_path "${retro_artifact_path}" \
+    --argjson findings  "${action_items_json:-[]}" \
+    '{verdict: $verdict, findings: $findings, artifact_path: $artifact_path}')"
+```
+
+Re-runs with identical payload yield `status=skipped_duplicate` and must be treated as success.
+
+Failure posture:
+
+- Missing `_memory/validator-sidecar/` directory → the shared helper creates the directory and seeds both files with canonical ADR-016 headers before the first append (AC-EC10).
+- Degraded-mode running: if Step 5c / 5d / 5 failed earlier, Step 7 still runs so the validator sidecar records the partial-success outcome — retro mandate per architecture §10.28.2.
+- Helper rejection or error → log a warning and continue. Memory persistence is best-effort and MUST NOT fail the skill (FR-RIM-8 non-blocking).
+
+> **Note (E34-S2).** This Step 7 invocation was retargeted from `retro-sidecar-write.sh` to `val-sidecar-write.sh` to realize the architecture §10.28.2 delegation. Other retro writes (action-items, skill_overrides proposals) continue to use `retro-sidecar-write.sh` — only the two validator-sidecar targets route through the shared Val helper here.
 
 ## Finalize
 

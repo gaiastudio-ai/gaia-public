@@ -1,9 +1,9 @@
 ---
 name: gaia-triage-findings
-description: "Scan in-progress and completed story files for development findings and triage each into a new backlog story, an existing story, or dismiss. Produces new story files with complete frontmatter (15 required fields, status: backlog, sprint_id: null). Source story findings tables stay intact for idempotent re-triage. GAIA-native replacement for the legacy triage-findings XML engine workflow."
-argument-hint: "[story-key?]"
+description: "Scan in-progress and completed story files for development findings and triage each into a new backlog story, an existing story, or dismiss. Produces new story files with complete frontmatter (15 required fields, status: backlog, sprint_id: null). Source story findings tables stay intact for idempotent re-triage. Done-story guard (FR-FITP-1) blocks ADD TO EXISTING mutations against status: done targets with an explicit override path recorded for retrospective review. GAIA-native replacement for the legacy triage-findings XML engine workflow."
+argument-hint: "[story-key?] [--override-done-story --user <u> --date <d> --finding <fid> --reason <r>]"
 allowed-tools: [Read, Write, Bash]
-version: "1.0.0"
+version: "1.1.0"
 ---
 
 ## Setup
@@ -27,6 +27,7 @@ This skill is the native Claude Code conversion of the legacy `_gaia/lifecycle/w
 - New stories MUST be appended to `epics-and-stories.md` under the correct epic.
 - New backlog story files MUST use the canonical filename format `{story_key}-{story_title_slug}.md`.
 - All 15 required frontmatter fields must be populated: `template`, `version`, `used_by`, `key`, `title`, `epic`, `status`, `priority`, `size`, `points`, `risk`, `sprint_id`, `date`, `author`, and at minimum one of `depends_on`/`blocks`/`traces_to` (can be empty arrays).
+- **Done-Story Immutability Guard (FR-FITP-1):** Before any ADD TO EXISTING mutation, MUST invoke `scripts/triage-guard.sh check <target_story>`. If the target story has `status: done`, the guard halts with guidance to route through `/gaia-create-story` (new story) or `/gaia-add-feature` (change request) — zero writes to the done story. An explicit override path exists (`--override-done-story` with user, date, finding ID, reason) that records the override in the triage report with `retro_flag: true` so `/gaia-retro` surfaces it. Done stories are immutable institutional artifacts; silent mutation merges retro-blind regressions back into closed work.
 
 ## Steps
 
@@ -73,7 +74,87 @@ Present recommendations and let the user confirm or override each decision:
 - **ADD TO EXISTING** -- append finding to an existing story's tasks
 - **DISMISS** -- finding is not actionable or already resolved
 
-### Step 4 --- Create Backlog Stories
+### Step 3b --- Done-Story Guard (ADD TO EXISTING only, FR-FITP-1)
+
+For every finding classified as **ADD TO EXISTING**, BEFORE any mutation of the target story, invoke the done-story guard:
+
+```bash
+${CLAUDE_PLUGIN_ROOT}/scripts/triage-guard.sh check "${target_story_file}"
+```
+
+Interpret the exit code:
+
+- **Exit 0** — target status is `in-progress`, `review`, `ready-for-dev`, `validating`, or `backlog`. Proceed with the ADD TO EXISTING mutation (append finding to the target story's tasks).
+- **Exit 2** — target is `status: done`. The guard emits halt guidance on stdout (story key, sprint ID, retrospective linkage, sanctioned redirects). Present the guidance to the user. Do NOT mutate the target story. Two sanctioned paths:
+  - **Recommended:** re-classify the finding as CREATE STORY (routes through `/gaia-create-story` with `origin: triage-findings`).
+  - **Change request:** open `/gaia-add-feature` if the finding implies a spec-level amendment.
+- **Exit 1** — error reading the target story file. Surface the stderr and halt the classification pathway for that finding.
+
+**Override path (rare, audited):** If the user explicitly requests the override, re-invoke the guard with all override arguments:
+
+```bash
+${CLAUDE_PLUGIN_ROOT}/scripts/triage-guard.sh check \
+  --override \
+  --user "${USER}" \
+  --date "$(date -u +%Y-%m-%d)" \
+  --finding "${finding_id}" \
+  --reason "${user_supplied_reason}" \
+  --report "${CLAUDE_PROJECT_ROOT}/docs/implementation-artifacts/triage-report.md" \
+  "${target_story_file}"
+```
+
+The guard exits 0 and appends an override record to the triage report under a `## Done-Story Guard Overrides` section:
+
+```yaml
+- user: "<user>"
+  date: "<YYYY-MM-DD>"
+  finding_id: "<finding_id>"
+  target_story_key: "<E*-S*>"
+  reason: "<free-text>"
+  retro_flag: true
+```
+
+`retro_flag: true` ensures `/gaia-retro` surfaces the override for retrospective review. Proceed with the ADD TO EXISTING mutation only after the guard exits 0.
+
+**Non-mutation invariant:** on the guard-fired path (no override), zero writes to the target story file, zero writes to `sprint-status.yaml`, zero writes to `action-items.yaml` (action-items writes land in Step 3c below).
+
+### Step 3c --- Record Action Items for NOW Classifications (E39-S3, FR-FITP-3)
+
+For every finding classified as **NOW** (inject into current sprint), persist a structured action-items entry so retrospectives, `/gaia-action-items` resolution, and `/gaia-sprint-plan` escalation halts (E38-S2) have a complete record. This write is independent of the CREATE STORY / ADD TO EXISTING routing -- a finding classified NOW always produces exactly one action-items entry.
+
+1. Source the action-items writer:
+```bash
+source "${CLAUDE_PLUGIN_ROOT}/scripts/action-items-write.sh"
+```
+
+2. Map the finding type to the classification enum:
+   - `bug` -> `bug`
+   - `task` -> `task`
+   - `research` -> `research`
+   - Any other finding type -> **HALT** with: `"Unknown finding type '{type}'. Expected: bug, task, research. Cannot map to action-items classification."` Do NOT silently default -- the mapping is explicit by design.
+
+3. Invoke the writer:
+```bash
+aiw_write \
+  --target "${CLAUDE_PROJECT_ROOT}/docs/planning-artifacts/action-items.yaml" \
+  --sprint-id "{current_sprint_id}" \
+  --classification "{mapped_classification}" \
+  --text "{finding_summary}" \
+  --ref-key "finding_id" \
+  --ref-value "{finding_id}"
+```
+
+The writer handles:
+- **Bootstrap:** creates `action-items.yaml` with the architecture §10.28.6 schema header if the file does not exist.
+- **Auto-increment:** computes the next `AI-{n}` id from existing entries.
+- **Idempotency:** dedup key is `(finding_id, sprint_id)` -- re-running the same triage does not duplicate.
+- **Schema compliance:** entry fields match architecture §10.28.6 exactly (`id`, `sprint_id`, `text`, `classification`, `status: open`, `escalation_count: 0`, `created_at`, `theme_hash`, `finding_id`).
+
+> **TODO (E36-S2 swap-in):** When E36-S2 ships the shared action-items writer, replace the inline `action-items-write.sh` source with the E36-S2 shared writer invocation. The inline writer is byte-compatible with the E36-S2 schema, so swap-in is a pure deletion of the source line above.
+
+### Step 4 --- Create Backlog Stories (Skill-to-Skill Delegation, FR-FITP-2)
+
+Story creation is delegated to `/gaia-create-story` via subagent spawn. This replaces all inline story-creation logic -- delegation is authoritative. The spawned `/gaia-create-story` produces the full elaboration (AC, tasks, test scenarios) and records provenance in the frontmatter.
 
 For each CREATE STORY decision:
 
@@ -81,29 +162,36 @@ For each CREATE STORY decision:
 2. Scan `${CLAUDE_PROJECT_ROOT}/docs/planning-artifacts/epics-and-stories.md` and `${CLAUDE_PROJECT_ROOT}/docs/implementation-artifacts/` for all existing stories in that epic.
 3. Find the highest story number and assign the next sequential key.
 4. Update `epics-and-stories.md` with the new story entry under the correct epic.
-5. Create the new story file at `${CLAUDE_PROJECT_ROOT}/docs/implementation-artifacts/{story_key}-{slug}.md` with complete frontmatter:
 
-```yaml
-template: 'story'
-version: 1.4.0
-used_by: ['create-story']
-key: "{new_story_key}"
-title: "{title_from_finding}"
-epic: "{source_epic}"
-status: backlog
-priority: "{P0|P1|P2}"
-size: "{estimated_size}"
-points: {estimated_points}
-risk: "{risk_level}"
-sprint_id: null
-date: "{today}"
-author: "Triage"
-depends_on: []
-blocks: []
-traces_to: []
+5. **Pre-spawn validation:** validate `origin_ref` (the finding ID) using `spawn-guard.sh`:
+```bash
+"${CLAUDE_PLUGIN_ROOT}/scripts/spawn-guard.sh" validate-ref "${finding_id}"
 ```
+If validation fails (empty, null, shell-unsafe characters), halt with guidance. Do not spawn the subagent.
 
-Set `origin: triage` and `origin_ref` to the source story file path for traceability.
+6. **Collision check:** verify no story file already exists at the canonical path:
+```bash
+"${CLAUDE_PLUGIN_ROOT}/scripts/spawn-guard.sh" check-collision "${CLAUDE_PROJECT_ROOT}/docs/implementation-artifacts" "${new_story_key}"
+```
+If collision detected, halt with guidance to delete or rename before retry. Do not spawn the subagent.
+
+7. **Spawn `/gaia-create-story`:** invoke as a subagent with origin context:
+```
+/gaia-create-story {new_story_key} with origin="triage-findings" origin_ref="{finding_id}"
+```
+The spawned `/gaia-create-story` populates the story frontmatter with `origin: "triage-findings"` and `origin_ref: "{finding_id}"` and produces the full elaboration (AC, tasks, test scenarios). The parent MUST NOT duplicate elaboration logic -- delegation is authoritative.
+
+8. **Post-spawn verification:** after the subagent completes, verify the story file exists and frontmatter is correct:
+```bash
+"${CLAUDE_PLUGIN_ROOT}/scripts/spawn-guard.sh" verify "${CLAUDE_PROJECT_ROOT}/docs/implementation-artifacts/${new_story_key}-*.md" "triage-findings" "${finding_id}"
+```
+If verification fails (schema drift in `origin`/`origin_ref`), halt with actionable guidance referencing NFR-FITP-1.
+
+9. **On subagent failure** (timeout, context overflow, crash): halt with actionable guidance (failure reason, retry instructions). Clean up any partial file:
+```bash
+"${CLAUDE_PLUGIN_ROOT}/scripts/spawn-guard.sh" cleanup "${CLAUDE_PROJECT_ROOT}/docs/implementation-artifacts/${new_story_key}-*.md"
+```
+No partial story stubs may persist on disk after a failed spawn.
 
 ### Step 5 --- Mark Findings as Triaged
 
@@ -128,6 +216,40 @@ If any stories were marked as NOW (inject into current sprint):
 
 If any stories were marked as NEXT SPRINT (P0):
 - Note they will be prioritized in `/gaia-sprint-plan`.
+
+### Step 7 — Persist to Val Sidecar (E34-S2)
+
+Final step. Delegates Val-decision persistence to the shared Val sidecar writer helper (`val-sidecar-write.sh`, E34-S1, architecture §10.10). Placing this last satisfies AC3 atomicity — any upstream failure (spawn-guard rejection, `/gaia-create-story` subagent failure, findings-table write error) short-circuits before the helper runs, so no partial sidecar entry can appear.
+
+Derive a deterministic `triage_session_id` of the form `triage-YYYY-MM-DD-<seq>`. The `<seq>` counter is a zero-padded monotonic index per day, computed by scanning existing triage markers in the current session's source stories:
+
+```bash
+today="$(date -u +%Y-%m-%d)"
+seq="$(printf '%03d' "$(( $(ls docs/implementation-artifacts/ 2>/dev/null | grep -c "^triage-${today}-" || echo 0) + 1 ))")"
+triage_session_id="triage-${today}-${seq}"
+```
+
+If no triage-artifact naming scheme is in use yet, `seq` defaults to `001`. This identifier is documented in the triage artifact header so downstream consumers can correlate the sidecar entry back to the source findings.
+
+Build the decision payload as `{verdict, findings[], artifact_path}` — the `findings[]` list holds the triaged finding IDs (CREATE STORY / ADD TO EXISTING / DISMISS decisions) sorted by id.
+
+Invoke the helper:
+
+```bash
+${CLAUDE_PLUGIN_ROOT}/scripts/val-sidecar-write.sh \
+  --command-name "/gaia-triage-findings" \
+  --input-id     "${triage_session_id}" \
+  --sprint-id    "${sprint_id:-N/A}" \
+  --decision-payload "$(jq -cn \
+    --arg verdict       "${verdict:-recorded}" \
+    --arg artifact_path "${triage_artifact_path}" \
+    --argjson findings  "${findings_json:-[]}" \
+    '{verdict: $verdict, findings: $findings, artifact_path: $artifact_path}')"
+```
+
+The helper enforces the two-file allowlist (NFR-VSP-2) and idempotency by composite `(command_name, input_id, decision_hash)` key (FR-VSP-2) — re-runs with identical payload yield `status=skipped_duplicate` and must be treated as success.
+
+Failure posture: if the helper rejects or errors, log a warning and continue — memory persistence is best-effort and MUST NOT fail the skill.
 
 ## Finalize
 

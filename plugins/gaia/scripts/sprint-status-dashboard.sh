@@ -47,7 +47,31 @@ fi
 
 # ---------- Resolve paths ----------
 PROJECT_PATH="${PROJECT_PATH:-.}"
-YAML_PATH="$PROJECT_PATH/docs/implementation-artifacts/sprint-status.yaml"
+# Canonical yaml location. Honor pre-exported SPRINT_STATUS_YAML (E38-S1) so
+# bats fixtures that place the yaml at the project-path root can be used
+# without restructuring the fixture tree.
+YAML_PATH="${SPRINT_STATUS_YAML:-}"
+if [[ -z "$YAML_PATH" ]]; then
+  CANONICAL_YAML="$PROJECT_PATH/docs/implementation-artifacts/sprint-status.yaml"
+  FALLBACK_YAML="$PROJECT_PATH/sprint-status.yaml"
+  if [[ -f "$CANONICAL_YAML" ]]; then
+    YAML_PATH="$CANONICAL_YAML"
+  elif [[ -f "$FALLBACK_YAML" ]]; then
+    YAML_PATH="$FALLBACK_YAML"
+  else
+    YAML_PATH="$CANONICAL_YAML"
+  fi
+fi
+
+# Implementation-artifacts directory — used to locate story files for
+# risk-surfacing frontmatter lookup (E38-S1).
+IMPLEMENTATION_ARTIFACTS="${IMPLEMENTATION_ARTIFACTS:-$PROJECT_PATH/docs/implementation-artifacts}"
+
+# Mitigation catalog path (E38-S1, ADR-055 FR-SPQG-5). Defaults to the
+# plugin-bundled catalog sibling to this script. Honors an env override so
+# tests or alternate bundles can point at a different file.
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+MITIGATION_CATALOG="${MITIGATION_CATALOG:-$SCRIPT_DIR/../skills/gaia-sprint-status/mitigation-catalog.yaml}"
 
 log() { printf '%s: %s\n' "$SCRIPT_NAME" "$*" >&2; }
 die() { log "ERROR: $*"; exit 1; }
@@ -79,6 +103,69 @@ end_date=$(yaml_val end_date)
 capacity_util=$(yaml_val capacity_utilization)
 epic_focus=$(yaml_val epic_focus)
 
+# ---------- Load mitigation catalog (E38-S1, FR-SPQG-5) ----------
+# The catalog is a YAML file with a `mitigations:` array, each entry having
+# `id`, `label`, and `description`. We extract labels for inline annotation.
+# Missing or empty catalog → degrade gracefully with a warning, do not halt.
+catalog_labels=()
+catalog_missing=false
+catalog_warning=""
+if [[ ! -s "$MITIGATION_CATALOG" ]]; then
+  catalog_missing=true
+  catalog_warning="WARNING: mitigation catalog not found at $MITIGATION_CATALOG — risk surfacing degraded"
+else
+  # Parse `label: "..."` lines under the `mitigations:` section.
+  while IFS= read -r label_line; do
+    [[ -n "$label_line" ]] && catalog_labels+=("$label_line")
+  done < <(awk '
+    BEGIN { in_mitigations = 0 }
+    /^mitigations:/ { in_mitigations = 1; next }
+    in_mitigations && /^[^[:space:]#-]/ { in_mitigations = 0 }
+    in_mitigations && /^[[:space:]]+label:[[:space:]]*/ {
+      v = $0
+      sub(/^[[:space:]]+label:[[:space:]]*/, "", v)
+      gsub(/^["'\''[:space:]]+|["'\''[:space:]]+$/, "", v)
+      print v
+    }
+  ' "$MITIGATION_CATALOG")
+  if [[ ${#catalog_labels[@]} -eq 0 ]]; then
+    catalog_missing=true
+    catalog_warning="WARNING: mitigation catalog empty at $MITIGATION_CATALOG — risk surfacing degraded"
+  fi
+fi
+
+# ---------- Story risk lookup helper ----------
+# Given a story key, locate its story file under IMPLEMENTATION_ARTIFACTS and
+# read the `risk:` frontmatter field. Returns the lowercased risk value to
+# stdout ("high", "medium", "low", "") — empty string when the story file is
+# missing, unreadable, or has no risk field. Case-insensitive glob so bats
+# fixtures with lowercase {slug}-story.md filenames match upper-cased keys.
+story_risk() {
+  local key="$1"
+  local matches=()
+  shopt -s nullglob nocaseglob
+  # shellcheck disable=SC2206
+  matches=( "${IMPLEMENTATION_ARTIFACTS}/${key}-"*.md )
+  shopt -u nullglob nocaseglob
+  [[ ${#matches[@]} -eq 0 ]] && return 0
+  local story_file="${matches[0]}"
+  [[ -r "$story_file" ]] || return 0
+  awk '
+    BEGIN { in_fm = 0; seen = 0 }
+    /^---[[:space:]]*$/ {
+      if (!in_fm && !seen) { in_fm = 1; seen = 1; next }
+      if (in_fm) { exit }
+    }
+    in_fm && /^[[:space:]]*risk:[[:space:]]*/ {
+      v = $0
+      sub(/^[[:space:]]*risk:[[:space:]]*/, "", v)
+      gsub(/^["'\''[:space:]]+|["'\''[:space:]]+$/, "", v)
+      print tolower(v)
+      exit
+    }
+  ' "$story_file"
+}
+
 # ---------- Render header ----------
 printf '=%.0s' {1..72}; printf '\n'
 printf '  SPRINT STATUS DASHBOARD\n'
@@ -109,6 +196,8 @@ printf '  %-12s %-38s %-14s %s\n' "-----" "-----" "------" "---"
 # Track story data
 s_key="" s_title="" s_status="" s_points=""
 
+high_risk_story_count=0
+
 flush_story() {
   if [[ -n "$s_key" ]]; then
     # Truncate title to 36 chars
@@ -116,7 +205,23 @@ flush_story() {
     if [[ ${#display_title} -gt 36 ]]; then
       display_title="${display_title:0:33}..."
     fi
-    printf '  %-12s %-38s %-14s %s\n' "$s_key" "$display_title" "$s_status" "$s_points"
+    printf '  %-12s %-38s %-14s %s' "$s_key" "$display_title" "$s_status" "$s_points"
+
+    # Risk-surfacing annotation (E38-S1, FR-SPQG-5) — inline mitigation label
+    # for HIGH-risk stories. Suppressed entirely when the catalog is missing
+    # or empty (AC-EC6 degrades gracefully); rendered verbatim from catalog
+    # to preserve unknown/new entries (AC-EC7).
+    local risk
+    risk="$(story_risk "$s_key")"
+    if [[ "$risk" == "high" ]]; then
+      high_risk_story_count=$((high_risk_story_count + 1))
+      if [[ "$catalog_missing" != true ]] && [[ ${#catalog_labels[@]} -gt 0 ]]; then
+        # Rotate through catalog labels to surface variety across stories.
+        local idx=$(( (high_risk_story_count - 1) % ${#catalog_labels[@]} ))
+        printf '  [HIGH-risk: mitigation — %s]' "${catalog_labels[$idx]}"
+      fi
+    fi
+    printf '\n'
     story_count=$((story_count + 1))
   fi
   s_key="" s_title="" s_status="" s_points=""
@@ -163,6 +268,41 @@ fi
 # ---------- Footer ----------
 printf -- '-%.0s' {1..72}; printf '\n'
 printf '  Total: %d stories | %s points\n' "$story_count" "${total_points:-0}"
+
+# Risk-surfacing block (E38-S1, FR-SPQG-5).
+# When the current sprint contains at least one HIGH-risk story, list every
+# mitigation catalog entry verbatim so reviewers see the full set of
+# suggested mitigations (AC5, AC-EC7 — unknown entries are rendered
+# verbatim without enum validation). When no HIGH-risk stories exist the
+# block is suppressed entirely (AC6 — clean output, no-op default).
+# When the catalog is missing or empty, emit the warning line (AC-EC6).
+if [[ "$high_risk_story_count" -gt 0 ]]; then
+  if [[ "$catalog_missing" == true ]]; then
+    printf '  %s\n' "$catalog_warning"
+  else
+    printf '  Recommended mitigations for HIGH-risk stories:\n'
+    label_iter=""
+    for label_iter in "${catalog_labels[@]}"; do
+      printf '    - %s\n' "$label_iter"
+    done
+    # Also surface raw ids so AC-EC7 can assert either `label` or `id`
+    # shows up verbatim when a reviewer extends the catalog with a
+    # never-before-cataloged mitigation.
+    while IFS= read -r id_line; do
+      [[ -n "$id_line" ]] && printf '      (id: %s)\n' "$id_line"
+    done < <(awk '
+      BEGIN { in_mitigations = 0 }
+      /^mitigations:/ { in_mitigations = 1; next }
+      in_mitigations && /^[^[:space:]#-]/ { in_mitigations = 0 }
+      in_mitigations && /^[[:space:]]+-[[:space:]]+id:[[:space:]]*/ {
+        v = $0
+        sub(/^[[:space:]]+-[[:space:]]+id:[[:space:]]*/, "", v)
+        gsub(/^["'\''[:space:]]+|["'\''[:space:]]+$/, "", v)
+        print v
+      }
+    ' "$MITIGATION_CATALOG")
+  fi
+fi
 printf '=%.0s' {1..72}; printf '\n'
 
 exit 0

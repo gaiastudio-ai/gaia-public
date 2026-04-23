@@ -116,7 +116,41 @@ The guard exits 0 and appends an override record to the triage report under a `#
 
 `retro_flag: true` ensures `/gaia-retro` surfaces the override for retrospective review. Proceed with the ADD TO EXISTING mutation only after the guard exits 0.
 
-**Non-mutation invariant:** on the guard-fired path (no override), zero writes to the target story file, zero writes to `sprint-status.yaml`, zero writes to `action-items.yaml` (action-items writes land in E39-S3).
+**Non-mutation invariant:** on the guard-fired path (no override), zero writes to the target story file, zero writes to `sprint-status.yaml`, zero writes to `action-items.yaml` (action-items writes land in Step 3c below).
+
+### Step 3c --- Record Action Items for NOW Classifications (E39-S3, FR-FITP-3)
+
+For every finding classified as **NOW** (inject into current sprint), persist a structured action-items entry so retrospectives, `/gaia-action-items` resolution, and `/gaia-sprint-plan` escalation halts (E38-S2) have a complete record. This write is independent of the CREATE STORY / ADD TO EXISTING routing -- a finding classified NOW always produces exactly one action-items entry.
+
+1. Source the action-items writer:
+```bash
+source "${CLAUDE_PLUGIN_ROOT}/scripts/action-items-write.sh"
+```
+
+2. Map the finding type to the classification enum:
+   - `bug` -> `bug`
+   - `task` -> `task`
+   - `research` -> `research`
+   - Any other finding type -> **HALT** with: `"Unknown finding type '{type}'. Expected: bug, task, research. Cannot map to action-items classification."` Do NOT silently default -- the mapping is explicit by design.
+
+3. Invoke the writer:
+```bash
+aiw_write \
+  --target "${CLAUDE_PROJECT_ROOT}/docs/planning-artifacts/action-items.yaml" \
+  --sprint-id "{current_sprint_id}" \
+  --classification "{mapped_classification}" \
+  --text "{finding_summary}" \
+  --ref-key "finding_id" \
+  --ref-value "{finding_id}"
+```
+
+The writer handles:
+- **Bootstrap:** creates `action-items.yaml` with the architecture §10.28.6 schema header if the file does not exist.
+- **Auto-increment:** computes the next `AI-{n}` id from existing entries.
+- **Idempotency:** dedup key is `(finding_id, sprint_id)` -- re-running the same triage does not duplicate.
+- **Schema compliance:** entry fields match architecture §10.28.6 exactly (`id`, `sprint_id`, `text`, `classification`, `status: open`, `escalation_count: 0`, `created_at`, `theme_hash`, `finding_id`).
+
+> **TODO (E36-S2 swap-in):** When E36-S2 ships the shared action-items writer, replace the inline `action-items-write.sh` source with the E36-S2 shared writer invocation. The inline writer is byte-compatible with the E36-S2 schema, so swap-in is a pure deletion of the source line above.
 
 ### Step 4 --- Create Backlog Stories (Skill-to-Skill Delegation, FR-FITP-2)
 

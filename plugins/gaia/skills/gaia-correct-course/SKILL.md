@@ -121,6 +121,34 @@ For stories that **changed status** but remain in the sprint:
 PROJECT_PATH="${CLAUDE_PROJECT_ROOT}" "${CLAUDE_PLUGIN_ROOT}/scripts/sprint-state.sh" transition --story {story_key} --to {new_status}
 ```
 
+### Step 5b --- Record Action Items for Drop/Defer Decisions (E39-S3, FR-FITP-3)
+
+After the sprint-state mutation in Step 5, for every story that was **dropped** or **deferred** (moved back to backlog), persist a structured action-items entry so retrospectives and `/gaia-action-items` have a complete record. Both drop and defer are process-class decisions per FR-FITP-3.
+
+1. Source the action-items writer:
+```bash
+source "${CLAUDE_PLUGIN_ROOT}/scripts/action-items-write.sh"
+```
+
+2. For each dropped or deferred story, invoke the writer:
+```bash
+aiw_write \
+  --target "${CLAUDE_PROJECT_ROOT}/docs/planning-artifacts/action-items.yaml" \
+  --sprint-id "{current_sprint_id}" \
+  --classification "process" \
+  --text "Dropped/deferred {story_key}: {reason}" \
+  --ref-key "story_key" \
+  --ref-value "{story_key}"
+```
+
+The writer handles:
+- **Bootstrap:** creates `action-items.yaml` with the architecture §10.28.6 schema header if the file does not exist.
+- **Auto-increment:** computes the next `AI-{n}` id from existing entries.
+- **Idempotency:** dedup key is `(story_key, sprint_id, classification=process)` -- re-running the same drop/defer does not duplicate.
+- **Schema compliance:** entry fields match architecture §10.28.6 exactly (`id`, `sprint_id`, `text`, `classification`, `status: open`, `escalation_count: 0`, `created_at`, `theme_hash`, `story_key`).
+
+> **TODO (E36-S2 swap-in):** When E36-S2 ships the shared action-items writer, replace the inline `action-items-write.sh` source with the E36-S2 shared writer invocation. The inline writer is byte-compatible with the E36-S2 schema, so swap-in is a pure deletion of the source line above.
+
 ### Step 6 --- Log Course Correction
 
 Format the change summary with a standard header in the sprint plan:

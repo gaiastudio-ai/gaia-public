@@ -23,11 +23,13 @@ Do NOT invoke `/gaia-resume` when:
 
 ## Critical Rules
 
-- **Delegate all checkpoint I/O to `checkpoint.sh`.** Do NOT parse checkpoint YAML, compute sha256 checksums, or re-implement drift detection in the LLM layer — the script is the single source of truth (ADR-042, E28-S136).
+- **Delegate all checkpoint I/O to scripts.** For V1 YAML checkpoints, use `checkpoint.sh read` / `checkpoint.sh validate` (E28-S136). For V2 JSON per-skill checkpoints (ADR-059, E43 cluster), delegate discovery, temp-file filtering, and corruption classification to `resume-discovery.sh` (E43-S7). Do NOT parse checkpoint YAML/JSON, compute sha256 checksums, filter orphan temp files, or re-implement drift / corruption detection in the LLM layer — the scripts are the single source of truth (ADR-042).
 - **Never silently resume past a validation failure.** If `checkpoint.sh validate` returns a non-zero exit code, the user MUST be prompted with Proceed / Start fresh / Review. Auto-resuming past drift or missing files is a protocol violation.
+- **Never silently resume past a corruption failure.** If `resume-discovery.sh` exits 3 (corrupted checkpoint), the user MUST see the classified `corrupted checkpoint: {path} — {reason}. Suggestion: re-run /gaia-{skill} from scratch, or select a different checkpoint from {dir}.` message and be offered a re-run or fallback path. Never auto-retry past a corrupted checkpoint.
 - **Exclude the `completed/` subdirectory when listing active checkpoints.** Archived checkpoints under `_memory/checkpoints/completed/` represent finished workflows and are not resumable. Only live checkpoint files directly under `_memory/checkpoints/` are candidates.
-- **Read-only with respect to checkpoint files.** This skill does NOT write, delete, or modify any checkpoint YAML. It invokes read and validate subcommands only; any resumption that proceeds past this skill re-enters the owning workflow, which is responsible for its own checkpoint writes.
-- **Never invent a checkpoint or workflow name.** If the user's input does not match a real `.yaml` file under `_memory/checkpoints/`, report the mismatch and re-prompt — do not fabricate a resume target.
+- **Filter orphan temp files and non-canonical filenames during discovery.** The V2 checkpoint writer (`write-checkpoint.sh`) uses an atomic write pattern (`{FINAL}.tmp.$$` renamed to `{FINAL}`). If a crash leaves an orphan temp file behind, the discovery logic (`resume-discovery.sh`) MUST ignore it during resume routing and surface it to the user as cleanup guidance — never attempt to parse a temp file or non-canonical filename as a valid checkpoint.
+- **Read-only with respect to checkpoint files.** This skill does NOT write, delete, or modify any checkpoint file. It invokes read/validate/discovery subcommands only; any resumption that proceeds past this skill re-enters the owning workflow, which is responsible for its own checkpoint writes.
+- **Never invent a checkpoint or workflow name.** If the user's input does not match a real checkpoint file under `_memory/checkpoints/`, report the mismatch and re-prompt — do not fabricate a resume target.
 
 ## Inputs
 
@@ -126,13 +128,66 @@ Once validation is clean (Step 4 exit 0) or the user chose **Proceed** in Step 5
 - Instruct the user to re-invoke the owning slash command (derived from the checkpoint's `workflow` field — for example, `dev-story-E28-S173` → `/gaia-dev-story E28-S173`). The owning workflow is responsible for reading its own checkpoint via `checkpoint.sh read` on re-entry and skipping to the recorded step.
 - This skill exits after the handoff. It does NOT execute workflow steps itself.
 
+## V2 Checkpoint Discovery (E43, per-skill JSON checkpoints)
+
+The V2 checkpoint infrastructure introduced by E43 writes per-skill JSON checkpoints under `_memory/checkpoints/{skill_name}/{ISO8601-microseconds-Z}-step-{N}.json`. When the user requests resume for a V2 skill (any of the 24 Phase 1–3 skills wired in E43-S2..S5), delegate discovery, temp-file filtering, and corruption classification to `resume-discovery.sh`:
+
+```bash
+"${CLAUDE_PLUGIN_ROOT}/scripts/resume-discovery.sh" "{skill_name}"
+```
+
+### Reserved exit codes for V2 resume
+
+- **0 — success.** The path of the latest valid checkpoint is printed to stdout; any cleanup guidance (orphan temp files, non-canonical filenames) is emitted BEFORE the path so the user can clean up their workspace.
+- **1 — usage / invalid argument.** Generic failure exit.
+- **2 — no checkpoint found for skill** (after filtering). The user has never run this skill or all files in the skill directory were filtered as temp / non-canonical. Suggest `/gaia-{skill_name}` to start fresh.
+- **3 — corrupted checkpoint.** The latest candidate failed to parse as JSON. The script emits a classified message of shape `corrupted checkpoint: {path} — {reason}. Suggestion: re-run /gaia-{skill_name} from scratch, or select a different checkpoint from {dir}.` along with any additional corrupted checkpoint paths and a count of uncorrupted earlier checkpoints (user may resume from an earlier step rather than re-run from scratch).
+
+### Temp-file and non-canonical filtering
+
+`resume-discovery.sh` filters out any file matching these patterns from the candidate list and reports them as cleanup guidance:
+
+- `{canonical}.tmp.{pid}` — the atomic-write temp produced by `write-checkpoint.sh` and renamed on successful write; surviving tmp files indicate a crash mid-write.
+- `.tmp-*.json` — leading-dot alternate convention (defensive).
+- `*.partial` — alternate convention (defensive).
+- Any filename not matching the canonical pattern `{ISO8601-microseconds-Z}-step-{N}.json` — reported under cleanup guidance but never parsed as a checkpoint.
+
+Cleanup guidance is informational only — `/gaia-resume` proceeds with the filtered candidate list without blocking on leftover files.
+
+### Corruption-detection control flow
+
+```text
+candidates = list_checkpoints(skill_dir)
+    # filter out temp-file patterns and non-canonical filenames;
+    # report them as cleanup guidance before any resume action.
+latest = candidates.sort_by_timestamp.last
+if latest is None:
+    emit "no checkpoint found for {skill}"; exit 2
+try:
+    checkpoint = json.load(latest)
+except JSONDecodeError as reason:
+    emit "corrupted checkpoint: {latest} — {reason}. Suggestion: re-run /gaia-{skill} from scratch."
+    # also report earlier corrupted checkpoints and count of uncorrupted ones
+    exit 3
+# continue with checksum verification (E43-S6) …
+```
+
+No code path emits an unhandled parse error, stack trace, or bare `command not found` to the user — every error is caught, classified, and reported with an actionable message. This is the corruption-handling contract operationalized by E43-S7 (ADR-059 resilience clause).
+
 ## References
 
-- `plugins/gaia/scripts/checkpoint.sh` — the deterministic checkpoint primitive (write / read / validate) from E28-S136.
+- `plugins/gaia/scripts/checkpoint.sh` — the deterministic V1 YAML checkpoint primitive (write / read / validate) from E28-S136.
+- `plugins/gaia/scripts/write-checkpoint.sh` — the deterministic V2 JSON per-skill checkpoint writer (atomic temp-file rename) from E43-S1.
+- `plugins/gaia/scripts/resume-discovery.sh` — the V2 discovery + corruption classifier (temp-file filtering, non-canonical filtering, JSON parse guard, cleanup guidance) from E43-S7.
 - `_memory/checkpoints/` — active checkpoint files; `_memory/checkpoints/completed/` — archived, non-resumable.
 - `${CLAUDE_PLUGIN_ROOT}/knowledge/gaia-help.csv` — registers `/gaia-resume` so `/gaia-help` can discover it.
 - ADR-041: Native Execution Model via Claude Code Skills + Subagents + Plugins + Hooks.
 - ADR-042: Scripts-over-LLM for Deterministic Operations.
 - ADR-048: Engine Deletion as Program-Closing Action — legacy command coexists with this skill until program close.
-- E28-S136: checkpoint primitive foundation (write / read / validate, sha256 integrity).
+- E28-S136: V1 checkpoint primitive foundation (write / read / validate, sha256 integrity).
+- E43-S1: V2 checkpoint schema v1 + atomic `write-checkpoint.sh` helper.
+- E43-S7: V2 checkpoint failure-mode handling (corruption, partial writes, orphan temp filtering) — this skill's delegation to `resume-discovery.sh`.
 - FR-323: Skill Conversion — slash-command identity preserved.
+- FR-342: Per-skill checkpoint/resume contract.
+- ADR-059: V2 checkpoint schema + atomic write + resume contract.
+- NFR-VCP-1: Checkpoint schema consistency across skills.

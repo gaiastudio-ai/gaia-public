@@ -328,66 +328,50 @@ PHASE3_TEST_STEPS=(8 6 5 5 6 9 5 8)
   [ "$status" -ne 0 ]
 }
 
-# ---------- AC-EC1: step with empty --paths still writes a valid checkpoint ----------
+# ---------- AC-EC1 + AC-EC5: empty --paths and metacharacter preservation ----------
 
-@test "AC-EC1: Phase 3 testing step with zero output paths still writes a valid checkpoint" {
-  local slug="gaia-val-validate"
-  "$SCRIPT" "$slug" 2 artifact_path=prd.md iteration_number=1
+@test "AC-EC1 + AC-EC5: empty --paths writes valid checkpoint; metacharacters preserved verbatim" {
+  # AC-EC1: zero-output step.
+  "$SCRIPT" gaia-val-validate 2 artifact_path=prd.md iteration_number=1
   local f
-  f=$(find "$CHECKPOINT_ROOT/$slug" -name '*-step-2.json' -type f | head -1)
+  f=$(find "$CHECKPOINT_ROOT/gaia-val-validate" -name '*-step-2.json' -type f | head -1)
   [ -n "$f" ]
   [ "$(jq -r '.output_paths | length' "$f")" = "0" ]
   [ "$(jq -r '.file_checksums | length' "$f")" = "0" ]
-}
-
-# ---------- AC-EC5: metacharacters / multi-line in key_variable preserved verbatim ----------
-
-@test "AC-EC5: multi-line and metacharacters in key_variable are preserved without injection" {
-  local slug="gaia-review-a11y"
-  "$SCRIPT" "$slug" 1 a11y_scope='prod;rm -rf /' report_path='$(whoami)'
-  local f
-  f=$(find "$CHECKPOINT_ROOT/$slug" -name '*-step-1.json' -type f | head -1)
+  # AC-EC5: shell metacharacter preservation.
+  "$SCRIPT" gaia-review-a11y 1 a11y_scope='prod;rm -rf /' report_path='$(whoami)'
+  f=$(find "$CHECKPOINT_ROOT/gaia-review-a11y" -name '*-step-1.json' -type f | head -1)
   [ -n "$f" ]
-  local v1 v2
-  v1=$(jq -r '.key_variables.a11y_scope' "$f")
-  v2=$(jq -r '.key_variables.report_path' "$f")
-  [ "$v1" = 'prod;rm -rf /' ]
-  [ "$v2" = '$(whoami)' ]
+  [ "$(jq -r '.key_variables.a11y_scope' "$f")" = 'prod;rm -rf /' ]
+  [ "$(jq -r '.key_variables.report_path' "$f")" = '$(whoami)' ]
 }
 
-# ---------- AC-EC3/AC-EC4: concurrent / nested skills write to distinct per-skill dirs ----------
+# ---------- AC-EC3/AC-EC4/AC-EC9: per-skill directory isolation (concurrent + nested) ----------
 
-@test "AC-EC3/AC-EC4: two Phase 3 testing skills write checkpoints to distinct per-skill dirs" {
+@test "AC-EC3/AC-EC4/AC-EC9: Phase 3 testing skills write checkpoints to distinct per-skill dirs (concurrent + nested)" {
   local art="$TEST_TMP/art.md"
   printf 'x\n' > "$art"
+  # Concurrent writes (AC-EC4) + two-skill isolation (AC-EC3).
   "$SCRIPT" gaia-test-design  3 story_key=E1-S1 test_plan_path=a --paths "$art" &
   "$SCRIPT" gaia-val-validate 3 artifact_path=a iteration_number=1 --paths "$art" &
   wait
+  # Nested caller-subflow isolation (AC-EC9) — each skill passes its own slug.
+  "$SCRIPT" gaia-atdd         3 story_key=E1-S1 test_file_path=a --paths "$art"
+  "$SCRIPT" gaia-val-validate 4 artifact_path=a iteration_number=2 --paths "$art"
   [ -d "$CHECKPOINT_ROOT/gaia-test-design" ]
   [ -d "$CHECKPOINT_ROOT/gaia-val-validate" ]
-  local c1 c2
-  c1=$(find "$CHECKPOINT_ROOT/gaia-test-design"  -name '*.json' | wc -l | tr -d ' ')
-  c2=$(find "$CHECKPOINT_ROOT/gaia-val-validate" -name '*.json' | wc -l | tr -d ' ')
-  [ "$c1" = "1" ]
-  [ "$c2" = "1" ]
-}
-
-# ---------- AC-EC9: nested gaia-val-validate (auto-fix loop) isolation ----------
-
-@test "AC-EC9: nested gaia-val-validate under a caller skill writes to its own directory" {
-  # Simulate a caller skill (gaia-atdd) that invokes gaia-val-validate as a
-  # sub-flow in its auto-fix loop. Each skill passes its own slug, so the
-  # helper routes writes independently.
-  local art="$TEST_TMP/art.md"
-  printf 'x\n' > "$art"
-  "$SCRIPT" gaia-atdd          3 story_key=E1-S1 test_file_path=a --paths "$art"
-  "$SCRIPT" gaia-val-validate  4 artifact_path=a iteration_number=2 --paths "$art"
   [ -d "$CHECKPOINT_ROOT/gaia-atdd" ]
-  [ -d "$CHECKPOINT_ROOT/gaia-val-validate" ]
-  # Neither should contain the other's checkpoints.
+  local c1 c2 c3
+  c1=$(find "$CHECKPOINT_ROOT/gaia-test-design" -name '*.json' | wc -l | tr -d ' ')
+  c2=$(find "$CHECKPOINT_ROOT/gaia-val-validate" -name '*.json' | wc -l | tr -d ' ')
+  c3=$(find "$CHECKPOINT_ROOT/gaia-atdd" -name '*.json' | wc -l | tr -d ' ')
+  [ "$c1" = "1" ]
+  [ "$c2" = "2" ]
+  [ "$c3" = "1" ]
+  # No cross-namespace leakage.
   local cross
   cross=$(find "$CHECKPOINT_ROOT/gaia-atdd" -name '*-step-4.json' | wc -l | tr -d ' ')
   [ "$cross" = "0" ]
-  cross=$(find "$CHECKPOINT_ROOT/gaia-val-validate" -name '*-step-3.json' | wc -l | tr -d ' ')
+  cross=$(find "$CHECKPOINT_ROOT/gaia-test-design" -name '*-step-4.json' | wc -l | tr -d ' ')
   [ "$cross" = "0" ]
 }

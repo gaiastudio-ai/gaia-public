@@ -25,11 +25,11 @@
 #   }
 #
 # Boundary vs. scripts/checkpoint.sh:
-#   scripts/checkpoint.sh is the V1-era YAML workflow checkpoint writer used
-#   by the legacy engine. write-checkpoint.sh is its V2 replacement for
-#   per-skill JSON checkpoints (ADR-059). They coexist during the V1→V2
-#   transition; do NOT retrofit the old script to the new schema — each
-#   consumer (/gaia-resume for V2 vs. workflow.xml for V1) targets one shape.
+#   scripts/checkpoint.sh is the YAML-shaped workflow checkpoint writer used
+#   by V1-era tooling. write-checkpoint.sh is the V2 per-skill JSON writer
+#   (ADR-059). The two scripts coexist during the V1→V2 transition; do NOT
+#   retrofit the old script to the new schema — each consumer targets one
+#   shape (/gaia-resume for V2 JSON; the older engine for V1 YAML).
 #
 # Exit codes:
 #   0   success

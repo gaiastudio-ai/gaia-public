@@ -254,11 +254,46 @@ teardown() { common_teardown; }
 
 @test "AC-EC7: sha256 tool missing exits non-zero with clear error" {
   local f="$TEST_TMP/f.md"; printf 'x\n' > "$f"
-  # Construct a PATH with only the temp dir and the script's own dir (so the
-  # script can still be resolved) but no shasum/sha256sum.
+  # Shadow shasum and sha256sum with a stubdir placed AHEAD of the real PATH.
+  # Each stub is an executable that returns 127 (not found). This simulates
+  # "tool missing from PATH" without stripping /bin, /usr/bin, python3, etc.
+  # that the script itself needs to run.
   local stubdir="$TEST_TMP/stubs"
   mkdir -p "$stubdir"
-  run env PATH="$stubdir" "$SCRIPT" gaia-skill 1 --paths "$f"
+  for tool in shasum sha256sum; do
+    cat > "$stubdir/$tool" <<'STUB'
+#!/bin/sh
+exit 127
+STUB
+    chmod +x "$stubdir/$tool"
+  done
+  # However — the script uses `command -v shasum` to detect availability and
+  # will STILL see shasum in PATH (stubbed). The stub returns 127 at the
+  # exec attempt in sha256_of, so the script exits non-zero there. But the
+  # preflight check passes. To truly simulate "not on PATH", replace the
+  # stubs with `command -v`-invisible wrappers: absent files. Use an
+  # isolated PATH that preserves system basics but excludes any sha256 tool.
+  rm -f "$stubdir"/shasum "$stubdir"/sha256sum
+  # Build a fresh PATH consisting of /bin and /usr/bin ONLY when shasum is
+  # not located under those — on macOS shasum lives at /usr/bin/shasum, on
+  # Linux sha256sum lives at /usr/bin/sha256sum. So we must exclude those
+  # directories. Stage a chroot-lite by symlinking the minimum needed
+  # binaries (sh, env, mkdir, mv, cat, printf, sort, wc, find, jq, python3,
+  # rm, dirname, basename, ls, chmod) into stubdir and running with PATH
+  # pointing only at stubdir.
+  local bindir="$stubdir"
+  local tools="sh env mkdir mv cat printf sort wc find rm dirname basename ls chmod date awk grep sed head tail bash"
+  for t in $tools; do
+    local src
+    src=$(command -v "$t" 2>/dev/null || true)
+    if [ -n "$src" ]; then
+      ln -sf "$src" "$bindir/$t"
+    fi
+  done
+  # Deliberately do NOT link shasum / sha256sum / python3 / jq — the preflight
+  # check must observe their absence. (Timestamp fallback in the script
+  # handles missing python3 via a date-based fallback.)
+  run env -i PATH="$bindir" HOME="$HOME" TEST_TMP="$TEST_TMP" CHECKPOINT_ROOT="$CHECKPOINT_ROOT" "$SCRIPT" gaia-skill 1 --paths "$f"
   [ "$status" -ne 0 ]
   [[ "$output" == *"sha256"* ]]
   # No checkpoint file written.

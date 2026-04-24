@@ -53,6 +53,8 @@ This skill is the native Claude Code conversion of the legacy val-validate-artif
   - Large artifact (over 600 lines): chunk by second-level sections (### headings) for finer granularity
 - Present the section map to confirm scope: "{N} sections identified, {M} chunks for validation"
 
+> `!scripts/write-checkpoint.sh gaia-val-validate 1 artifact_path="$ARTIFACT_PATH" iteration_number="$ITERATION_NUMBER" stage=artifact-loaded`
+
 ### Step 2 -- Detect Artifact Type and Run Document-Specific Rules
 
 - Extract the basename from the artifact path and determine the artifact type:
@@ -65,6 +67,8 @@ This skill is the native Claude Code conversion of the legacy val-validate-artif
 - If artifact type is unknown: skip structural rules entirely. Log: "No document-specific ruleset for this artifact type -- factual verification only." Proceed to Step 3.
 - If artifact type is recognized: execute Pass 1 structural rules against the artifact content. Record structural findings with source tag [STRUCTURAL].
 
+> `!scripts/write-checkpoint.sh gaia-val-validate 2 artifact_path="$ARTIFACT_PATH" iteration_number="$ITERATION_NUMBER" artifact_type="$ARTIFACT_TYPE" stage=type-detected`
+
 ### Step 3 -- Extract Verifiable Claims
 
 - For each chunk from Step 1, extract all verifiable factual claims:
@@ -76,6 +80,8 @@ This skill is the native Claude Code conversion of the legacy val-validate-artif
   - **Structural assertions**: claims about directory structure, file contents, or configuration values
 - For each claim, record: claim text, source section, source line (approximate), claim type.
 - If no verifiable factual claims are found: produce INFO "No factual claims identified for verification" and skip to Step 7.
+
+> `!scripts/write-checkpoint.sh gaia-val-validate 3 artifact_path="$ARTIFACT_PATH" iteration_number="$ITERATION_NUMBER" claims_count="$CLAIMS_COUNT" stage=claims-extracted`
 
 ### Step 4 -- Codebase Scanning and Filesystem Verification
 
@@ -92,6 +98,8 @@ This skill is the native Claude Code conversion of the legacy val-validate-artif
 - For count claims: enumerate actual items and compare against the stated count.
 - For structural claims: verify directory structures match the described layout.
 
+> `!scripts/write-checkpoint.sh gaia-val-validate 4 artifact_path="$ARTIFACT_PATH" iteration_number="$ITERATION_NUMBER" files_scanned="$FILES_SCANNED" stage=codebase-scanned`
+
 ### Step 5 -- Cross-Reference Ground Truth
 
 - Check if ground-truth was loaded (from the Memory section above).
@@ -102,6 +110,8 @@ This skill is the native Claude Code conversion of the legacy val-validate-artif
     - Check if ground truth has a more recent or more precise version of the same fact
     - Flag any discrepancies between the artifact claim and ground truth
   - For each misalignment: WARNING finding with evidence from both the artifact and ground truth.
+
+> `!scripts/write-checkpoint.sh gaia-val-validate 5 artifact_path="$ARTIFACT_PATH" iteration_number="$ITERATION_NUMBER" stage=ground-truth-cross-referenced`
 
 ### Step 6 -- Classify and Present Findings
 
@@ -123,6 +133,8 @@ This skill is the native Claude Code conversion of the legacy val-validate-artif
 
 - Enter discussion loop: present each finding, allow user to approve, dismiss, or edit.
 
+> `!scripts/write-checkpoint.sh gaia-val-validate 6 artifact_path="$ARTIFACT_PATH" iteration_number="$ITERATION_NUMBER" findings_count="$FINDINGS_COUNT" stage=findings-classified`
+
 ### Step 7 -- Write Approved Findings
 
 - Collect only the APPROVED findings (exclude dismissed ones).
@@ -140,6 +152,8 @@ This skill is the native Claude Code conversion of the legacy val-validate-artif
 
   Summary: {approved_count} finding(s) from {total_checked} claims verified.
 
+> `!scripts/write-checkpoint.sh gaia-val-validate 7 artifact_path="$ARTIFACT_PATH" iteration_number="$ITERATION_NUMBER" findings_count="$FINDINGS_COUNT" auto_fix_mode="$AUTO_FIX_MODE" stage=findings-written --paths "$ARTIFACT_PATH"`
+
 ### Step 8 -- Save to Val Memory
 
 - Auto-save all validation results to Val's memory sidecar:
@@ -147,6 +161,8 @@ This skill is the native Claude Code conversion of the legacy val-validate-artif
   2. Replace body of conversation-context.md with latest session summary
 - If memory sidecar directory does not exist, create it with standard headers.
 - If writing fails, log warning and continue -- memory save is non-blocking.
+
+> `!scripts/write-checkpoint.sh gaia-val-validate 8 artifact_path="$ARTIFACT_PATH" iteration_number="$ITERATION_NUMBER" findings_count="$FINDINGS_COUNT" stage=memory-saved`
 
 ## Finalize
 

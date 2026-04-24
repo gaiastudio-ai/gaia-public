@@ -35,6 +35,8 @@ This skill is the native Claude Code conversion of the legacy `_gaia/testing/wor
 - Identify existing test areas/categories (e.g., unit, integration, E2E, performance, security).
 - Display current test plan structure summary to the user: section count, test case count, coverage areas.
 
+> `!scripts/write-checkpoint.sh gaia-edit-test-plan 1 test_plan_path="docs/test-artifacts/test-plan.md" edit_mode=load stage=test-plan-loaded`
+
 ### Step 2 — Capture Change Scope
 
 Ask the user:
@@ -45,6 +47,8 @@ Ask the user:
 - Read relevant sections of `docs/planning-artifacts/prd.md` for requirement context (if available).
 - Read relevant sections of `docs/planning-artifacts/architecture.md` for technical context (if available).
 - Record: new_requirements, change_description, affected_test_areas.
+
+> `!scripts/write-checkpoint.sh gaia-edit-test-plan 2 test_plan_path="docs/test-artifacts/test-plan.md" edit_mode=scope stage=change-scope-captured`
 
 ### Step 3 — Define New Test Cases
 
@@ -59,6 +63,8 @@ For each new requirement, define test cases with:
 
 Determine if new test areas/categories are needed or if cases fit existing categories.
 
+> `!scripts/write-checkpoint.sh gaia-edit-test-plan 3 test_plan_path="docs/test-artifacts/test-plan.md" edit_mode=add stage=new-cases-defined`
+
 ### Step 4 — Update Test Plan
 
 - Append new test cases to the appropriate test area sections.
@@ -66,6 +72,8 @@ Determine if new test areas/categories are needed or if cases fit existing categ
 - Update test scope section to reflect expanded coverage.
 - Update coverage summary if present (new requirements covered / total).
 - Preserve all existing content exactly as-is — no reordering, no reformatting, no removal.
+
+> `!scripts/write-checkpoint.sh gaia-edit-test-plan 4 test_plan_path="docs/test-artifacts/test-plan.md" edit_mode=update stage=plan-updated`
 
 ### Step 5 — Add Version Note and Save
 
@@ -82,11 +90,15 @@ If no Version History section exists, create one.
 
 Write the updated test plan to `docs/test-artifacts/test-plan.md`.
 
+> `!scripts/write-checkpoint.sh gaia-edit-test-plan 5 test_plan_path="docs/test-artifacts/test-plan.md" edit_mode=save stage=saved --paths docs/test-artifacts/test-plan.md`
+
 ### Step 6 — Next Steps
 
 - Report test cases added: list new IDs, their types, and requirements covered.
 - If high-risk stories need acceptance tests: "Recommend running /gaia-atdd for stories: {story_keys}"
 - If traceability update needed: "Recommend running /gaia-trace to update traceability matrix"
+
+> `!scripts/write-checkpoint.sh gaia-edit-test-plan 6 test_plan_path="docs/test-artifacts/test-plan.md" edit_mode=next-steps stage=next-steps-reported`
 
 ## Finalize
 

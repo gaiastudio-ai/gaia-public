@@ -38,6 +38,8 @@ This skill is the native Claude Code conversion of the legacy `_gaia/testing/wor
 - If no config found: note that no existing CI platform was detected.
 - Ask which CI platform to use: GitHub Actions, GitLab CI, Jenkins, CircleCI, or other.
 
+> `!scripts/write-checkpoint.sh gaia-ci-setup 1 ci_provider="$CI_PROVIDER" ci_config_path="$CI_CONFIG_PATH" stage=platform-detected`
+
 ### Step 2 -- Preset Selection (Promotion Chain)
 
 - Check if `ci_cd.promotion_chain` already exists in `global.yaml`.
@@ -47,10 +49,14 @@ This skill is the native Claude Code conversion of the legacy `_gaia/testing/wor
 - For custom: prompt for each environment field (id, name, branch, ci_provider, merge_strategy, ci_checks).
 - Write the selected chain to `global.yaml` preserving all existing fields.
 
+> `!scripts/write-checkpoint.sh gaia-ci-setup 2 ci_provider="$CI_PROVIDER" ci_config_path="$CI_CONFIG_PATH" preset="$PRESET" stage=preset-selected`
+
 ### Step 3 -- Define Pipeline
 
 - Configure build, lint, test, coverage, and deploy gates.
 - Map gates to the selected CI platform's syntax.
+
+> `!scripts/write-checkpoint.sh gaia-ci-setup 3 ci_provider="$CI_PROVIDER" ci_config_path="$CI_CONFIG_PATH" stage=pipeline-defined`
 
 ### Step 4 -- Quality Gates
 
@@ -58,11 +64,15 @@ This skill is the native Claude Code conversion of the legacy `_gaia/testing/wor
 - Define pass/fail thresholds: coverage percentage, test pass rate.
 - Configure gate enforcement (blocking vs advisory).
 
+> `!scripts/write-checkpoint.sh gaia-ci-setup 4 ci_provider="$CI_PROVIDER" ci_config_path="$CI_CONFIG_PATH" stage=quality-gates-defined`
+
 ### Step 5 -- Secrets Management
 
 - Identify required secrets from architecture and PRD.
 - Document how to add secrets to the selected CI platform.
 - Define environment-level separation for staging vs production secrets.
+
+> `!scripts/write-checkpoint.sh gaia-ci-setup 5 ci_provider="$CI_PROVIDER" ci_config_path="$CI_CONFIG_PATH" stage=secrets-configured`
 
 ### Step 6 -- Deployment Strategy
 
@@ -70,21 +80,29 @@ This skill is the native Claude Code conversion of the legacy `_gaia/testing/wor
 - Define production deployment: manual approval gate.
 - Define rollback procedure.
 
+> `!scripts/write-checkpoint.sh gaia-ci-setup 6 ci_provider="$CI_PROVIDER" ci_config_path="$CI_CONFIG_PATH" stage=deployment-strategy-defined`
+
 ### Step 7 -- Monitoring and Notifications
 
 - Configure pipeline failure notifications.
 - Add pipeline status badge for README.
 - Recommend metrics dashboard for pipeline health.
 
+> `!scripts/write-checkpoint.sh gaia-ci-setup 7 ci_provider="$CI_PROVIDER" ci_config_path="$CI_CONFIG_PATH" stage=monitoring-configured`
+
 ### Step 8 -- Generate Pipeline Config
 
 - Generate the CI config file (e.g., `.github/workflows/ci.yml`) for the selected platform.
 - Validate the generated config syntax.
 
+> `!scripts/write-checkpoint.sh gaia-ci-setup 8 ci_provider="$CI_PROVIDER" ci_config_path="$CI_CONFIG_PATH" schema_retry_count="$SCHEMA_RETRY_COUNT" stage=pipeline-config-generated --paths "$CI_CONFIG_PATH"`
+
 ### Step 9 -- Generate Output
 
 - Generate the CI/CD pipeline configuration document at `docs/test-artifacts/ci-setup.md`.
 - Include: pipeline stages, quality gates, secrets management, deployment strategy, monitoring setup.
+
+> `!scripts/write-checkpoint.sh gaia-ci-setup 9 ci_provider="$CI_PROVIDER" ci_config_path="$CI_CONFIG_PATH" stage=output-generated --paths docs/test-artifacts/ci-setup.md`
 
 ## Finalize
 

@@ -35,6 +35,8 @@ This skill is the native Claude Code conversion of the legacy `_gaia/lifecycle/w
 - Extract component inventory, service boundaries, data stores.
 - Identify compute, storage, and networking requirements.
 
+> `!scripts/write-checkpoint.sh gaia-infra-design 1 project_name="$PROJECT_NAME" target_environments="$TARGET_ENVIRONMENTS" iac_stack="$IAC_STACK" topology_version="$TOPOLOGY_VERSION"`
+
 ### Step 2 — Environment Design
 
 Delegate to the **devops** subagent (Soren) via `agents/devops` to design environments.
@@ -42,6 +44,8 @@ Delegate to the **devops** subagent (Soren) via `agents/devops` to design enviro
 - Define environments: dev, staging, production (+ preview if needed).
 - Specify environment parity strategy — how close staging mirrors production.
 - Define access policies and promotion gates between environments.
+
+> `!scripts/write-checkpoint.sh gaia-infra-design 2 project_name="$PROJECT_NAME" target_environments="$TARGET_ENVIRONMENTS" iac_stack="$IAC_STACK" stage=environments`
 
 ### Step 3 — Deployment Topology
 
@@ -52,6 +56,8 @@ Delegate to the **devops** subagent (Soren) via `agents/devops` to design the de
 - Specify scaling strategy: horizontal, vertical, auto-scaling triggers.
 - Define networking: VPC, subnets, security groups, CDN.
 
+> `!scripts/write-checkpoint.sh gaia-infra-design 3 project_name="$PROJECT_NAME" target_environments="$TARGET_ENVIRONMENTS" iac_stack="$IAC_STACK" stage=topology`
+
 ### Step 4 — IaC Structure
 
 Delegate to the **devops** subagent (Soren) via `agents/devops` to define infrastructure-as-code.
@@ -60,6 +66,8 @@ Delegate to the **devops** subagent (Soren) via `agents/devops` to define infras
 - Specify IaC tool and conventions (Terraform, Pulumi, CloudFormation).
 - Design module boundaries matching service boundaries.
 - Define state management strategy.
+
+> `!scripts/write-checkpoint.sh gaia-infra-design 4 project_name="$PROJECT_NAME" target_environments="$TARGET_ENVIRONMENTS" iac_stack="$IAC_STACK" stage=iac`
 
 ### Step 5 — Observability Plan
 
@@ -70,10 +78,14 @@ Delegate to the **devops** subagent (Soren) via `agents/devops` to define observ
 - Define tracing: distributed tracing, correlation IDs.
 - Define alerting: SLO-based alerts, escalation policies, on-call rotation.
 
+> `!scripts/write-checkpoint.sh gaia-infra-design 5 project_name="$PROJECT_NAME" target_environments="$TARGET_ENVIRONMENTS" iac_stack="$IAC_STACK" stage=observability`
+
 ### Step 6 — Generate Output
 
 - Record key decisions in devops-sidecar memory.
 - Write the infrastructure design document to `docs/planning-artifacts/infrastructure-design.md` with: environment matrix, deployment topology, IaC structure, observability plan, and decision rationale.
+
+> `!scripts/write-checkpoint.sh gaia-infra-design 6 project_name="$PROJECT_NAME" target_environments="$TARGET_ENVIRONMENTS" iac_stack="$IAC_STACK" stage=output --paths docs/planning-artifacts/infrastructure-design.md`
 
 ## Finalize
 

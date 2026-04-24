@@ -40,11 +40,15 @@ This skill is the native Claude Code conversion of the legacy `_gaia/lifecycle/w
 - Check for brownfield artifacts: `docs/planning-artifacts/brownfield-assessment.md` and `docs/planning-artifacts/project-documentation.md`. If either exists, load them — these contain existing codebase analysis that must inform architecture decisions even if the PRD is not in brownfield mode.
 - Check for `docs/planning-artifacts/threat-model.md`. If it exists, load it — identified threats and mitigations must inform the security architecture in Step 7.
 
+> `!scripts/write-checkpoint.sh gaia-create-arch 1 project_name="$PROJECT_NAME" arch_version="$ARCH_VERSION"`
+
 ### Step 2 — Detect Mode
 
 - Check `docs/planning-artifacts/prd.md` header for "Mode: Brownfield".
 - If brownfield mode detected: set mode to brownfield. Use brownfield architecture template.
 - If no brownfield header: set mode to greenfield. Load `architecture-template.md` from this skill directory. If `custom/templates/architecture-template.md` exists and is non-empty, use the custom template instead.
+
+> `!scripts/write-checkpoint.sh gaia-create-arch 2 project_name="$PROJECT_NAME" arch_version="$ARCH_VERSION" arch_mode="$ARCH_MODE"`
 
 ### Step 3 — Technology Selection
 
@@ -55,6 +59,8 @@ Delegate to the **architect** subagent (Theo) via `agents/architect` to select t
 - If brownfield artifacts were loaded in Step 1: reference the existing tech stack, constraints, and integration points when evaluating technology choices.
 - Record decision as ADR in the architecture document's Decision Log table.
 - Present recommended technology stack to the user for confirmation.
+
+> `!scripts/write-checkpoint.sh gaia-create-arch 3 project_name="$PROJECT_NAME" arch_version="$ARCH_VERSION" section_slug=technology-selection`
 
 ### Step 4 — System Architecture
 
@@ -69,6 +75,8 @@ Delegate to the **architect** subagent (Theo) via `agents/architect` to design t
   - Target architecture for gaps identified in the PRD
   - As-is vs target delta table
 
+> `!scripts/write-checkpoint.sh gaia-create-arch 4 project_name="$PROJECT_NAME" arch_version="$ARCH_VERSION" section_slug=system-architecture`
+
 ### Step 5 — Data Architecture
 
 Delegate to the **architect** subagent (Theo) via `agents/architect` to design data architecture.
@@ -77,6 +85,8 @@ Delegate to the **architect** subagent (Theo) via `agents/architect` to design d
 - Define data flow between components.
 - Specify data storage, caching, and replication strategies.
 
+> `!scripts/write-checkpoint.sh gaia-create-arch 5 project_name="$PROJECT_NAME" arch_version="$ARCH_VERSION" section_slug=data-architecture`
+
 ### Step 6 — API Design
 
 Delegate to the **architect** subagent (Theo) via `agents/architect` to design APIs.
@@ -84,6 +94,8 @@ Delegate to the **architect** subagent (Theo) via `agents/architect` to design A
 - Define API endpoint overview.
 - Specify authentication and authorization strategy.
 - Document API versioning approach.
+
+> `!scripts/write-checkpoint.sh gaia-create-arch 6 project_name="$PROJECT_NAME" arch_version="$ARCH_VERSION" section_slug=api-design`
 
 ### Step 7 — Infrastructure and Cross-Cutting Concerns
 
@@ -95,6 +107,8 @@ Delegate to the **architect** subagent (Theo) via `agents/architect` to define i
 - Define security architecture: if threat-model.md was loaded, cross-reference identified threats and map each critical/high threat to an architectural mitigation. If no threat model exists, prompt user for key security requirements.
 - Brownfield: document security architecture, cross-cutting concerns with current state and gaps. Define migration strategy. Cross-reference api-documentation.md, event-catalog.md, dependency-map.md in the Integration Architecture section.
 
+> `!scripts/write-checkpoint.sh gaia-create-arch 7 project_name="$PROJECT_NAME" arch_version="$ARCH_VERSION" section_slug=infra-and-cross-cutting`
+
 ### Step 8 — Architecture Decision Records
 
 Delegate to the **architect** subagent (Theo) via `agents/architect` to compile ADRs.
@@ -104,11 +118,15 @@ Delegate to the **architect** subagent (Theo) via `agents/architect` to compile 
 - Brownfield: mark existing decisions as status "Existing", new gap-related decisions as "Proposed".
 - Generate a "Decision to Requirement Mapping" table mapping each ADR to the FR/NFR IDs it addresses. Flag any FR/NFR from the PRD with no corresponding ADR as a coverage gap.
 
+> `!scripts/write-checkpoint.sh gaia-create-arch 8 project_name="$PROJECT_NAME" arch_version="$ARCH_VERSION" adr_count="$ADR_COUNT"`
+
 ### Step 9 — Generate Output
 
 - Write the architecture document to `docs/planning-artifacts/architecture.md` using the `architecture-template.md` section structure.
 - Greenfield: include technology stack, system architecture, data architecture, API design, infrastructure plan, ADR references, and Decision-to-Requirement Mapping table.
 - Brownfield: include C4 diagrams, sequence diagrams, data flow diagram, as-is/target delta table, migration strategy, and cross-references.
+
+> `!scripts/write-checkpoint.sh gaia-create-arch 9 project_name="$PROJECT_NAME" arch_version="$ARCH_VERSION" --paths docs/planning-artifacts/architecture.md`
 
 ### Step 10 — Optional: API Design Review
 
@@ -116,11 +134,15 @@ Delegate to the **architect** subagent (Theo) via `agents/architect` to compile 
 - If yes: invoke the API design review task.
 - If skip: API review can be run anytime later with /gaia-review-api.
 
+> `!scripts/write-checkpoint.sh gaia-create-arch 10 project_name="$PROJECT_NAME" arch_version="$ARCH_VERSION" api_review_run="$API_REVIEW_RUN"`
+
 ### Step 11 — Adversarial Review
 
 - Read adversarial-triggers.yaml to evaluate trigger rules.
 - If adversarial review is triggered: spawn a subagent for adversarial review of the architecture document.
 - If not triggered: add "## Review Findings Incorporated" section noting the review was not triggered.
+
+> `!scripts/write-checkpoint.sh gaia-create-arch 11 project_name="$PROJECT_NAME" arch_version="$ARCH_VERSION" adversarial_triggered="$ADVERSARIAL_TRIGGERED"`
 
 ### Step 12 — Incorporate Adversarial Findings
 
@@ -128,6 +150,8 @@ Delegate to the **architect** subagent (Theo) via `agents/architect` to compile 
 - For each critical/high finding: update the architecture — add missing components, revise decisions, strengthen security/scalability, update ADRs.
 - Add a "## Review Findings Incorporated" section to the architecture document listing each finding, its severity, and how it was addressed.
 - Write the final architecture document.
+
+> `!scripts/write-checkpoint.sh gaia-create-arch 12 project_name="$PROJECT_NAME" arch_version="$ARCH_VERSION" --paths docs/planning-artifacts/architecture.md`
 
 ## Finalize
 

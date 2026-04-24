@@ -29,11 +29,15 @@ This skill is the native Claude Code conversion of the legacy `_gaia/core/tasks/
 - If `$ARGUMENTS` is non-empty, resolve it as the target. Otherwise ask the user inline for the API spec or route code (preserves the legacy Step 1 "Ask user for API specification or code to review" behavior — AC-EC4).
 - Read the target file(s). If a directory is given, recursively read all relevant API-definition files.
 
+> `!scripts/write-checkpoint.sh gaia-review-api 1 api_spec_path="$API_SPEC_PATH" review_scope="$REVIEW_SCOPE"`
+
 ### Step 2 — Naming Conventions
 
 - Check resource naming: plural nouns (`/users` not `/user`), kebab-case in path segments (`/audit-logs` not `/auditLogs`), no verbs in URLs (prefer `GET /orders/{id}/items` over `GET /getOrderItems`).
 - Verify consistent naming across endpoints — pluralisation, casing, hyphenation must be uniform.
 - Check path parameter naming — `{id}`, `{userId}`, consistent casing.
+
+> `!scripts/write-checkpoint.sh gaia-review-api 2 api_spec_path="$API_SPEC_PATH" review_scope="$REVIEW_SCOPE" review_stage=naming`
 
 ### Step 3 — HTTP Methods and Status Codes
 
@@ -49,11 +53,15 @@ This skill is the native Claude Code conversion of the legacy `_gaia/core/tasks/
   - `500`, `502`, `503`, `504` for server error
 - Flag misuse (e.g., returning `200` with an error body, or using `POST` where `PATCH` is correct).
 
+> `!scripts/write-checkpoint.sh gaia-review-api 3 api_spec_path="$API_SPEC_PATH" review_scope="$REVIEW_SCOPE" review_stage=methods-codes`
+
 ### Step 4 — Error Format and Versioning
 
 - Check the error response format follows RFC 7807 (Problem Details) or a consistent documented pattern. Required RFC 7807 fields: `type`, `title`, `status`; recommended: `detail`, `instance`. Deviations are flagged with severity.
 - Verify the API declares a versioning strategy — URL segment (`/v1/`), custom header (`Api-Version: 1`), media-type (`Accept: application/vnd.example+json; version=1`), or query parameter. Lack of versioning is a critical finding.
 - Verify breaking changes follow the declared versioning strategy — additive changes inside a major version, breaking changes require a new version.
+
+> `!scripts/write-checkpoint.sh gaia-review-api 4 api_spec_path="$API_SPEC_PATH" review_scope="$REVIEW_SCOPE" review_stage=errors-versioning`
 
 ### Step 5 — Report
 
@@ -76,6 +84,8 @@ If the file already exists for the same day (AC-EC3), write to a suffix-incremen
 The report is organised by category (naming, HTTP methods, status codes, error format, versioning). Each finding row includes: category, severity (critical / high / medium / low), endpoint or location, finding description, recommendation.
 
 If the target is empty or resolves to no API definitions (AC-EC6), exit with `No review target resolved` and do NOT write an empty report.
+
+> `!scripts/write-checkpoint.sh gaia-review-api 5 api_spec_path="$API_SPEC_PATH" review_scope="$REVIEW_SCOPE" review_stage=report --paths "$REPORT_PATH"`
 
 ## References
 

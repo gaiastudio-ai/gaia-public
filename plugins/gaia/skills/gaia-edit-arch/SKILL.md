@@ -39,6 +39,8 @@ This skill is the native Claude Code conversion of the legacy `_gaia/lifecycle/w
 - Identify existing Version History entries — note last version number for auto-increment.
 - Display current structure summary to user: section headers, ADR count, current version.
 
+> `!scripts/write-checkpoint.sh gaia-edit-arch 1 project_name="$PROJECT_NAME" edit_scope=load arch_version_current="$ARCH_VERSION_CURRENT"`
+
 ### Step 2 — Capture Change Scope
 
 Delegate to the **architect** subagent (Theo) via `agents/architect` to evaluate the requested changes.
@@ -57,6 +59,8 @@ Classify change scope: MINOR (section update, config change) / SIGNIFICANT (new 
 
 Confirm scope of changes with user before proceeding. The architect subagent evaluates whether the requested changes are consistent with the existing architecture and flags any potential conflicts.
 
+> `!scripts/write-checkpoint.sh gaia-edit-arch 2 project_name="$PROJECT_NAME" edit_scope="$EDIT_SCOPE" architecture_section_targeted="$ARCHITECTURE_SECTION_TARGETED" driver="$DRIVER"`
+
 ### Step 3 — Apply Targeted Edits
 
 Delegate to the **architect** subagent (Theo) via `agents/architect` to apply the edits:
@@ -65,6 +69,8 @@ Delegate to the **architect** subagent (Theo) via `agents/architect` to apply th
 - Preserve all unchanged sections exactly as-is — no reordering, no reformatting, no content loss.
 - Validate consistency between edited sections and remaining unchanged sections.
 - If edits affect component-to-requirement traceability: verify Addresses fields remain accurate.
+
+> `!scripts/write-checkpoint.sh gaia-edit-arch 3 project_name="$PROJECT_NAME" edit_scope=apply architecture_section_targeted="$ARCHITECTURE_SECTION_TARGETED"`
 
 ### Step 4 — Record ADRs
 
@@ -84,6 +90,8 @@ Delegate to the **architect** subagent (Theo) via `agents/architect` to record a
 - If superseding an existing ADR: set old ADR status to "Superseded by ADR-{new_id}" and add "Supersedes: ADR-{old_id}" to the new entry.
 - Auto-increment architecture version: minor bump (e.g., v1.0 -> v1.1, v1.3 -> v1.4).
 
+> `!scripts/write-checkpoint.sh gaia-edit-arch 4 project_name="$PROJECT_NAME" edit_scope=adr adr_count="$ADR_COUNT" arch_version_new="$ARCH_VERSION_NEW"`
+
 ### Step 5 — Add Version Note
 
 - Append a new row to the Version History table:
@@ -95,6 +103,8 @@ Delegate to the **architect** subagent (Theo) via `agents/architect` to record a
   |------|--------|--------|-------------|
   | {date} | {change summary} | {driver} | {CR ID or reference} |
   ```
+
+> `!scripts/write-checkpoint.sh gaia-edit-arch 5 project_name="$PROJECT_NAME" edit_scope=version arch_version_new="$ARCH_VERSION_NEW"`
 
 ### Step 6 — Save and Review Gate
 
@@ -108,6 +118,8 @@ Delegate to the **architect** subagent (Theo) via `agents/architect` to record a
 - For each critical/high finding: incorporate into architecture document.
 - Update "Review Findings Incorporated" section — append new entries with amendment date.
 - Write the final architecture document.
+
+> `!scripts/write-checkpoint.sh gaia-edit-arch 6 project_name="$PROJECT_NAME" edit_scope=save arch_version_new="$ARCH_VERSION_NEW" --paths docs/planning-artifacts/architecture.md`
 
 ### Step 7 — Cascade Impact Analysis
 
@@ -125,6 +137,8 @@ This is the cascade-aware behavior preserved from the legacy edit-architecture w
 - For each artifact with impact > NONE: recommend the appropriate update workflow.
 - Report cascade assessment to user with recommended next command(s).
 - Record all architecture changes and new ADRs in Theo's memory sidecar.
+
+> `!scripts/write-checkpoint.sh gaia-edit-arch 7 project_name="$PROJECT_NAME" edit_scope=cascade cascade_impact="$CASCADE_IMPACT"`
 
 ## Finalize
 

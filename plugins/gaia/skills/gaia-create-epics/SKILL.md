@@ -44,11 +44,15 @@ This skill is the native Claude Code conversion of the legacy `_gaia/lifecycle/w
 - Read `docs/test-artifacts/test-plan.md` — extract risk assessment (high-risk areas: revenue-critical, security-sensitive, complex logic). This file was already validated by `scripts/setup.sh` via the enforced quality gate.
 - Read `docs/planning-artifacts/ux-design.md` if available — extract UI flows, component hierarchy, interaction patterns, and accessibility requirements. Set `has_ux_design` flag.
 
+> `!scripts/write-checkpoint.sh gaia-create-epics 1 project_name="$PROJECT_NAME" prd_version="$PRD_VERSION" architecture_version="$ARCHITECTURE_VERSION"`
+
 ### Step 2 — Detect Mode
 
 - Check `docs/planning-artifacts/prd.md` header for "Mode: Brownfield".
 - If brownfield mode detected: set mode to brownfield. Stories must cover gap requirements ONLY — do NOT create stories for existing implemented features.
 - If no brownfield header: set mode to greenfield. Create stories for all features from the PRD.
+
+> `!scripts/write-checkpoint.sh gaia-create-epics 2 project_name="$PROJECT_NAME" prd_version="$PRD_VERSION" epics_mode="$EPICS_MODE"`
 
 ### Step 3 — Define Epics
 
@@ -57,6 +61,8 @@ Delegate to the **architect** subagent (Theo) via `agents/architect` to define e
 - Group related features into logical epics.
 - Each epic: name, description, goal, success criteria.
 - Brownfield: epics should focus on gap closure — not existing functionality.
+
+> `!scripts/write-checkpoint.sh gaia-create-epics 3 project_name="$PROJECT_NAME" prd_version="$PRD_VERSION" epic_count="$EPIC_COUNT"`
 
 ### Step 4 — Break Into Stories
 
@@ -68,11 +74,15 @@ Delegate to the **pm** subagent (Derek) via `agents/pm` to author user stories.
 - Brownfield: stories must trace to PRD gap requirement IDs. Do NOT create stories for existing implemented features.
 - If `has_ux_design`: frontend stories MUST reference specific UX flows, components, and interaction patterns from ux-design.md. Include relevant screen names, navigation paths, and accessibility requirements in acceptance criteria.
 
+> `!scripts/write-checkpoint.sh gaia-create-epics 4 project_name="$PROJECT_NAME" prd_version="$PRD_VERSION" epic_count="$EPIC_COUNT" story_count="$STORY_COUNT"`
+
 ### Step 5 — Apply Test-Plan Risk Levels
 
 - Read risk assessment from the test plan loaded in Step 1.
 - For each story: if it touches a high-risk component, set risk_level: high. Otherwise medium or low.
 - High-risk stories: add to Dev Notes: "Risk: HIGH — run /gaia-atdd before /gaia-dev-story".
+
+> `!scripts/write-checkpoint.sh gaia-create-epics 5 project_name="$PROJECT_NAME" prd_version="$PRD_VERSION" story_count="$STORY_COUNT" high_risk_count="$HIGH_RISK_COUNT"`
 
 ### Step 6 — Declare Dependencies
 
@@ -81,12 +91,16 @@ Delegate to the **architect** subagent (Theo) via `agents/architect` to determin
 - For each story, declare depends_on: [story-ids] and blocks: [story-ids].
 - Ensure no circular dependencies.
 
+> `!scripts/write-checkpoint.sh gaia-create-epics 6 project_name="$PROJECT_NAME" prd_version="$PRD_VERSION" story_count="$STORY_COUNT" deps_declared="$DEPS_DECLARED"`
+
 ### Step 7 — Priority Ordering
 
 Delegate to the **pm** subagent (Derek) via `agents/pm` to set business priority.
 
 - Sort stories by: dependency topology first, then business priority.
 - Assign priority: P0 (must-have), P1 (should-have), P2 (nice-to-have).
+
+> `!scripts/write-checkpoint.sh gaia-create-epics 7 project_name="$PROJECT_NAME" prd_version="$PRD_VERSION" story_count="$STORY_COUNT" priority_assigned="$PRIORITY_ASSIGNED"`
 
 ### Step 8 — Generate Output
 
@@ -104,6 +118,8 @@ Write the epics and stories document to `docs/planning-artifacts/epics-and-stori
   - AC1: {criteria}
 ```
 
+> `!scripts/write-checkpoint.sh gaia-create-epics 8 project_name="$PROJECT_NAME" prd_version="$PRD_VERSION" epic_count="$EPIC_COUNT" story_count="$STORY_COUNT" --paths docs/planning-artifacts/epics-and-stories.md`
+
 ### Step 9 — Brownfield: Generate Onboarding Knowledge Base (optional)
 
 Skip this step if mode is greenfield.
@@ -111,17 +127,23 @@ Skip this step if mode is greenfield.
 - Generate onboarding doc as a knowledge base index linking to ALL artifacts.
 - Write to `docs/planning-artifacts/brownfield-onboarding.md`.
 
+> `!scripts/write-checkpoint.sh gaia-create-epics 9 project_name="$PROJECT_NAME" prd_version="$PRD_VERSION" epics_mode=brownfield brownfield_onboarding_written="$BROWNFIELD_ONBOARDING_WRITTEN"`
+
 ### Step 10 — Edge Case Analysis (optional)
 
 - Ask: "Would you like to hunt for edge cases in the stories? Recommended to catch gaps before sprint planning. (yes / skip)"
 - If yes: spawn edge case analysis subagent.
 - If skip: edge case analysis can be run anytime later with /gaia-edge-cases.
 
+> `!scripts/write-checkpoint.sh gaia-create-epics 10 project_name="$PROJECT_NAME" prd_version="$PRD_VERSION" edge_cases_run="$EDGE_CASES_RUN"`
+
 ### Step 11 — Adversarial Review (optional)
 
 - Ask: "Would you like to run an adversarial review on the epics and stories? Recommended before sprint planning. (yes / skip)"
 - If yes: spawn adversarial review subagent.
 - If skip: adversarial review can be run anytime later with /gaia-adversarial.
+
+> `!scripts/write-checkpoint.sh gaia-create-epics 11 project_name="$PROJECT_NAME" prd_version="$PRD_VERSION" adversarial_run="$ADVERSARIAL_RUN"`
 
 ## Finalize
 

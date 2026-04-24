@@ -100,6 +100,64 @@ Where `{slug}` is a short kebab-case slug derived from the product vision (e.g.,
 
 > `!scripts/write-checkpoint.sh gaia-product-brief 8 product_name="$PRODUCT_NAME" target_user="$TARGET_USER" --paths docs/creative-artifacts/product-brief-${SLUG}.md`
 
+## Validation
+
+<!--
+  E42-S5 — V1→V2 27-item checklist port (FR-341, FR-359).
+  Classification (27 items total):
+    - Script-verifiable: 18 (SV-01..SV-18) — enforced by finalize.sh.
+    - LLM-checkable:      9 (LLM-01..LLM-09) — evaluated by the host LLM
+      against the product-brief artifact at finalize time.
+  Exit code 0 when all 18 script-verifiable items PASS; non-zero otherwise.
+
+  The 9 required product-brief sections (per architecture §10.31.1 and
+  test plan §11.46.18 VCP-GATE-03) form the spine of the script-verifiable
+  subset (SV-04..SV-12). SV-01..SV-03 guard artifact existence, non-empty
+  body, and top-level title/frontmatter. SV-13..SV-18 are deeper presence
+  checks — Vision body non-empty, ≥1 persona, ≥1 key feature, scope
+  carries both in-scope and out-of-scope wording, ≥1 competitor, and
+  Success Metrics contains at least one measurable numeric signal
+  (percent, currency, duration, NPS). These defend against the most
+  common V2-regression: a required heading present but the body left
+  empty.
+
+  LLM-checkable items (LLM-01..LLM-09) cover semantic judgement that
+  bash cannot reliably assess — coherence, plausibility, rationale,
+  credibility, differentiation, measurability, and scope discipline.
+
+  Invoked by `finalize.sh` at post-complete (per §10.31.1).
+
+  See docs/implementation-artifacts/E42-S5-port-gaia-product-brief-27-item-checklist-to-v2.md.
+-->
+
+- [script-verifiable] SV-01 — Output artifact exists at docs/creative-artifacts/product-brief-*.md
+- [script-verifiable] SV-02 — Output artifact is non-empty
+- [script-verifiable] SV-03 — Artifact has frontmatter or top-level title
+- [script-verifiable] SV-04 — Vision Statement section present
+- [script-verifiable] SV-05 — Target Users section present
+- [script-verifiable] SV-06 — Problem Statement section present
+- [script-verifiable] SV-07 — Proposed Solution section present
+- [script-verifiable] SV-08 — Key Features section present
+- [script-verifiable] SV-09 — Scope and Boundaries section present
+- [script-verifiable] SV-10 — Risks and Assumptions section present
+- [script-verifiable] SV-11 — Competitive Landscape section present
+- [script-verifiable] SV-12 — Success Metrics section present
+- [script-verifiable] SV-13 — Vision Statement body non-empty
+- [script-verifiable] SV-14 — At least one persona listed in Target Users
+- [script-verifiable] SV-15 — Key Features list non-empty
+- [script-verifiable] SV-16 — Scope and Boundaries documents both in-scope and out-of-scope
+- [script-verifiable] SV-17 — At least one competitor listed in Competitive Landscape
+- [script-verifiable] SV-18 — Success Metrics contain measurable values
+- [LLM-checkable] LLM-01 — Vision statement is coherent and aspirational
+- [LLM-checkable] LLM-02 — Target user personas are plausible and grounded in research
+- [LLM-checkable] LLM-03 — Problem statement is grounded in user/market research findings
+- [LLM-checkable] LLM-04 — Proposed solution addresses the stated problem
+- [LLM-checkable] LLM-05 — Key features are prioritised with rationale
+- [LLM-checkable] LLM-06 — Risks are credible and assumptions are testable
+- [LLM-checkable] LLM-07 — Competitive landscape differentiation is clear
+- [LLM-checkable] LLM-08 — Success metrics are measurable and attributable to the product
+- [LLM-checkable] LLM-09 — Scope boundaries are defensible against feature creep
+
 ## Finalize
 
 !${CLAUDE_PLUGIN_ROOT}/skills/gaia-product-brief/scripts/finalize.sh

@@ -75,6 +75,58 @@ Write a structured domain research report to `docs/planning-artifacts/domain-res
 
 > `!scripts/write-checkpoint.sh gaia-domain-research 5 domain="$DOMAIN" research_scope="$RESEARCH_SCOPE" --paths docs/planning-artifacts/domain-research.md`
 
+## Validation
+
+<!--
+  E42-S3 — V1→V2 22-item checklist port (FR-341, FR-359).
+  Classification (22 items total):
+    - Script-verifiable: 13 (SV-01..SV-13) — enforced by finalize.sh.
+    - LLM-checkable:      9 (LLM-01..LLM-09) — evaluated by the host LLM
+      against the domain-research artifact below.
+  Exit code 0 when all script-verifiable items PASS; non-zero otherwise.
+  Dedup / expand rule applied to the V1 surface (2 rules + 11 checkboxes):
+    - "Domain clearly defined" and "Risk assessment included" validation
+      rules collapse into the Scope (SV-04) and Risk Assessment section
+      (SV-11) items respectively — counted once.
+    - "All required sections present" in V1 Output Verification expands
+      into one check per V2 Step 5 required section (Domain Overview,
+      Key Players, Regulatory Landscape, Trends, Terminology Glossary,
+      Risk Assessment, Recommendations — SV-06..SV-12) so each section
+      fails independently rather than as a single binary.
+    - "Terminology glossary included" splits into section-present
+      (SV-10) and content-populated (SV-13, ≥3 terms) so an empty
+      heading cannot spoof a PASS.
+    - The three Risk Assessment sub-items (regulatory/technical/market)
+      are LLM-checkable (semantic judgement on coverage quality) while
+      the umbrella ## Risk Assessment heading is script-verifiable.
+    - Web Access checkboxes from V1 fold into LLM-08 (semantic check on
+      the limitation wording).
+  See docs/implementation-artifacts/E42-S3-port-gaia-domain-research-checklist-to-v2.md.
+-->
+
+- [script-verifiable] SV-01 — Output artifact exists at docs/planning-artifacts/domain-research.md
+- [script-verifiable] SV-02 — Output artifact is non-empty
+- [script-verifiable] SV-03 — Artifact has frontmatter or top-level title
+- [script-verifiable] SV-04 — Domain/industry clearly defined
+- [script-verifiable] SV-05 — Focus areas identified
+- [script-verifiable] SV-06 — Domain Overview section present
+- [script-verifiable] SV-07 — Key Players section present
+- [script-verifiable] SV-08 — Regulatory Landscape section present
+- [script-verifiable] SV-09 — Trends section present
+- [script-verifiable] SV-10 — Terminology Glossary section present
+- [script-verifiable] SV-11 — Risk Assessment section present
+- [script-verifiable] SV-12 — Recommendations section present
+- [script-verifiable] SV-13 — Terminology Glossary populated with at least 3 terms
+- [LLM-checkable] LLM-01 — Key players identified with roles and context
+- [LLM-checkable] LLM-02 — Regulatory landscape captures applicable regulations with scope
+- [LLM-checkable] LLM-03 — Industry trends mapped with evidence or direction of travel
+- [LLM-checkable] LLM-04 — Terminology glossary entries are accurate and domain-specific
+- [LLM-checkable] LLM-05 — Regulatory and compliance risks identified with impact/likelihood
+- [LLM-checkable] LLM-06 — Technical risks specific to the domain identified
+- [LLM-checkable] LLM-07 — Market and competitive risks evaluated
+- [LLM-checkable] LLM-08 — Web access availability and limitations noted if web access unavailable
+- [LLM-checkable] LLM-09 — Recommendations actionable and grounded in the risk assessment
+
 ## Finalize
 
 !${CLAUDE_PLUGIN_ROOT}/skills/gaia-domain-research/scripts/finalize.sh

@@ -104,6 +104,45 @@ This skill is the native Claude Code conversion of the legacy `_gaia/testing/wor
 
 > `!scripts/write-checkpoint.sh gaia-ci-setup 9 ci_provider="$CI_PROVIDER" ci_config_path="$CI_CONFIG_PATH" stage=output-generated --paths docs/test-artifacts/ci-setup.md`
 
+## Validation
+
+<!--
+  E42-S15 — V1→V2 8-item checklist port (FR-341, FR-359, VCP-CHK-35, VCP-CHK-36).
+  Classification (8 items total — V1 verbatim, no extras):
+    - Script-verifiable: 6 (SV-01..SV-06) — enforced by finalize.sh.
+    - LLM-checkable:     2 (LLM-01..LLM-02) — evaluated by the host LLM
+      against the ci-setup.md artifact at finalize time.
+  Exit code 0 when all 6 script-verifiable items PASS; non-zero otherwise.
+
+  V1 source: 8 items (clean). V1 → V2 mapping (1:1, no drop, no merge):
+    V1 "CI platform confirmed by user (not just auto-detected)" → LLM-01 (semantic)
+    V1 "Pipeline stages defined (build, lint, test, coverage)"  → SV-01 (4-stage regex)
+    V1 "Quality gate thresholds set"                            → SV-02 (threshold regex)
+    V1 "Secrets management documented (required secrets,
+        environment separation)"                                → SV-03 (heading)
+    V1 "Deployment strategy defined (staging, production,
+        rollback)"                                              → SV-04 (heading + 3 keywords)
+    V1 "Monitoring and notifications configured (failure
+        alerts, status badge)"                                  → SV-05 (heading + alert/badge)
+    V1 "Pipeline config generated"                              → SV-06 (heading or path regex)
+    V1 "Gates are enforced (blocking, not advisory)"            → LLM-02 (semantic)
+
+  Invoked by `finalize.sh` at post-complete (per architecture §10.31.1).
+  Validation runs BEFORE the checkpoint and lifecycle-event writes
+  (observability is never suppressed by checklist outcome — story AC6).
+
+  See docs/implementation-artifacts/E42-S15-port-gaia-test-framework-atdd-ci-setup-checklists-to-v2.md.
+-->
+
+- [script-verifiable] SV-01 — Pipeline stages defined (build, lint, test, coverage)
+- [script-verifiable] SV-02 — Quality gate thresholds set
+- [script-verifiable] SV-03 — Secrets management documented (required secrets, environment separation)
+- [script-verifiable] SV-04 — Deployment strategy defined (staging, production, rollback)
+- [script-verifiable] SV-05 — Monitoring and notifications configured (failure alerts, status badge)
+- [script-verifiable] SV-06 — Pipeline config generated
+- [LLM-checkable] LLM-01 — CI platform confirmed by user (not just auto-detected)
+- [LLM-checkable] LLM-02 — Gates are enforced (blocking, not advisory)
+
 ## Finalize
 
 !${CLAUDE_PLUGIN_ROOT}/skills/gaia-ci-setup/scripts/finalize.sh

@@ -30,6 +30,8 @@ This skill is the native Claude Code conversion of the legacy `_gaia/lifecycle/w
 - If found, load and incorporate insights into the session.
 - If not found, note that no prior creative work exists and proceed.
 
+> `!scripts/write-checkpoint.sh gaia-brainstorm 1 slug="$SLUG" technique="$TECHNIQUE"`
+
 ### Step 2 — Elicit Project Vision
 
 Ask the user the following questions, one at a time, and wait for a response before moving to the next:
@@ -39,6 +41,8 @@ Ask the user the following questions, one at a time, and wait for a response bef
 3. What pain points does this address?
 4. What makes this different from existing solutions?
 
+> `!scripts/write-checkpoint.sh gaia-brainstorm 2 slug="$SLUG" technique="$TECHNIQUE"`
+
 ### Step 3 — Competitive Landscape
 
 - Based on user-provided information, analyze the competitive landscape.
@@ -46,12 +50,16 @@ Ask the user the following questions, one at a time, and wait for a response bef
 - Identify direct and indirect competitors.
 - Map competitive positioning.
 
+> `!scripts/write-checkpoint.sh gaia-brainstorm 3 slug="$SLUG" technique="$TECHNIQUE"`
+
 ### Step 4 — Opportunity Synthesis
 
 - Synthesize findings into 3–5 opportunity areas.
 - For each opportunity: describe it, estimate impact, note evidence.
 - Rank opportunities by potential impact and feasibility.
 - Collect all ideas explored during the session that did not make the top opportunity list into a **Parking Lot** — for each, note the idea, why it was deprioritized, and under what conditions it might become viable.
+
+> `!scripts/write-checkpoint.sh gaia-brainstorm 4 slug="$SLUG" technique="$TECHNIQUE"`
 
 ### Step 5 — Generate Output
 
@@ -66,6 +74,8 @@ Write a structured brainstorm artifact to `docs/creative-artifacts/brainstorm-{s
 - Next steps per `${CLAUDE_PLUGIN_ROOT}/knowledge/lifecycle-sequence.yaml` (routing table ships inside the plugin under ADR-041's `knowledge/` convention; the legacy v1 location `_gaia/_config/lifecycle-sequence.yaml` is retired and no longer used)
 
 Where `{slug}` is a short kebab-case slug derived from the project vision (e.g., `brainstorm-ai-code-review.md`).
+
+> `!scripts/write-checkpoint.sh gaia-brainstorm 5 slug="$SLUG" technique="$TECHNIQUE" --paths docs/creative-artifacts/brainstorm-${SLUG}.md`
 
 ## Finalize
 

@@ -34,21 +34,29 @@ This skill is the native Claude Code conversion of the legacy `_gaia/lifecycle/w
 - Load any other creative outputs under `docs/creative-artifacts/`.
 - Summarize what upstream context was found and flag any missing inputs to the user before proceeding.
 
+> `!scripts/write-checkpoint.sh gaia-product-brief 1 product_name="$PRODUCT_NAME" target_user="$TARGET_USER"`
+
 ### Step 2 — Vision Statement
 
 - Collaboratively craft the vision statement with the user.
 - Incorporate insights from prior analysis if available.
 - Ask the user: **"What is the core vision for this product?"** — wait for a response before moving on.
 
+> `!scripts/write-checkpoint.sh gaia-product-brief 2 product_name="$PRODUCT_NAME" target_user="$TARGET_USER"`
+
 ### Step 3 — Target Users
 
 - Define user personas based on research.
 - For each persona capture: name, role, goals, pain points, context.
 
+> `!scripts/write-checkpoint.sh gaia-product-brief 3 product_name="$PRODUCT_NAME" target_user="$TARGET_USER"`
+
 ### Step 4 — Problem Statement
 
 - Articulate the core problem being solved.
 - Ground the statement in user research, market findings, and domain landscape where available.
+
+> `!scripts/write-checkpoint.sh gaia-product-brief 4 product_name="$PRODUCT_NAME" target_user="$TARGET_USER"`
 
 ### Step 5 — Proposed Solution
 
@@ -56,16 +64,22 @@ This skill is the native Claude Code conversion of the legacy `_gaia/lifecycle/w
 - Capture key features and differentiators.
 - Reference technical research for technology selection rationale if available.
 
+> `!scripts/write-checkpoint.sh gaia-product-brief 5 product_name="$PRODUCT_NAME" target_user="$TARGET_USER"`
+
 ### Step 6 — Scope, Risks and Competitive Landscape
 
 - Define what is in-scope for this product and what is explicitly out of scope.
 - Document known risks, dependencies, and assumptions the solution depends on.
 - Summarize competitive landscape from upstream brainstorm and market research — key competitors, positioning, and differentiation.
 
+> `!scripts/write-checkpoint.sh gaia-product-brief 6 product_name="$PRODUCT_NAME" target_user="$TARGET_USER"`
+
 ### Step 7 — Success Metrics
 
 - Define measurable KPIs and success criteria.
 - Include both quantitative and qualitative metrics.
+
+> `!scripts/write-checkpoint.sh gaia-product-brief 7 product_name="$PRODUCT_NAME" target_user="$TARGET_USER"`
 
 ### Step 8 — Generate Output
 
@@ -83,6 +97,8 @@ Write a structured product brief to `docs/creative-artifacts/product-brief-{slug
 - **Next Steps** — per `${CLAUDE_PLUGIN_ROOT}/knowledge/lifecycle-sequence.yaml` (routing table ships inside the plugin under ADR-041's `knowledge/` convention; the legacy v1 location `_gaia/_config/lifecycle-sequence.yaml` is retired and no longer used)
 
 Where `{slug}` is a short kebab-case slug derived from the product vision (e.g., `product-brief-ai-code-review.md`).
+
+> `!scripts/write-checkpoint.sh gaia-product-brief 8 product_name="$PRODUCT_NAME" target_user="$TARGET_USER" --paths docs/creative-artifacts/product-brief-${SLUG}.md`
 
 ## Finalize
 

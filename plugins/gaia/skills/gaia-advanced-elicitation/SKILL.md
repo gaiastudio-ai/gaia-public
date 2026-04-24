@@ -50,6 +50,8 @@ Ask the user, in order, and wait for a response on each:
 - **"Who are the key stakeholders?"**
 - **"Are there specific requirements gaps or assumptions from the research that you want to validate?"**
 
+> `!scripts/write-checkpoint.sh gaia-advanced-elicitation 1 elicitation_topic="$ELICITATION_TOPIC" technique="$TECHNIQUE"`
+
 ### Step 2 — Method Selection
 
 - Present the available elicitation methods from the table above with their descriptions and best-fit scenarios.
@@ -59,6 +61,8 @@ Ask the user:
 - **"Which elicitation method(s) would you like to use? (or let me recommend based on your context)"**
 
 - If user defers: recommend 2-3 methods based on the project context.
+
+> `!scripts/write-checkpoint.sh gaia-advanced-elicitation 2 elicitation_topic="$ELICITATION_TOPIC" technique="$TECHNIQUE"`
 
 ### Step 3 — Elicitation Execution
 
@@ -75,6 +79,8 @@ For each selected method, execute the structured questioning flow:
 
 Document all requirements discovered during each method.
 
+> `!scripts/write-checkpoint.sh gaia-advanced-elicitation 3 elicitation_topic="$ELICITATION_TOPIC" technique="$TECHNIQUE"`
+
 ### Step 4 — Requirements Synthesis
 
 - Consolidate all discovered requirements across methods.
@@ -82,6 +88,8 @@ Document all requirements discovered during each method.
 - Categorize as: functional, non-functional, constraint, assumption.
 - Tag each requirement with source method and confidence level.
 - Identify gaps where further elicitation is needed.
+
+> `!scripts/write-checkpoint.sh gaia-advanced-elicitation 4 elicitation_topic="$ELICITATION_TOPIC" technique="$TECHNIQUE"`
 
 ### Step 5 — Generate Output
 
@@ -96,6 +104,8 @@ Write a structured elicitation report to `docs/planning-artifacts/elicitation-re
 
 [Source: _gaia/lifecycle/workflows/1-analysis/advanced-elicitation/instructions.xml]
 [Source: _gaia/lifecycle/workflows/1-analysis/advanced-elicitation/workflow.yaml]
+
+> `!scripts/write-checkpoint.sh gaia-advanced-elicitation 5 elicitation_topic="$ELICITATION_TOPIC" technique="$TECHNIQUE" --paths docs/planning-artifacts/elicitation-report-${DATE}.md`
 
 ## Finalize
 

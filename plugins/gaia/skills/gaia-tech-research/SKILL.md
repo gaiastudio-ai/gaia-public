@@ -34,11 +34,15 @@ Ask the user, in order, and wait for a response on each:
 - **"What is the use case or problem context?"**
 - **"Are there constraints (team expertise, budget, timeline)?"**
 
+> `!scripts/write-checkpoint.sh gaia-tech-research 1 technology="$TECHNOLOGY" evaluation_criteria="$EVALUATION_CRITERIA"`
+
 ### Step 2 — Web Access Check
 
 - Check if MCP web tools are available for live research.
 - If web access is available, proceed with live web research in subsequent steps.
 - If no web access, notify the user: *"Web access unavailable. Proceeding with user-provided data and general knowledge. Results may be less comprehensive."*
+
+> `!scripts/write-checkpoint.sh gaia-tech-research 2 technology="$TECHNOLOGY" evaluation_criteria="$EVALUATION_CRITERIA"`
 
 ### Step 3 — Technology Evaluation
 
@@ -46,11 +50,15 @@ Ask the user, in order, and wait for a response on each:
 - Evaluate ecosystem: libraries, tools, IDE support, documentation quality.
 - Check production readiness: stability, performance characteristics, scalability.
 
+> `!scripts/write-checkpoint.sh gaia-tech-research 3 technology="$TECHNOLOGY" evaluation_criteria="$EVALUATION_CRITERIA"`
+
 ### Step 4 — Trade-off Analysis
 
 - Create pros/cons matrix for each technology option.
 - Compare alternatives across key dimensions.
 - Provide recommendation with clear rationale.
+
+> `!scripts/write-checkpoint.sh gaia-tech-research 4 technology="$TECHNOLOGY" evaluation_criteria="$EVALUATION_CRITERIA"`
 
 ### Step 5 — Generate Output
 
@@ -64,6 +72,8 @@ Write a structured technical research report to `docs/planning-artifacts/technic
 
 [Source: _gaia/lifecycle/workflows/1-analysis/technical-research/instructions.xml]
 [Source: _gaia/lifecycle/workflows/1-analysis/technical-research/workflow.yaml]
+
+> `!scripts/write-checkpoint.sh gaia-tech-research 5 technology="$TECHNOLOGY" evaluation_criteria="$EVALUATION_CRITERIA" --paths docs/planning-artifacts/technical-research.md`
 
 ## Finalize
 

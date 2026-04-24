@@ -32,10 +32,14 @@ Ask the user, in order, and wait for a response on each:
 - **"What domain or industry do you want to research?"**
 - **"Are there specific aspects you want to focus on?"**
 
+> `!scripts/write-checkpoint.sh gaia-domain-research 1 domain="$DOMAIN" research_scope="$RESEARCH_SCOPE"`
+
 ### Step 2 — Web Access Check
 
 - Check if MCP web tools are available.
 - If no web access, notify the user and proceed with general knowledge only.
+
+> `!scripts/write-checkpoint.sh gaia-domain-research 2 domain="$DOMAIN" research_scope="$RESEARCH_SCOPE"`
 
 ### Step 3 — Domain Landscape
 
@@ -44,11 +48,15 @@ Ask the user, in order, and wait for a response on each:
 - Map industry trends and emerging patterns.
 - Define domain-specific terminology and concepts.
 
+> `!scripts/write-checkpoint.sh gaia-domain-research 3 domain="$DOMAIN" research_scope="$RESEARCH_SCOPE"`
+
 ### Step 4 — Domain-Specific Risks
 
 - Identify regulatory and compliance risks.
 - Assess technical risks specific to the domain.
 - Evaluate market and competitive risks.
+
+> `!scripts/write-checkpoint.sh gaia-domain-research 4 domain="$DOMAIN" research_scope="$RESEARCH_SCOPE"`
 
 ### Step 5 — Generate Output
 
@@ -64,6 +72,8 @@ Write a structured domain research report to `docs/planning-artifacts/domain-res
 
 [Source: _gaia/lifecycle/workflows/1-analysis/domain-research/instructions.xml]
 [Source: _gaia/lifecycle/workflows/1-analysis/domain-research/workflow.yaml]
+
+> `!scripts/write-checkpoint.sh gaia-domain-research 5 domain="$DOMAIN" research_scope="$RESEARCH_SCOPE" --paths docs/planning-artifacts/domain-research.md`
 
 ## Finalize
 

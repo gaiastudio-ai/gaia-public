@@ -34,11 +34,15 @@ Ask the user, in order, and wait for a response on each:
 - **"Are there specific competitors you want analyzed?"**
 - **"What geographic scope? (global, regional, local)"**
 
+> `!scripts/write-checkpoint.sh gaia-market-research 1 research_topic="$RESEARCH_TOPIC" competitor_set="$COMPETITOR_SET"`
+
 ### Step 2 — Web Access Check
 
 - Check if MCP web tools are available for live research.
 - If web access is available, proceed with live web research in subsequent steps.
 - If no web access, notify the user: *"Web access unavailable. Proceeding with user-provided data and general knowledge. Results may be less comprehensive."*
+
+> `!scripts/write-checkpoint.sh gaia-market-research 2 research_topic="$RESEARCH_TOPIC" competitor_set="$COMPETITOR_SET"`
 
 ### Step 3 — Competitive Analysis
 
@@ -46,11 +50,15 @@ Ask the user, in order, and wait for a response on each:
 - For each competitor capture: strengths, weaknesses, market position, pricing model.
 - Create a competitive positioning matrix.
 
+> `!scripts/write-checkpoint.sh gaia-market-research 3 research_topic="$RESEARCH_TOPIC" competitor_set="$COMPETITOR_SET"`
+
 ### Step 4 — Customer Research
 
 - Define target customer segments.
 - Analyze user behavior patterns and needs.
 - Identify underserved needs and market gaps.
+
+> `!scripts/write-checkpoint.sh gaia-market-research 4 research_topic="$RESEARCH_TOPIC" competitor_set="$COMPETITOR_SET"`
 
 ### Step 5 — Market Sizing
 
@@ -58,6 +66,8 @@ Ask the user, in order, and wait for a response on each:
 - Estimate Serviceable Addressable Market (SAM).
 - Estimate Serviceable Obtainable Market (SOM).
 - State all assumptions clearly.
+
+> `!scripts/write-checkpoint.sh gaia-market-research 5 research_topic="$RESEARCH_TOPIC" competitor_set="$COMPETITOR_SET"`
 
 ### Step 6 — Generate Output
 
@@ -72,6 +82,8 @@ Write a structured market research report to `docs/planning-artifacts/market-res
 
 [Source: _gaia/lifecycle/workflows/1-analysis/market-research/instructions.xml]
 [Source: _gaia/lifecycle/workflows/1-analysis/market-research/workflow.yaml]
+
+> `!scripts/write-checkpoint.sh gaia-market-research 6 research_topic="$RESEARCH_TOPIC" competitor_set="$COMPETITOR_SET" --paths docs/planning-artifacts/market-research.md`
 
 ## Finalize
 

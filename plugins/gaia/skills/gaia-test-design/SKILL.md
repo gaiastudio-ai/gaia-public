@@ -126,6 +126,48 @@ Delegate to the **test-architect** subagent (Sable) via `agents/test-architect` 
 
 > `!scripts/write-checkpoint.sh gaia-test-design 8 story_key="$STORY_KEY" test_plan_path="docs/test-artifacts/test-plan.md" stage=scaffold-suggestion`
 
+## Validation
+
+<!--
+  E42-S14 — V1→V2 8-item checklist port (FR-341, FR-359, VCP-CHK-27, VCP-CHK-28).
+  Classification (8 items total):
+    - Script-verifiable: 6 (SV-01..SV-06) — enforced by finalize.sh.
+    - LLM-checkable:     2 (LLM-01..LLM-02) — evaluated by the host LLM
+      against the test-plan.md artifact at finalize time.
+  Exit code 0 when all 6 script-verifiable items PASS; non-zero otherwise.
+
+  V1 source: _gaia/testing/workflows/test-design/checklist.md (8 items,
+  clean). V1 → V2 mapping (1:1, no drop, no merge):
+    V1 "Project context loaded and understood"                 → LLM (context semantics)
+    V1 "Risk assessment completed with probability x impact"   → SV-03 (heading + keywords)
+    V1 "Test levels defined per component"                     → SV-04 (levels/pyramid)
+    V1 "Test pyramid applied appropriately"                    → SV-04 (pyramid keyword — folded with test-levels)
+    V1 "Legacy integration boundaries identified (brownfield)" → LLM-01
+    V1 "Data migration validation tests defined (if applicable)" → LLM-02
+    V1 "Coverage targets defined"                              → SV-05
+    V1 "Quality gates specified for CI"                        → SV-06
+  Additional structural items (SV-01, SV-02) enforce the V1 output
+  contract (test-plan.md written to docs/test-artifacts/test-plan.md,
+  non-empty). The V1 "Project context loaded" item collapses to host-LLM
+  review because context loading is a Step-1 side effect not provably
+  inspected against the artifact body.
+
+  Invoked by `finalize.sh` at post-complete (per architecture §10.31.1).
+  Validation runs BEFORE the checkpoint and lifecycle-event writes
+  (observability is never suppressed by checklist outcome — story AC5).
+
+  See docs/implementation-artifacts/E42-S14-port-gaia-edit-test-plan-and-gaia-test-design-checklists-to-v2.md.
+-->
+
+- [script-verifiable] SV-01 — Output file saved to docs/test-artifacts/test-plan.md
+- [script-verifiable] SV-02 — Output artifact is non-empty
+- [script-verifiable] SV-03 — Risk assessment section present (risk heading + probability/impact keywords)
+- [script-verifiable] SV-04 — Test strategy section present (test pyramid / test levels keyword)
+- [script-verifiable] SV-05 — Coverage targets defined (coverage / target keyword present)
+- [script-verifiable] SV-06 — Quality gates specified for CI (quality gate / CI gate keyword present)
+- [LLM-checkable] LLM-01 — Legacy integration boundaries identified and tested (if brownfield)
+- [LLM-checkable] LLM-02 — Data migration validation tests defined (if applicable)
+
 ## Finalize
 
 !${CLAUDE_PLUGIN_ROOT}/skills/gaia-test-design/scripts/finalize.sh

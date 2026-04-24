@@ -1,17 +1,44 @@
 #!/usr/bin/env bash
-# finalize.sh — Cluster 6 architecture skill finalize (E28-S45, brief §Cluster 6 / P6-S1)
+# finalize.sh — /gaia-create-arch skill finalize (E28-S45 + E42-S8)
 #
-# Mechanical copy of the Cluster 4 reference implementation authored under
-# E28-S35 (gaia-brainstorm/scripts/finalize.sh). Only WORKFLOW_NAME and
-# SCRIPT_NAME differ — the body is byte-identical to the reference.
+# E42-S8 extends the bare-bones Cluster 6 finalize scaffolding with a
+# 33-item post-completion checklist (25 script-verifiable + 8
+# LLM-checkable) derived from the V1 /gaia-create-arch (create-architecture)
+# checklist. See docs/implementation-artifacts/E42-S8-* for the
+# V1 -> V2 mapping.
 #
-# Responsibilities (per brief §Cluster 4):
-#   1. Write a checkpoint via the shared checkpoint.sh foundation script
-#   2. Emit a lifecycle event via lifecycle-event.sh for the tailing sync agent
+# Responsibilities (per brief §Cluster 6 + story E42-S8):
+#   1. Run the script-verifiable subset of the 33 V1 checklist items
+#      against the architecture artifact. Validation runs FIRST.
+#   2. Emit an LLM-checkable payload listing the semantic-judgment items.
+#   3. Write a checkpoint via the shared checkpoint.sh helper.
+#   4. Emit a lifecycle event via lifecycle-event.sh.
+#
+# The observability side effects (3 + 4) MUST run on every invocation —
+# the checklist outcome never suppresses the checkpoint/event write
+# (matches E42-S1..S7 contract; story AC5).
 #
 # Exit codes:
-#   0 — finalize succeeded
-#   1 — checkpoint write or lifecycle event emission failed
+#   0 — finalize succeeded; all 25 script-verifiable items PASS (or
+#       no artifact was requested — classic Cluster 6 behaviour).
+#   1 — one or more script-verifiable checklist items FAIL; the
+#       AC4 "output file not found" violation; or a
+#       checkpoint/lifecycle-event failure. Failed item names are
+#       listed on stderr under a "Checklist violations:" header
+#       followed by a one-line remediation hint.
+#
+# Environment:
+#   ARCHITECTURE_ARTIFACT  Absolute path to the architecture artifact to
+#                          validate. When set, the script runs the 33-item
+#                          checklist against it. When set but the file does
+#                          not exist, AC4 fires — a single "no artifact to
+#                          validate" violation is emitted and the script
+#                          exits non-zero. When unset, the script looks for
+#                          docs/planning-artifacts/architecture.md relative
+#                          to the current working directory. If neither is
+#                          present, the checklist run is skipped (classic
+#                          Cluster 6 behaviour — observability still runs,
+#                          exit 0).
 
 set -euo pipefail
 LC_ALL=C
@@ -29,7 +56,269 @@ LIFECYCLE_EVENT="$PLUGIN_SCRIPTS_DIR/lifecycle-event.sh"
 log() { printf '%s: %s\n' "$SCRIPT_NAME" "$*" >&2; }
 die() { log "$*"; exit 1; }
 
-# ---------- 1. Write checkpoint ----------
+# ---------- 0. Resolve artifact path ----------
+# ARCHITECTURE_ARTIFACT wins when set (test fixtures + explicit invocation).
+# If it is set but the file is missing, AC4 fires. If unset, fall back
+# to docs/planning-artifacts/architecture.md. If neither is present the
+# checklist is simply skipped (observability still runs).
+ARTIFACT=""
+ARTIFACT_REQUESTED=0
+if [ -n "${ARCHITECTURE_ARTIFACT:-}" ]; then
+  ARTIFACT_REQUESTED=1
+  ARTIFACT="$ARCHITECTURE_ARTIFACT"
+else
+  if [ -f "docs/planning-artifacts/architecture.md" ]; then
+    ARTIFACT="docs/planning-artifacts/architecture.md"
+  fi
+fi
+
+# ---------- 1. Run the 33-item checklist ----------
+VIOLATIONS=()
+CHECKED=0
+PASSED=0
+CHECKLIST_STATUS=0
+
+# item_check <id> <description> <boolean-result>
+# boolean-result: "pass" or "fail".
+item_check() {
+  local id="$1" desc="$2" result="$3"
+  CHECKED=$((CHECKED + 1))
+  if [ "$result" = "pass" ]; then
+    printf '  [PASS] %s — %s\n' "$id" "$desc" >&2
+    PASSED=$((PASSED + 1))
+  else
+    printf '  [FAIL] %s — %s\n' "$id" "$desc" >&2
+    VIOLATIONS+=("$id — $desc")
+  fi
+}
+
+# heading_present <file> <heading-text>
+# Pass when an H2 heading containing the given text (case-insensitive,
+# with optional numeric prefix like "## 1. System Overview") is present.
+heading_present() {
+  local f="$1" text="$2"
+  if grep -Ei "^##[[:space:]]+([0-9]+\.[[:space:]]+)?${text}([[:space:]]|\$|[[:punct:]])" "$f" >/dev/null 2>&1; then
+    echo "pass"
+  else
+    echo "fail"
+  fi
+}
+
+# file_nonempty <file>
+file_nonempty() {
+  [ -s "$1" ] && echo "pass" || echo "fail"
+}
+
+# section_body_nonempty <file> <heading-regex>
+# Pass when the H2 section exists AND has at least one non-blank,
+# non-comment content line before the next H2 heading.
+section_body_nonempty() {
+  local f="$1" pattern="$2"
+  awk -v pat="$pattern" '
+    BEGIN { in_section = 0; found = 0 }
+    {
+      if ($0 ~ "^##[[:space:]]+([0-9]+\\.[[:space:]]+)?" pat "([[:space:]]|$|[[:punct:]])") {
+        in_section = 1; next
+      }
+      if (in_section && /^##[[:space:]]/) { in_section = 0 }
+      if (in_section) {
+        line = $0
+        sub(/^[[:space:]]+/, "", line)
+        sub(/[[:space:]]+$/, "", line)
+        if (length(line) > 0 && line !~ /^<!--/) { found = 1 }
+      }
+    }
+    END { exit (found ? 0 : 1) }
+  ' "$f" && echo "pass" || echo "fail"
+}
+
+# decision_log_table_present <file>
+# Pass when an "Architecture Decisions" or "Decision Log" H2 is followed
+# by a markdown table header + separator before the next H2.
+decision_log_table_present() {
+  local f="$1"
+  awk '
+    BEGIN { in_section = 0; saw_header = 0; saw_sep = 0 }
+    {
+      if ($0 ~ /^##[[:space:]]+([0-9]+\.[[:space:]]+)?(Architecture Decisions|Decision Log)([[:space:]]|$|[[:punct:]])/) {
+        in_section = 1; next
+      }
+      if (in_section && /^##[[:space:]]/) { in_section = 0 }
+      if (in_section) {
+        if ($0 ~ /^\|.*\|[[:space:]]*$/) { saw_header = 1 }
+        if (saw_header && $0 ~ /^\|[[:space:]]*:?-+/) { saw_sep = 1 }
+      }
+    }
+    END { exit ((saw_header && saw_sep) ? 0 : 1) }
+  ' "$f" && echo "pass" || echo "fail"
+}
+
+# decision_log_has_rows <file>
+# Pass when the Decision Log table has at least one data row after the
+# separator. This is the AC-EC5 / VCP-CHK-16 anchor — the V1 item
+# "Decisions recorded" is its description.
+decision_log_has_rows() {
+  local f="$1"
+  awk '
+    BEGIN { in_section = 0; saw_sep = 0; rows = 0 }
+    {
+      if ($0 ~ /^##[[:space:]]+([0-9]+\.[[:space:]]+)?(Architecture Decisions|Decision Log)([[:space:]]|$|[[:punct:]])/) {
+        in_section = 1; saw_sep = 0; next
+      }
+      if (in_section && /^##[[:space:]]/) { in_section = 0 }
+      if (in_section) {
+        if ($0 ~ /^\|[[:space:]]*:?-+/) { saw_sep = 1; next }
+        if (saw_sep && $0 ~ /^\|.*\|/) { rows++ }
+      }
+    }
+    END { exit (rows >= 1 ? 0 : 1) }
+  ' "$f" && echo "pass" || echo "fail"
+}
+
+# fr_id_present <file> — at least one "FR-###" identifier (traceability).
+fr_id_present() {
+  grep -Eq 'FR-[0-9]{3,}' "$1" && echo "pass" || echo "fail"
+}
+
+# pattern_present <file> <extended-regex>
+# Generic helper — pass when the pattern matches anywhere in the file
+# (case-insensitive), fail otherwise.
+pattern_present() {
+  local f="$1" pattern="$2"
+  grep -Eiq "$pattern" "$f" && echo "pass" || echo "fail"
+}
+
+# Section-body helpers — bind the heading pattern for each required body
+# (only helpers actually used by the SV items below are defined — lean by design).
+system_components_body()    { section_body_nonempty "$1" "System[[:space:]]+Components"; }
+data_architecture_body()    { section_body_nonempty "$1" "Data[[:space:]]+Architecture"; }
+integration_points_body()   { section_body_nonempty "$1" "(Integration[[:space:]]+Points|API[[:space:]]+Design)"; }
+infrastructure_body()       { section_body_nonempty "$1" "Infrastructure"; }
+cross_cutting_body()        { section_body_nonempty "$1" "Cross-Cutting[[:space:]]+Concerns"; }
+
+if [ "$ARTIFACT_REQUESTED" -eq 1 ] && [ ! -f "$ARTIFACT" ]; then
+  # AC4 — Caller explicitly pointed at an artifact path but it does
+  # not exist on disk.
+  log "no artifact to validate at $ARTIFACT"
+  printf '\nChecklist violations:\n' >&2
+  printf '  - no artifact to validate (expected %s)\n' "$ARTIFACT" >&2
+  printf 'Remediation: rerun /gaia-create-arch to produce docs/planning-artifacts/architecture.md, then rerun finalize.sh.\n' >&2
+  CHECKLIST_STATUS=1
+elif [ -n "$ARTIFACT" ] && [ -f "$ARTIFACT" ]; then
+  log "running 33-item checklist against $ARTIFACT"
+  printf '\nChecklist: /gaia-create-arch (33 items — 25 script-verifiable, 8 LLM-checkable)\n' >&2
+
+  # --- Script-verifiable items (25) ---
+
+  # Envelope (SV-01..SV-03)
+  item_check "SV-01" "Output file exists at docs/planning-artifacts/architecture.md" \
+    "$([ -f "$ARTIFACT" ] && echo pass || echo fail)"
+  item_check "SV-02" "Output artifact is non-empty" "$(file_nonempty "$ARTIFACT")"
+
+  if head -n 20 "$ARTIFACT" | grep -Eq '^(# |---)'; then
+    item_check "SV-03" "Artifact has frontmatter or top-level title" pass
+  else
+    item_check "SV-03" "Artifact has frontmatter or top-level title" fail
+  fi
+
+  # Required sections (SV-04..SV-11)
+  item_check "SV-04" "System Overview section present" \
+    "$(heading_present "$ARTIFACT" "System[[:space:]]+Overview")"
+  item_check "SV-05" "Architecture Decisions section present (Decision Log)" \
+    "$(heading_present "$ARTIFACT" "(Architecture[[:space:]]+Decisions|Decision[[:space:]]+Log)")"
+  item_check "SV-06" "System Components section present" \
+    "$(heading_present "$ARTIFACT" "System[[:space:]]+Components")"
+  item_check "SV-07" "Data Architecture section present" \
+    "$(heading_present "$ARTIFACT" "Data[[:space:]]+Architecture")"
+  item_check "SV-08" "Integration Points section present" \
+    "$(heading_present "$ARTIFACT" "(Integration[[:space:]]+Points|API[[:space:]]+Design)")"
+  item_check "SV-09" "Infrastructure section present" \
+    "$(heading_present "$ARTIFACT" "Infrastructure")"
+  item_check "SV-10" "Security Architecture section present" \
+    "$(heading_present "$ARTIFACT" "Security[[:space:]]+Architecture")"
+  item_check "SV-11" "Cross-Cutting Concerns section present" \
+    "$(heading_present "$ARTIFACT" "Cross-Cutting[[:space:]]+Concerns")"
+
+  # Section-body sanity (SV-12..SV-19) — V1 verbatim anchor strings.
+  # SV-12 anchor: V1 "Stack selected with rationale" (Technology).
+  # SV-13 anchor: V1 "Component diagram described" (System Design).
+  # SV-14 anchor: V1 "Service boundaries defined" (System Design).
+  # SV-15 anchor: V1 "Data model defined" (Data).
+  # SV-16 anchor: V1 "Data flow documented" (Data).
+  # SV-17 anchor: V1 "Endpoints overviewed" (API).
+  # SV-18 anchor: V1 "Auth strategy defined" (API).
+  # SV-19 anchor: V1 "Deployment topology described" (Infrastructure).
+  item_check "SV-12" "Stack selected with rationale" \
+    "$(system_components_body "$ARTIFACT")"
+  item_check "SV-13" "Component diagram described" \
+    "$(system_components_body "$ARTIFACT")"
+  item_check "SV-14" "Service boundaries defined" \
+    "$(system_components_body "$ARTIFACT")"
+  item_check "SV-15" "Data model defined" \
+    "$(data_architecture_body "$ARTIFACT")"
+  item_check "SV-16" "Data flow documented" \
+    "$(data_architecture_body "$ARTIFACT")"
+  item_check "SV-17" "Endpoints overviewed" \
+    "$(integration_points_body "$ARTIFACT")"
+  item_check "SV-18" "Auth strategy defined" \
+    "$(pattern_present "$ARTIFACT" "(OAuth|JWT|RBAC|ABAC|SAML|authentication|authorisation|authorization)")"
+  item_check "SV-19" "Deployment topology described" \
+    "$(infrastructure_body "$ARTIFACT")"
+
+  # Decision Log structural (SV-20..SV-22)
+  # SV-21 is the VCP-CHK-16 anchor — V1 "Decisions recorded" verbatim.
+  item_check "SV-20" "Decision Log table present with markdown table structure" \
+    "$(decision_log_table_present "$ARTIFACT")"
+  item_check "SV-21" "Decisions recorded (Decision Log table has at least one ADR row)" \
+    "$(decision_log_has_rows "$ARTIFACT")"
+  item_check "SV-22" "Each ADR has context, decision, consequences (ADR row fields populated)" \
+    "$(pattern_present "$ARTIFACT" '\|[[:space:]]*ADR-[0-9]')"
+
+  # Body sanity continued (SV-23)
+  item_check "SV-23" "Cross-cutting concerns documented" \
+    "$(cross_cutting_body "$ARTIFACT")"
+
+  # Gates + Output verification (SV-24..SV-25)
+  item_check "SV-24" "Review Findings Incorporated section present" \
+    "$(heading_present "$ARTIFACT" "Review[[:space:]]+Findings[[:space:]]+Incorporated")"
+  item_check "SV-25" "At least one FR-### identifier referenced (traceability)" \
+    "$(fr_id_present "$ARTIFACT")"
+
+  # --- LLM-checkable items (8) ---
+  printf '\n[LLM-CHECK] The following 8 items require semantic review by the host LLM:\n' >&2
+  cat >&2 <<'EOF'
+  LLM-01 — Trade-offs documented (tech-stack choices justified against alternatives)
+  LLM-02 — Communication patterns specified (sync vs async, at-least-once vs exactly-once)
+  LLM-03 — Each ADR has context, decision, consequences with sound rationale
+  LLM-04 — Decision-to-Requirement Mapping — every ADR maps to at least one FR/NFR; no orphaned FR/NFR
+  LLM-05 — Security architecture addresses identified threats (threat-model cross-reference where present)
+  LLM-06 — Environments defined (dev, staging, prod) with progression rules explicit
+  LLM-07 — Monitoring, logging, and error-handling strategies adequate for the system scale
+  LLM-08 — Adversarial review findings properly incorporated with traceable before/after mapping
+EOF
+
+  TOTAL_ITEMS=33
+  LLM_ITEMS=8
+  printf '\nChecklist summary: %d/%d script-verifiable items PASS; %d LLM-checkable items deferred to host review. Total items: %d.\n' \
+    "$PASSED" "$CHECKED" "$LLM_ITEMS" "$TOTAL_ITEMS" >&2
+
+  if [ "${#VIOLATIONS[@]}" -gt 0 ]; then
+    printf '\nChecklist violations:\n' >&2
+    for v in "${VIOLATIONS[@]}"; do
+      printf '  - %s\n' "$v" >&2
+    done
+    printf 'Remediation: amend the architecture artifact to satisfy the failed items, then rerun /gaia-create-arch.\n' >&2
+    CHECKLIST_STATUS=1
+  else
+    printf 'Checklist: all %d script-verifiable items PASS.\n' "$PASSED" >&2
+    CHECKLIST_STATUS=0
+  fi
+else
+  log "no architecture artifact found (ARCHITECTURE_ARTIFACT unset and no docs/planning-artifacts/architecture.md) — skipping checklist run"
+  CHECKLIST_STATUS=0
+fi
+
+# ---------- 2. Write checkpoint (observability — never suppressed) ----------
 if [ -x "$CHECKPOINT" ]; then
   if ! "$CHECKPOINT" write --workflow "$WORKFLOW_NAME" --step 12 >/dev/null 2>&1; then
     die "checkpoint.sh write failed for $WORKFLOW_NAME"
@@ -39,7 +328,7 @@ else
   log "checkpoint.sh not found at $CHECKPOINT — skipping checkpoint write (non-fatal)"
 fi
 
-# ---------- 2. Emit lifecycle event ----------
+# ---------- 3. Emit lifecycle event (observability — never suppressed) ----------
 if [ -x "$LIFECYCLE_EVENT" ]; then
   if ! "$LIFECYCLE_EVENT" --type workflow_complete --workflow "$WORKFLOW_NAME" >/dev/null 2>&1; then
     die "lifecycle-event.sh emit failed for $WORKFLOW_NAME"
@@ -50,4 +339,4 @@ else
 fi
 
 log "finalize complete for $WORKFLOW_NAME"
-exit 0
+exit "$CHECKLIST_STATUS"

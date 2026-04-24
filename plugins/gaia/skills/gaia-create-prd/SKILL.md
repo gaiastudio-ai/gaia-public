@@ -164,6 +164,78 @@ Write the PRD to `docs/planning-artifacts/prd.md` with all sections populated:
 
 > `!scripts/write-checkpoint.sh gaia-create-prd 13 project_name="$PROJECT_NAME" prd_version="$PRD_VERSION" feature_slug="$FEATURE_SLUG" --paths docs/planning-artifacts/prd.md`
 
+## Validation
+
+<!--
+  E42-S6 — V1→V2 36-item checklist port (FR-341, FR-359, VCP-CHK-11, VCP-CHK-12).
+  Classification (36 items total):
+    - Script-verifiable: 24 (SV-01..SV-24) — enforced by finalize.sh.
+    - LLM-checkable:     12 (LLM-01..LLM-12) — evaluated by the host LLM
+      against the PRD artifact at finalize time.
+  Exit code 0 when all 24 script-verifiable items PASS; non-zero otherwise.
+
+  The V1 source checklist at _gaia/lifecycle/workflows/2-planning/create-prd/
+  checklist.md carried 21 bulleted items. The story product-brief count (36)
+  is authoritative (see story Dev Notes #1): the 21 V1 bullets are expanded
+  here to 36 by (a) splitting compound items (e.g., "All sections present" →
+  per-section SV-04..SV-15), (b) adding envelope items SV-01..SV-03,
+  (c) adding Requirements Summary Table structural + data-row checks
+  (SV-16..SV-17 — AC-EC5 guard), (d) adding FR-### / NFR-### identifier
+  regex checks (SV-18..SV-19), (e) adding the VCP-CHK-12 anchor check for
+  dependency failure modes + fallback behaviour (SV-20), (f) adding section-
+  body sanity checks (SV-21..SV-24) to catch empty sections, and (g) pulling
+  12 LLM-checkable items (LLM-01..LLM-12) out of the V1 semantic bullets
+  (user-focus traceability, MoSCoW, consistency, measurability, failure-mode
+  credibility, scope discipline).
+
+  The VCP-CHK-12 anchor is SV-20 — "Critical dependencies have failure modes
+  and fallback behavior defined". This is the V1 phrase verbatim and MUST
+  appear in violation output when the Dependencies section lacks failure-
+  mode / fallback text.
+
+  Invoked by `finalize.sh` at post-complete (per §10.31.1). Validation runs
+  BEFORE session-memory auto-save (AC-EC6 / ADR-061).
+
+  See docs/implementation-artifacts/E42-S6-port-gaia-create-prd-36-item-checklist-to-v2.md.
+-->
+
+- [script-verifiable] SV-01 — Output artifact exists at docs/planning-artifacts/prd.md
+- [script-verifiable] SV-02 — Output artifact is non-empty
+- [script-verifiable] SV-03 — Artifact has frontmatter or top-level title
+- [script-verifiable] SV-04 — Overview section present
+- [script-verifiable] SV-05 — Goals and Non-Goals section present
+- [script-verifiable] SV-06 — User Stories section present
+- [script-verifiable] SV-07 — Functional Requirements section present
+- [script-verifiable] SV-08 — Non-Functional Requirements section present
+- [script-verifiable] SV-09 — User Journeys section present
+- [script-verifiable] SV-10 — Data Requirements section present
+- [script-verifiable] SV-11 — Integration Requirements section present
+- [script-verifiable] SV-12 — Out of Scope section present
+- [script-verifiable] SV-13 — Constraints section present
+- [script-verifiable] SV-14 — Success Criteria section present
+- [script-verifiable] SV-15 — Dependencies section present
+- [script-verifiable] SV-16 — Requirements Summary Table present with markdown table structure
+- [script-verifiable] SV-17 — Requirements Summary Table has at least one data row
+- [script-verifiable] SV-18 — At least one FR-### functional-requirement identifier present
+- [script-verifiable] SV-19 — At least one NFR-### non-functional-requirement identifier present
+- [script-verifiable] SV-20 — Critical dependencies have failure modes and fallback behavior defined
+- [script-verifiable] SV-21 — Out of Scope section body non-empty
+- [script-verifiable] SV-22 — Constraints section body non-empty
+- [script-verifiable] SV-23 — Success Criteria section body non-empty
+- [script-verifiable] SV-24 — User Journeys section body non-empty
+- [LLM-checkable] LLM-01 — Requirements trace to user needs (user-focus traceability)
+- [LLM-checkable] LLM-02 — User stories use the standard "As a... I want... so that..." format
+- [LLM-checkable] LLM-03 — Each functional requirement has testable acceptance criteria
+- [LLM-checkable] LLM-04 — Acceptance criteria are measurable and unambiguous
+- [LLM-checkable] LLM-05 — MoSCoW (or equivalent) prioritisation applied to features
+- [LLM-checkable] LLM-06 — No contradictions between requirements
+- [LLM-checkable] LLM-07 — Terminology used consistently throughout the PRD
+- [LLM-checkable] LLM-08 — User journeys are meaningful and cover happy + error paths
+- [LLM-checkable] LLM-09 — Non-functional requirements have measurable targets (thresholds, not vague qualifiers)
+- [LLM-checkable] LLM-10 — Constraints are coherent and compatible with the proposed solution
+- [LLM-checkable] LLM-11 — Dependency failure modes are articulated with realistic SLAs
+- [LLM-checkable] LLM-12 — Scope boundaries are defensible against feature creep
+
 ## Finalize
 
 !${CLAUDE_PLUGIN_ROOT}/skills/gaia-create-prd/scripts/finalize.sh

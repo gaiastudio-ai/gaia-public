@@ -145,6 +145,92 @@ Skip this step if mode is greenfield.
 
 > `!scripts/write-checkpoint.sh gaia-create-epics 11 project_name="$PROJECT_NAME" prd_version="$PRD_VERSION" adversarial_run="$ADVERSARIAL_RUN"`
 
+## Validation
+
+<!--
+  E42-S10 — V1→V2 31-item checklist port (FR-341, FR-359, VCP-CHK-19, VCP-CHK-20).
+  Classification (31 items total):
+    - Script-verifiable: 21 (SV-01..SV-21) — enforced by finalize.sh.
+    - LLM-checkable:     10 (LLM-01..LLM-10) — evaluated by the host LLM
+      against the epics-and-stories.md artifact at finalize time.
+  Exit code 0 when all 21 script-verifiable items PASS; non-zero otherwise.
+
+  The V1 source checklist at
+  _gaia/lifecycle/workflows/3-solutioning/create-epics-stories/checklist.md
+  ships 15 explicit bullets across seven V1 categories (Gates, Epics,
+  Stories, Dependencies, Test Integration, Priority, Output
+  Verification). The story 31-item count is authoritative per
+  docs/v1-v2-command-gap-analysis.md; the remaining ~16 items are
+  reconciled from V1 instructions.xml step outputs (Task 1.2):
+    - PRD / architecture / test-plan consumed as upstream gates
+    - Review Findings Incorporated section on the architecture
+    - epic frontmatter (## Epic N: heading)
+    - story frontmatter (### Story E{N}-S{N}: heading; 15-field
+      contract items: Priority, Size, Depends on, Blocks, Risk,
+      Acceptance Criteria, Traces to)
+    - enum validation (P0/P1/P2, S/M/L/XL, high/medium/low)
+    - algorithmic checks (no circular dependencies via Kahn's topo
+      sort; no duplicate story keys)
+    - semantic LLM items (LLM-01..LLM-10: epic grouping, user-story
+      format, ordering, ATDD reminder adequacy, review-findings
+      coverage, brownfield gap coverage, sizing plausibility, AC
+      testability, epic goal clarity, priority-intent alignment).
+
+  V1 category coverage mapping (31 items):
+    Gates                — SV-18, SV-19, SV-20                                   (3)
+    Epics                — SV-03, LLM-01, LLM-09                                 (3)
+    Stories              — SV-04, SV-05, SV-06, SV-10, LLM-02, LLM-07, LLM-08    (7)
+    Dependencies         — SV-07, SV-08, SV-14, SV-15                            (4)
+    Test Integration     — SV-09, SV-16, SV-17                                   (3)
+    Priority             — SV-11, LLM-03, LLM-10                                 (3)
+    Output Verification  — SV-01, SV-02, SV-12, SV-13, SV-21,
+                           LLM-05, LLM-06, LLM-04                                (8)
+    Total                                                                        31
+
+  The VCP-CHK-20 anchor is SV-14 — "No circular dependencies". This
+  is the V1 phrase verbatim and MUST appear in violation output
+  when a cycle is detected (AC2). The cycle path is surfaced via
+  the failing story keys drained by Kahn's algorithm.
+
+  Invoked by `finalize.sh` at post-complete (per §10.31.1). Validation
+  runs BEFORE the checkpoint and lifecycle-event writes (observability
+  is never suppressed by checklist outcome — story AC5).
+
+  See docs/implementation-artifacts/E42-S10-port-gaia-create-epics-31-item-checklist-to-v2.md.
+-->
+
+- [script-verifiable] SV-01 — Output file saved to docs/planning-artifacts/epics-and-stories.md
+- [script-verifiable] SV-02 — Output artifact is non-empty
+- [script-verifiable] SV-03 — Epics section present (## Epic N: headings)
+- [script-verifiable] SV-04 — Stories section present (### Story E{N}-S{N}: headings)
+- [script-verifiable] SV-05 — Every story declares Priority
+- [script-verifiable] SV-06 — Every story declares Size
+- [script-verifiable] SV-07 — Every story declares Depends on
+- [script-verifiable] SV-08 — Every story declares Blocks
+- [script-verifiable] SV-09 — Every story declares Risk (risk_level)
+- [script-verifiable] SV-10 — Every story declares Acceptance Criteria
+- [script-verifiable] SV-11 — Priority values restricted to P0/P1/P2
+- [script-verifiable] SV-12 — Size values restricted to S/M/L/XL
+- [script-verifiable] SV-13 — Risk values restricted to high/medium/low
+- [script-verifiable] SV-14 — No circular dependencies (topological sort drains every story)
+- [script-verifiable] SV-15 — No duplicate story keys
+- [script-verifiable] SV-16 — test-plan.md read and risk levels extracted (test-plan.md exists)
+- [script-verifiable] SV-17 — Every story surfaces a Risk value (risk levels extracted from test-plan)
+- [script-verifiable] SV-18 — PRD consumed (prd.md exists upstream)
+- [script-verifiable] SV-19 — Architecture consumed (architecture.md exists upstream)
+- [script-verifiable] SV-20 — Review Findings Incorporated section present in architecture
+- [script-verifiable] SV-21 — Traceability referenced (Traces to / FR-### identifier present)
+- [LLM-checkable] LLM-01 — Epics group related features logically
+- [LLM-checkable] LLM-02 — Each story follows user story format ("As a ... I want ... so that ...")
+- [LLM-checkable] LLM-03 — Stories ordered by dependency topology first, then business priority
+- [LLM-checkable] LLM-04 — High-risk stories include ATDD reminder in Dev Notes with adequate guidance
+- [LLM-checkable] LLM-05 — Review Findings Incorporated section content actually addresses findings
+- [LLM-checkable] LLM-06 — Brownfield mode: stories cover gap requirements only (no existing-feature stories)
+- [LLM-checkable] LLM-07 — Story sizes (S/M/L/XL) are reasonable for team velocity
+- [LLM-checkable] LLM-08 — Acceptance criteria are testable and unambiguous
+- [LLM-checkable] LLM-09 — Each epic has a clearly stated goal and success criteria
+- [LLM-checkable] LLM-10 — Priority labels (P0/P1/P2) match business intent described in PRD
+
 ## Finalize
 
 !${CLAUDE_PLUGIN_ROOT}/skills/gaia-create-epics/scripts/finalize.sh

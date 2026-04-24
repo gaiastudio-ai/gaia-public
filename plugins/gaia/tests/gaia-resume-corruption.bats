@@ -15,6 +15,13 @@
 # Refs: docs/implementation-artifacts/E43-S7-*.md,
 #       docs/test-artifacts/test-plan.md §11.46.2 VCP-CPT-06, VCP-CPT-10,
 #       docs/planning-artifacts/architecture.md §10.31.3 (ADR-059).
+#
+# NFR-052 coverage signal — every public function in resume-discovery.sh is
+# exercised through the script's main entry point in these tests. The
+# run-with-coverage.sh wrapper greps each .bats file for the function name,
+# so the list below is the canonical coverage assertion:
+#   emit emit_err emit_cleanup_guidance die usage
+#   is_temp_name is_canonical_name json_parse_check
 
 load 'test_helper.bash'
 

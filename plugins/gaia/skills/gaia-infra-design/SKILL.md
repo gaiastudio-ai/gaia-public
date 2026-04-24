@@ -87,6 +87,79 @@ Delegate to the **devops** subagent (Soren) via `agents/devops` to define observ
 
 > `!scripts/write-checkpoint.sh gaia-infra-design 6 project_name="$PROJECT_NAME" target_environments="$TARGET_ENVIRONMENTS" iac_stack="$IAC_STACK" stage=output --paths docs/planning-artifacts/infrastructure-design.md`
 
+## Validation
+
+<!--
+  E42-S12 — V1→V2 25-item checklist port (FR-341, FR-359, VCP-CHK-23, VCP-CHK-24).
+  Classification (25 items total):
+    - Script-verifiable: 15 (SV-01..SV-15) — enforced by finalize.sh.
+    - LLM-checkable:     10 (LLM-01..LLM-10) — evaluated by the host LLM
+      against the infrastructure-design.md artifact at finalize time.
+  Exit code 0 when all 15 script-verifiable items PASS; non-zero otherwise.
+
+  The V1 source checklist at
+  _gaia/lifecycle/workflows/3-solutioning/infrastructure-design/checklist.md
+  ships 13 explicit bullets across five V1 categories (Environments,
+  Deployment, IaC, Observability, Output Verification). The story 25-item
+  count is authoritative per docs/v1-v2-command-gap-analysis.md §11; the
+  remaining 12 items are reconciled from V1 instructions.xml step outputs
+  (story Task 1.3):
+    - per-environment access policy and promotion gates
+    - dev / staging / production triad declared
+    - auto-scaling triggers and networking detail (VPC/subnets/CDN)
+    - IaC tool named with rationale, module-to-service-boundary alignment
+    - state management strategy
+    - distributed tracing / correlation IDs
+    - alerting, escalation, and on-call specifics
+    - structural shape requirements of the output file (non-empty,
+      output path correct, section headings present)
+    - sidecar decision write reference.
+
+  V1 category coverage mapping (25 items):
+    Environments         — SV-03, SV-04, SV-05, LLM-01, LLM-02           (5)
+    Deployment           — SV-06, SV-07, SV-08, LLM-03, LLM-04           (5)
+    IaC                  — SV-09, SV-10, SV-11, LLM-05, LLM-10           (5)
+    Observability        — SV-12, SV-13, SV-14, LLM-06, LLM-07, LLM-08   (6)
+    Output Verification  — SV-01, SV-02, SV-15, LLM-09                   (4)
+    Total                                                                 25
+
+  The VCP-CHK-24 anchor is SV-11 — "State management strategy specified".
+  This is the V1 phrase verbatim and MUST appear in violation output
+  when the state-management item fails (story AC2).
+
+  Invoked by `finalize.sh` at post-complete (per §10.31.1). Validation
+  runs BEFORE the checkpoint and lifecycle-event writes (observability
+  is never suppressed by checklist outcome — story AC5).
+
+  See docs/implementation-artifacts/E42-S12-port-gaia-infra-design-25-item-checklist-to-v2.md.
+-->
+
+- [script-verifiable] SV-01 — Output file saved to docs/planning-artifacts/infrastructure-design.md
+- [script-verifiable] SV-02 — Output artifact is non-empty
+- [script-verifiable] SV-03 — Environments section present (## Environments heading)
+- [script-verifiable] SV-04 — Environments include dev, staging, and production
+- [script-verifiable] SV-05 — Environment parity strategy specified (parity keyword present)
+- [script-verifiable] SV-06 — Deployment section present (## Deployment heading)
+- [script-verifiable] SV-07 — Load balancing and scaling approach specified (auto-scaling / load balancing keyword present)
+- [script-verifiable] SV-08 — Networking design documented (VPC / subnet / CDN / security-group keyword present)
+- [script-verifiable] SV-09 — IaC section present (## IaC heading)
+- [script-verifiable] SV-10 — IaC tool named (Terraform / Pulumi / CloudFormation / CDK / Bicep / OpenTofu / Ansible)
+- [script-verifiable] SV-11 — State management strategy specified (state-management / remote-state / state-locking keyword present)
+- [script-verifiable] SV-12 — Observability section present (## Observability heading)
+- [script-verifiable] SV-13 — Alerting and escalation policies specified (alerting / escalation / on-call keyword present)
+- [script-verifiable] SV-14 — Distributed tracing / correlation IDs planned (tracing / correlation-id keyword present)
+- [script-verifiable] SV-15 — Decisions recorded in devops-sidecar (sidecar reference present)
+- [LLM-checkable] LLM-01 — Every environment has a defined purpose and access policy
+- [LLM-checkable] LLM-02 — Environment parity strategy is coherent for the architecture
+- [LLM-checkable] LLM-03 — Container/compute strategy matches workload characteristics
+- [LLM-checkable] LLM-04 — Load balancing and scaling approach is technically sound
+- [LLM-checkable] LLM-05 — IaC module structure aligns with service boundaries
+- [LLM-checkable] LLM-06 — Logging strategy covers retention and aggregation for declared services
+- [LLM-checkable] LLM-07 — Metrics and dashboards cover the declared services
+- [LLM-checkable] LLM-08 — Alerting thresholds and escalation policies are realistic
+- [LLM-checkable] LLM-09 — Promotion gates between environments are defined and sensible
+- [LLM-checkable] LLM-10 — Infrastructure decisions traceable to architecture components they serve
+
 ## Finalize
 
 !${CLAUDE_PLUGIN_ROOT}/skills/gaia-infra-design/scripts/finalize.sh

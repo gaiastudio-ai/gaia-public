@@ -21,8 +21,9 @@
 # is exercised through the script's main entry point in these tests. The
 # run-with-coverage.sh wrapper greps each .bats file for the function name,
 # so the list below is the canonical coverage assertion:
-#   cmd_read cmd_validate cmd_list sha256_of latest_for_skill
-#   validate_file_checksums validate_skill_md_hash emit_drift_report die
+#   emit emit_err die usage sha256_of json_parse_check read_json_field
+#   latest_for_skill emit_drift_report validate_file_checksums
+#   validate_skill_md_hash cmd_read cmd_validate cmd_list
 
 load 'test_helper.bash'
 

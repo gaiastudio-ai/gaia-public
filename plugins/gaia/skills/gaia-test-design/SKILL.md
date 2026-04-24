@@ -43,6 +43,8 @@ This skill is the native Claude Code conversion of the legacy `_gaia/testing/wor
 - If prd.md is missing: log WARNING and proceed with reduced scope context. Do not halt.
 - Understand system components and their interactions from whatever context is available.
 
+> `!scripts/write-checkpoint.sh gaia-test-design 1 story_key="$STORY_KEY" test_plan_path="docs/test-artifacts/test-plan.md" stage=context-loaded`
+
 ### Step 2 -- Risk Assessment
 
 Delegate to the **test-architect** subagent (Sable) via `agents/test-architect` for risk assessment.
@@ -52,6 +54,8 @@ Delegate to the **test-architect** subagent (Sable) via `agents/test-architect` 
 - Rate each area using probability x impact scoring.
 - Produce a risk assessment matrix with columns: Area, Risk Level (H/M/L), Probability, Impact, Coverage Strategy.
 - When architecture.md is missing, use generic risk ratings based on common patterns (auth = High, CRUD = Medium, static content = Low).
+
+> `!scripts/write-checkpoint.sh gaia-test-design 2 story_key="$STORY_KEY" test_plan_path="docs/test-artifacts/test-plan.md" risk_level="$RISK_LEVEL" stage=risk-assessment`
 
 ### Step 3 -- Legacy Integration Boundaries (Brownfield)
 
@@ -67,6 +71,8 @@ This step is **optional** -- activate only when brownfield indicators are presen
 - Add legacy boundary risks to the risk assessment from Step 2.
 - If no brownfield indicators are found: skip this step entirely.
 
+> `!scripts/write-checkpoint.sh gaia-test-design 3 story_key="$STORY_KEY" test_plan_path="docs/test-artifacts/test-plan.md" stage=legacy-boundaries`
+
 ### Step 4 -- Test Strategy
 
 Delegate to the **test-architect** subagent (Sable) via `agents/test-architect` for test strategy design.
@@ -78,6 +84,8 @@ Delegate to the **test-architect** subagent (Sable) via `agents/test-architect` 
 - Map each component to its appropriate test level based on risk assessment.
 - Define the test pyramid distribution targets (e.g., 70% unit, 20% integration, 10% E2E).
 
+> `!scripts/write-checkpoint.sh gaia-test-design 4 story_key="$STORY_KEY" test_plan_path="docs/test-artifacts/test-plan.md" stage=test-strategy`
+
 ### Step 5 -- Test Plan
 
 Delegate to the **test-architect** subagent (Sable) via `agents/test-architect` for test plan authoring.
@@ -87,6 +95,8 @@ Delegate to the **test-architect** subagent (Sable) via `agents/test-architect` 
 - Specify test data requirements, fixtures, and mocks.
 - Define test environment requirements and setup.
 
+> `!scripts/write-checkpoint.sh gaia-test-design 5 story_key="$STORY_KEY" test_plan_path="docs/test-artifacts/test-plan.md" stage=test-plan-drafted`
+
 ### Step 6 -- Quality Gates
 
 Delegate to the **test-architect** subagent (Sable) via `agents/test-architect` for quality gate definition.
@@ -94,6 +104,8 @@ Delegate to the **test-architect** subagent (Sable) via `agents/test-architect` 
 - Define automated gates: coverage percentage thresholds, pass rate requirements, performance budgets.
 - Specify CI pipeline integration points for each gate.
 - Define gate failure behavior (block merge, warn, advisory).
+
+> `!scripts/write-checkpoint.sh gaia-test-design 6 story_key="$STORY_KEY" test_plan_path="docs/test-artifacts/test-plan.md" stage=quality-gates`
 
 ### Step 7 -- Generate Output
 
@@ -103,12 +115,16 @@ Delegate to the **test-architect** subagent (Sable) via `agents/test-architect` 
 - Compile the test plan by populating the template with: risk assessment (Step 2), legacy integration boundaries (Step 3, if applicable), test strategy (Step 4), test plan details (Step 5), quality gates (Step 6).
 - Write the compiled test plan to `docs/test-artifacts/test-plan.md`.
 
+> `!scripts/write-checkpoint.sh gaia-test-design 7 story_key="$STORY_KEY" test_plan_path="docs/test-artifacts/test-plan.md" stage=output-generated --paths docs/test-artifacts/test-plan.md`
+
 ### Step 8 -- Optional: Scaffold Test Framework
 
 - Check if the project already has a test framework configured (look for jest.config, vitest.config, playwright.config, pytest.ini, build.gradle test blocks, etc.).
 - If no test framework is detected: suggest running `/gaia-test-framework` to scaffold the test framework with appropriate tooling, folder structure, fixture patterns, and a sample test.
 - If a test framework already exists: skip this step -- the framework is already configured.
 - This step is informational only -- the actual scaffolding is handled by the separate `/gaia-test-framework` skill.
+
+> `!scripts/write-checkpoint.sh gaia-test-design 8 story_key="$STORY_KEY" test_plan_path="docs/test-artifacts/test-plan.md" stage=scaffold-suggestion`
 
 ## Finalize
 

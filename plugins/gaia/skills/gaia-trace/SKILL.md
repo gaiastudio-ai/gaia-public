@@ -41,11 +41,15 @@ This skill is the native Claude Code conversion of the legacy `_gaia/testing/wor
 - Read `docs/planning-artifacts/epics-and-stories.md` -- for each story, identify which FR/NFR it implements. Build a mapping: FR/NFR -> Story(s) -> Story ACs.
 - Read `docs/test-artifacts/test-plan.md` if it exists -- extract planned test IDs and their categories (Unit, Integration, E2E, Manual, Performance, Security, Accessibility).
 
+> `!scripts/write-checkpoint.sh gaia-trace 1 trace_matrix_path="docs/test-artifacts/traceability-matrix.md" coverage_metrics=pending stage=requirements-loaded`
+
 ### Step 2 -- Load Test Inventory
 
 - Scan existing test descriptions from test-plan.md.
 - For each test, record: test ID, test type (Unit/Integration/E2E/Manual/Performance/Security/Accessibility), implementation status (planned/implemented), requirement mapping, and file path if implemented.
 - If test-plan.md has broken table syntax or missing headers, log a parse warning and skip unparseable rows. Continue with valid rows only.
+
+> `!scripts/write-checkpoint.sh gaia-trace 2 trace_matrix_path="docs/test-artifacts/traceability-matrix.md" coverage_metrics=pending stage=test-inventory-loaded`
 
 ### Step 3 -- Build Matrix
 
@@ -64,6 +68,8 @@ This skill is the native Claude Code conversion of the legacy `_gaia/testing/wor
   - For each story with ACs, list the specific test IDs covering each AC.
   - This section supports the primary FR/NFR matrix but is NOT the primary dimension.
 
+> `!scripts/write-checkpoint.sh gaia-trace 3 trace_matrix_path="docs/test-artifacts/traceability-matrix.md" coverage_metrics=pending stage=matrix-built`
+
 ### Step 4 -- Gap Analysis
 
 - Identify FR/NFR requirements with no mapped story -- flag as "No implementing story" gap.
@@ -72,6 +78,8 @@ This skill is the native Claude Code conversion of the legacy `_gaia/testing/wor
 - For each story tagged Risk: HIGH -- check if `docs/test-artifacts/atdd-{story_key}.md` exists. If missing, flag as "HIGH-RISK STORY WITHOUT ATDD -- run /gaia-atdd before /gaia-dev-story" gap. This is a blocking gap.
 - Prioritize gaps by risk level (High-risk FR/NFRs without coverage are blocking).
 - Calculate implementation rate: count implemented tests vs total planned tests. Record as: Total planned: N, Implemented: M (percentage%).
+
+> `!scripts/write-checkpoint.sh gaia-trace 4 trace_matrix_path="docs/test-artifacts/traceability-matrix.md" coverage_metrics="$COVERAGE_METRICS" stage=gap-analysis-complete`
 
 ### Step 5 -- Generate Matrix
 
@@ -84,12 +92,16 @@ This skill is the native Claude Code conversion of the legacy `_gaia/testing/wor
   6. Implementation-readiness gate decision: if all High-risk FR/NFRs have at least one planned test AND implementation rate > 50%, declare PASS. If any High-risk FR/NFR has zero test coverage, declare BLOCKED. Otherwise declare CONDITIONAL.
 - Write the compiled matrix to `docs/test-artifacts/traceability-matrix.md`.
 
+> `!scripts/write-checkpoint.sh gaia-trace 5 trace_matrix_path="docs/test-artifacts/traceability-matrix.md" coverage_metrics="$COVERAGE_METRICS" stage=matrix-generated --paths docs/test-artifacts/traceability-matrix.md`
+
 ### Step 6 -- Gate Verification
 
 - Invoke `validate-gate.sh traceability_exists` to verify the traceability matrix was written successfully.
 - If validate-gate.sh returns exit code 0: gate PASSED -- report success.
 - If validate-gate.sh returns non-zero exit code: gate FAILED -- report the actionable error message listing each uncovered requirement by ID with its title. The error output from validate-gate.sh contains the expected file path and failure reason.
 - If all requirements have zero test coverage (100% uncovered): validate-gate.sh returns non-zero and the error message lists all requirements as uncovered.
+
+> `!scripts/write-checkpoint.sh gaia-trace 6 trace_matrix_path="docs/test-artifacts/traceability-matrix.md" coverage_metrics="$COVERAGE_METRICS" gate_status="$GATE_STATUS" stage=gate-verified`
 
 ## Finalize
 

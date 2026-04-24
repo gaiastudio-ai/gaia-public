@@ -36,6 +36,8 @@ This skill is the native Claude Code conversion of the legacy `_gaia/testing/wor
 - Validate story key format: must match `E{number}-S{number}` pattern. If malformed, exit with error: "Invalid story key format: {story_key}. Expected format: E{n}-S{n}".
 - If no story key was provided, exit with error: "story-key argument is required".
 
+> `!scripts/write-checkpoint.sh gaia-atdd 1 story_key="$STORY_KEY" test_file_path="docs/test-artifacts/atdd-$STORY_KEY.md" stage=input-validated`
+
 ### Step 2 -- Load Story File
 
 - Search `docs/implementation-artifacts/` for a file matching `{story_key}-*.md`.
@@ -46,6 +48,8 @@ This skill is the native Claude Code conversion of the legacy `_gaia/testing/wor
   - Acceptance criteria from the `## Acceptance Criteria` section
 - If the Acceptance Criteria section is missing or contains no AC entries, exit with: "No acceptance criteria found for {story_key}".
 
+> `!scripts/write-checkpoint.sh gaia-atdd 2 story_key="$STORY_KEY" test_file_path="docs/test-artifacts/atdd-$STORY_KEY.md" ac_count="$AC_COUNT" stage=story-loaded`
+
 ### Step 3 -- Generate AC-to-Test Mapping
 
 - Load knowledge fragment: `knowledge/api-testing-patterns.md` for schema validation and contract test patterns relevant to AC-to-test transformation
@@ -54,6 +58,8 @@ This skill is the native Claude Code conversion of the legacy `_gaia/testing/wor
   - Transform the AC into a Given/When/Then test skeleton
   - Name the test descriptively to reflect the AC being validated
 - Build a traceability table mapping each AC to its corresponding test
+
+> `!scripts/write-checkpoint.sh gaia-atdd 3 story_key="$STORY_KEY" test_file_path="docs/test-artifacts/atdd-$STORY_KEY.md" ac_count="$AC_COUNT" stage=mapping-generated`
 
 ### Step 4 -- Write ATDD Artifact
 
@@ -66,12 +72,16 @@ This skill is the native Claude Code conversion of the legacy `_gaia/testing/wor
 - If the file already exists, overwrite it completely (idempotent operation)
 - After writing, check file size. If output exceeds 10KB, display warning: "ATDD output exceeds 10KB — review for completeness"
 
+> `!scripts/write-checkpoint.sh gaia-atdd 4 story_key="$STORY_KEY" test_file_path="docs/test-artifacts/atdd-$STORY_KEY.md" ac_count="$AC_COUNT" batch_mode="$BATCH_MODE" stage=artifact-written --paths "docs/test-artifacts/atdd-$STORY_KEY.md"`
+
 ### Step 5 -- Validation
 
 - Verify every AC from the story has exactly one corresponding test in the output
 - Verify no test references an AC that does not exist in the story
 - Verify all tests use Given/When/Then format
 - Verify the output file was written successfully
+
+> `!scripts/write-checkpoint.sh gaia-atdd 5 story_key="$STORY_KEY" test_file_path="docs/test-artifacts/atdd-$STORY_KEY.md" ac_count="$AC_COUNT" stage=validated`
 
 ## Finalize
 

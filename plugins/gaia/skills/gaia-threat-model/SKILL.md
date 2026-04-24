@@ -106,6 +106,78 @@ Delegate to the **security** subagent (Zara) via `agents/security` to extract re
 
 > `!scripts/write-checkpoint.sh gaia-threat-model 7 project_name="$PROJECT_NAME" threat_model_scope=output stride_stage=complete --paths docs/planning-artifacts/threat-model.md`
 
+## Validation
+
+<!--
+  E42-S11 — V1→V2 25-item checklist port (FR-341, FR-359, VCP-CHK-21, VCP-CHK-22).
+  Classification (25 items total):
+    - Script-verifiable: 15 (SV-01..SV-15) — enforced by finalize.sh.
+    - LLM-checkable:     10 (LLM-01..LLM-10) — evaluated by the host LLM
+      against the threat-model.md artifact at finalize time.
+  Exit code 0 when all 15 script-verifiable items PASS; non-zero otherwise.
+
+  The V1 source checklist at
+  _gaia/lifecycle/workflows/3-solutioning/security-threat-model/checklist.md
+  ships 12 explicit bullets across six V1 categories (Assets, STRIDE
+  Analysis, DREAD Scoring, Mitigations, Security Requirements, Output
+  Verification). The story 25-item count is authoritative per
+  docs/v1-v2-command-gap-analysis.md §10; the remaining 13 items are
+  reconciled from V1 instructions.xml step outputs (Task 1.3):
+    - per-component STRIDE enumeration (all six categories)
+    - per-threat DREAD enumeration (all five dimensions D/R/E/A/D)
+    - per-threat mitigation mapping for High/Critical severity
+    - SR-\d+ identifier per security requirement
+    - acceptance criteria per SR-
+    - sidecar decision write reference
+    - structural shape requirements of the output file (non-empty,
+      output path correct, section headings present).
+
+  V1 category coverage mapping (25 items):
+    Assets               — SV-03, SV-04, LLM-04, LLM-07                  (4)
+    STRIDE Analysis      — SV-06, SV-07, LLM-01, LLM-05, LLM-10          (5)
+    DREAD Scoring        — SV-08, SV-09, SV-10, LLM-03                   (4)
+    Mitigations          — SV-11, SV-12, LLM-02, LLM-08                  (4)
+    Security Requirements— SV-13, SV-14, LLM-06, LLM-09                  (4)
+    Output Verification  — SV-01, SV-02, SV-05, SV-15                    (4)
+    Total                                                                 25
+
+  The VCP-CHK-22 anchor is SV-07 — "All six STRIDE categories evaluated
+  per component". This is the V1 phrase verbatim and MUST appear in
+  violation output when a component is missing a STRIDE category (AC2).
+
+  Invoked by `finalize.sh` at post-complete (per §10.31.1). Validation
+  runs BEFORE the checkpoint and lifecycle-event writes (observability
+  is never suppressed by checklist outcome — story AC5).
+
+  See docs/implementation-artifacts/E42-S11-port-gaia-threat-model-25-item-checklist-to-v2.md.
+-->
+
+- [script-verifiable] SV-01 — Output file saved to docs/planning-artifacts/threat-model.md
+- [script-verifiable] SV-02 — Output artifact is non-empty
+- [script-verifiable] SV-03 — Assets section present (## Assets heading)
+- [script-verifiable] SV-04 — Assets table declares a Sensitivity column
+- [script-verifiable] SV-05 — Asset locations mapped to components (Component column present in Assets table)
+- [script-verifiable] SV-06 — STRIDE Analysis section present (## STRIDE Analysis heading)
+- [script-verifiable] SV-07 — All six STRIDE categories evaluated per component (Spoofing, Tampering, Repudiation, Information Disclosure, Denial of Service, Elevation of Privilege)
+- [script-verifiable] SV-08 — DREAD Scoring section present (## DREAD Scoring heading)
+- [script-verifiable] SV-09 — Each threat scored on all 5 DREAD dimensions (D/R/E/A/D columns populated)
+- [script-verifiable] SV-10 — Risk levels restricted to Critical/High/Medium/Low
+- [script-verifiable] SV-11 — Mitigations section present (## Mitigations heading)
+- [script-verifiable] SV-12 — High and critical threats have mitigations (every High/Critical threat appears in Mitigations)
+- [script-verifiable] SV-13 — Security Requirements section present (## Security Requirements heading)
+- [script-verifiable] SV-14 — Each requirement has acceptance criteria (SR-\d+ identifiers with AC bullets)
+- [script-verifiable] SV-15 — Decisions recorded in security-sidecar (sidecar reference present)
+- [LLM-checkable] LLM-01 — Threats are specific and actionable, not generic
+- [LLM-checkable] LLM-02 — Mitigations are specific and implementable
+- [LLM-checkable] LLM-03 — Risk levels align coherently with DREAD scores
+- [LLM-checkable] LLM-04 — Asset locations mapped to components correctly
+- [LLM-checkable] LLM-05 — STRIDE coverage is meaningful per component (not boilerplate)
+- [LLM-checkable] LLM-06 — Acceptance criteria per SR- are testable
+- [LLM-checkable] LLM-07 — Asset sensitivity classifications are accurate (critical/high/medium/low)
+- [LLM-checkable] LLM-08 — Mitigation prioritization reflects risk reduction vs implementation effort
+- [LLM-checkable] LLM-09 — Security requirements map back to architecture components they protect
+- [LLM-checkable] LLM-10 — No critical threats are missing from STRIDE coverage (completeness judgment)
+
 ## Finalize
 
 !${CLAUDE_PLUGIN_ROOT}/skills/gaia-threat-model/scripts/finalize.sh

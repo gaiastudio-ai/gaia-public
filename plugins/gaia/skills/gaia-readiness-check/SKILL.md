@@ -46,12 +46,16 @@ This skill is the native Claude Code conversion of the legacy `_gaia/lifecycle/w
 - Read `docs/planning-artifacts/infrastructure-design.md` if exists — extract deployment topology.
 - Note any missing artifacts immediately.
 
+> `!scripts/write-checkpoint.sh gaia-readiness-check 1 project_name="$PROJECT_NAME" gate_status=pending artifacts_inspected_count="$ARTIFACTS_INSPECTED_COUNT" stage=load`
+
 ### Step 2 — Completeness Check
 
 - Verify each document exists and has all required sections.
 - PRD: overview, personas, requirements, NFRs, journeys, data, integrations, constraints, criteria.
 - Architecture: stack, system design, data, API, infrastructure.
 - Epics: at least 1 epic with stories, all stories have AC.
+
+> `!scripts/write-checkpoint.sh gaia-readiness-check 2 project_name="$PROJECT_NAME" gate_status=pending artifacts_inspected_count="$ARTIFACTS_INSPECTED_COUNT" stage=completeness`
 
 ### Step 3 — Consistency Check
 
@@ -60,6 +64,8 @@ This skill is the native Claude Code conversion of the legacy `_gaia/lifecycle/w
 - Verify prd.md contains a "## Review Findings Incorporated" section.
 - Verify architecture.md contains a "## Review Findings Incorporated" section.
 - Check for terminology consistency across documents.
+
+> `!scripts/write-checkpoint.sh gaia-readiness-check 3 project_name="$PROJECT_NAME" gate_status=pending artifacts_inspected_count="$ARTIFACTS_INSPECTED_COUNT" stage=consistency`
 
 ### Step 4 — Cross-Artifact Contradiction Check
 
@@ -74,12 +80,16 @@ Delegate architecture-related contradiction analysis to the **architect** subage
 
 Record all contradictions in a structured list with contradiction_id, type, source_artifacts, description, authority_agent, severity (BLOCKING/WARNING), and recommended_resolution.
 
+> `!scripts/write-checkpoint.sh gaia-readiness-check 4 project_name="$PROJECT_NAME" gate_status=pending artifacts_inspected_count="$ARTIFACTS_INSPECTED_COUNT" stage=contradictions contradiction_count="$CONTRADICTION_COUNT"`
+
 ### Step 5 — TEA Readiness
 
 - TECHNICAL: Evaluate team expertise against chosen stack.
 - ESTIMATION: Check story point estimates for completeness.
 - ARCHITECTURE: Count ADRs, check for unresolved proposals.
 - TESTING: Verify test strategy is defined and AC are testable.
+
+> `!scripts/write-checkpoint.sh gaia-readiness-check 5 project_name="$PROJECT_NAME" gate_status=pending artifacts_inspected_count="$ARTIFACTS_INSPECTED_COUNT" stage=tea`
 
 ### Step 6 — Test Infrastructure Readiness
 
@@ -89,12 +99,16 @@ Record all contradictions in a structured list with contradiction_id, type, sour
 - Verify ci-setup.md defines enforced quality gates.
 - Verify test-plan.md exists.
 
+> `!scripts/write-checkpoint.sh gaia-readiness-check 6 project_name="$PROJECT_NAME" gate_status=pending artifacts_inspected_count="$ARTIFACTS_INSPECTED_COUNT" stage=test-infra`
+
 ### Step 7 — Security Readiness
 
 - Verify security requirements are documented in PRD.
 - Verify authentication/authorization is defined in architecture.
 - Verify data privacy requirements are addressed.
 - Compliance timeline estimation.
+
+> `!scripts/write-checkpoint.sh gaia-readiness-check 7 project_name="$PROJECT_NAME" gate_status=pending artifacts_inspected_count="$ARTIFACTS_INSPECTED_COUNT" stage=security`
 
 ### Step 8 — Operational Readiness
 
@@ -104,22 +118,32 @@ Delegate operational readiness assessment to the **devops** subagent (Soren) via
 - Observability: Are logging, metrics, and alerting requirements defined?
 - Release strategy: Is the deployment approach defined?
 
+> `!scripts/write-checkpoint.sh gaia-readiness-check 8 project_name="$PROJECT_NAME" gate_status=pending artifacts_inspected_count="$ARTIFACTS_INSPECTED_COUNT" stage=operational`
+
 ### Step 9 — Brownfield Completeness Check (optional)
 
 - Skip if `docs/planning-artifacts/brownfield-onboarding.md` does not exist.
 - Verify brownfield-specific artifacts (dependency-map, nfr-assessment, api-documentation).
 
+> `!scripts/write-checkpoint.sh gaia-readiness-check 9 project_name="$PROJECT_NAME" gate_status=pending artifacts_inspected_count="$ARTIFACTS_INSPECTED_COUNT" stage=brownfield`
+
 ### Step 10 — Generate Gate Report
 
 Write the readiness report to `docs/planning-artifacts/readiness-report.md` with YAML frontmatter containing machine-readable PASS/FAIL status for each check area.
+
+> `!scripts/write-checkpoint.sh gaia-readiness-check 10 project_name="$PROJECT_NAME" gate_status="$GATE_STATUS" artifacts_inspected_count="$ARTIFACTS_INSPECTED_COUNT" stage=report --paths docs/planning-artifacts/readiness-report.md`
 
 ### Step 11 — Adversarial Review
 
 Invoke an adversarial review of the readiness report for critical scrutiny.
 
+> `!scripts/write-checkpoint.sh gaia-readiness-check 11 project_name="$PROJECT_NAME" gate_status="$GATE_STATUS" artifacts_inspected_count="$ARTIFACTS_INSPECTED_COUNT" stage=adversarial`
+
 ### Step 12 — Incorporate Adversarial Findings
 
 Update the readiness report with adversarial review findings. If any Critical findings exist, set status to FAIL.
+
+> `!scripts/write-checkpoint.sh gaia-readiness-check 12 project_name="$PROJECT_NAME" gate_status="$GATE_STATUS" artifacts_inspected_count="$ARTIFACTS_INSPECTED_COUNT" stage=incorporate --paths docs/planning-artifacts/readiness-report.md`
 
 ## Finalize
 

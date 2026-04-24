@@ -77,6 +77,43 @@ Where `{slug}` is a short kebab-case slug derived from the project vision (e.g.,
 
 > `!scripts/write-checkpoint.sh gaia-brainstorm 5 slug="$SLUG" technique="$TECHNIQUE" --paths docs/creative-artifacts/brainstorm-${SLUG}.md`
 
+## Validation
+
+<!--
+  E42-S1 — V1→V2 24-item checklist port (FR-341, FR-359).
+  Classification (24 items total):
+    - Script-verifiable: 15 (SV-01..SV-15) — enforced by finalize.sh.
+    - LLM-checkable:      9 (LLM-01..LLM-09) — evaluated by the host LLM
+      against the brainstorm artifact below.
+  Exit code 0 when all script-verifiable items PASS; non-zero otherwise.
+  See docs/implementation-artifacts/E42-S1-port-gaia-brainstorm-checklist.md.
+-->
+
+- [script-verifiable] SV-01 — Output artifact exists at docs/creative-artifacts/brainstorm-*.md
+- [script-verifiable] SV-02 — Output artifact is non-empty
+- [script-verifiable] SV-03 — Output filename matches brainstorm-{slug}.md pattern
+- [script-verifiable] SV-04 — Vision Summary section present
+- [script-verifiable] SV-05 — Target Users section present
+- [script-verifiable] SV-06 — Pain Points section present
+- [script-verifiable] SV-07 — Differentiators section present
+- [script-verifiable] SV-08 — Competitive Landscape section present
+- [script-verifiable] SV-09 — Opportunity Areas section present
+- [script-verifiable] SV-10 — At least 3 opportunity areas identified
+- [script-verifiable] SV-11 — Parking Lot section present
+- [script-verifiable] SV-12 — Next Steps section present
+- [script-verifiable] SV-13 — Creative-artifacts/ checked for prior outputs
+- [script-verifiable] SV-14 — Artifact has frontmatter or top-level title
+- [script-verifiable] SV-15 — Opportunities listed as a structured list
+- [LLM-checkable] LLM-01 — Business idea clearly articulated
+- [LLM-checkable] LLM-02 — Target users well-defined
+- [LLM-checkable] LLM-03 — Pain points specific and grounded in user information
+- [LLM-checkable] LLM-04 — Differentiators stated clearly vs competitors
+- [LLM-checkable] LLM-05 — Direct and indirect competitors identified
+- [LLM-checkable] LLM-06 — Competitive positioning mapped
+- [LLM-checkable] LLM-07 — Each opportunity has supporting evidence
+- [LLM-checkable] LLM-08 — Opportunities ranked by impact and feasibility
+- [LLM-checkable] LLM-09 — Parking-lot entries include deprioritization reasoning and revival conditions
+
 ## Finalize
 
 !${CLAUDE_PLUGIN_ROOT}/skills/gaia-brainstorm/scripts/finalize.sh

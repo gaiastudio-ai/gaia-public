@@ -21,6 +21,7 @@
 #     "key_variables":  { ... },
 #     "output_paths":   [ ... ],
 #     "file_checksums": { "<path>": "sha256:<64hex>", ... },
+#     "skill_md_content_hash": "sha256:<64hex>",   // optional, ADR-059 §10.31.3
 #     "custom":         { ... }            // optional
 #   }
 #
@@ -63,6 +64,11 @@ Optional flags:
   --paths ...    One or more output paths to checksum (sha256)
   --custom FILE  Path to a JSON file whose contents are nested under the
                  "custom" key of the final checkpoint JSON
+  --skill-md FILE  Path to the owning SKILL.md. The script computes a
+                 SHA-256 over the file bytes and writes it as a top-level
+                 "skill_md_content_hash" field (ADR-059 §10.31.3). Used by
+                 /gaia-resume (E43-S6) to detect SKILL.md version drift
+                 between checkpoint write and resume.
 
 Environment:
   CHECKPOINT_ROOT  Directory where _memory/checkpoints/{skill}/ lives.
@@ -127,6 +133,7 @@ KEY_VAR_KEYS=()
 KEY_VAR_VALS=()
 PATHS=()
 CUSTOM_FILE=""
+SKILL_MD_FILE=""
 
 parsing_paths=0
 while [ $# -gt 0 ]; do
@@ -144,6 +151,17 @@ while [ $# -gt 0 ]; do
     --custom=*)
       parsing_paths=0
       CUSTOM_FILE="${1#--custom=}"
+      shift
+      ;;
+    --skill-md)
+      parsing_paths=0
+      [ $# -ge 2 ] || die 1 "--skill-md requires a file path"
+      SKILL_MD_FILE="$2"
+      shift 2
+      ;;
+    --skill-md=*)
+      parsing_paths=0
+      SKILL_MD_FILE="${1#--skill-md=}"
       shift
       ;;
     --*)
@@ -181,6 +199,14 @@ fi
 # Only required if we have paths to checksum. If zero paths, skip the check.
 if [ "${#PATHS[@]}" -gt 0 ] && [ -z "$SHA_TOOL" ]; then
   die 2 "sha256 tool not found (need shasum or sha256sum on PATH)"
+fi
+
+# ---------- Validate --skill-md (if provided) ----------
+SKILL_MD_HASH=""
+if [ -n "$SKILL_MD_FILE" ]; then
+  [ -f "$SKILL_MD_FILE" ] || die 1 "--skill-md file not found: $SKILL_MD_FILE"
+  [ -n "$SHA_TOOL" ] || die 2 "sha256 tool not found (need shasum or sha256sum on PATH)"
+  SKILL_MD_HASH=$(sha256_of "$SKILL_MD_FILE") || die 2 "sha256 failed on --skill-md file: $SKILL_MD_FILE"
 fi
 
 # ---------- Validate custom file (if provided) ----------
@@ -313,20 +339,24 @@ emit_file_checksums_obj() {
 build_json() {
   # Build in memory so we fail BEFORE opening the tmp file if a checksum
   # errors out (atomic guarantee).
-  local kv paths_arr checksums custom_block=""
+  local kv paths_arr checksums custom_block="" skill_md_block=""
   kv=$(emit_key_variables_obj)
   paths_arr=$(emit_output_paths_arr)
   checksums=$(emit_file_checksums_obj)
+  if [ -n "$SKILL_MD_HASH" ]; then
+    skill_md_block=",\"skill_md_content_hash\":$(json_escape "sha256:$SKILL_MD_HASH")"
+  fi
   if [ -n "$CUSTOM_CONTENT" ]; then
     custom_block=",\"custom\":$CUSTOM_CONTENT"
   fi
-  printf '{"schema_version":1,"step_number":%s,"skill_name":%s,"timestamp":%s,"key_variables":%s,"output_paths":%s,"file_checksums":%s%s}' \
+  printf '{"schema_version":1,"step_number":%s,"skill_name":%s,"timestamp":%s,"key_variables":%s,"output_paths":%s,"file_checksums":%s%s%s}' \
     "$STEP_NUMBER" \
     "$(json_escape "$SKILL_NAME")" \
     "$(json_escape "$TIMESTAMP")" \
     "$kv" \
     "$paths_arr" \
     "$checksums" \
+    "$skill_md_block" \
     "$custom_block"
 }
 

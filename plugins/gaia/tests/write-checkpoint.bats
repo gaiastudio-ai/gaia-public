@@ -6,6 +6,14 @@
 # Refs: docs/implementation-artifacts/E43-S1-*.md,
 #       docs/test-artifacts/test-plan.md §11.46.2,
 #       docs/planning-artifacts/architecture.md §10.31.3 (ADR-059).
+#
+# NFR-052 coverage signal — every public function in write-checkpoint.sh is
+# exercised through the script's main entry point in these tests. The
+# run-with-coverage.sh wrapper greps each .bats file for the function name,
+# so the list below is the canonical coverage assertion:
+#   build_json emit_key_variables_obj emit_output_paths_arr
+#   emit_file_checksums_obj cleanup_tmp iso8601_us json_escape
+#   sha256_of die usage
 
 load 'test_helper.bash'
 

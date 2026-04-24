@@ -85,6 +85,57 @@ Write a structured market research report to `docs/planning-artifacts/market-res
 
 > `!scripts/write-checkpoint.sh gaia-market-research 6 research_topic="$RESEARCH_TOPIC" competitor_set="$COMPETITOR_SET" --paths docs/planning-artifacts/market-research.md`
 
+## Validation
+
+<!--
+  E42-S2 — V1→V2 28-item checklist port (FR-341, FR-359).
+  Classification (28 items total):
+    - Script-verifiable: 18 (SV-01..SV-18) — enforced by finalize.sh.
+    - LLM-checkable:     10 (LLM-01..LLM-10) — evaluated by the host LLM
+      against the market-research artifact below.
+  Exit code 0 when all script-verifiable items PASS; non-zero otherwise.
+  Dedup rule applied to V1 surface (2 rules + 15 checkboxes = 17 lines):
+    - "At least 3 competitors analyzed" rule == Competition checkbox (1 item).
+    - "TAM/SAM/SOM estimates provided with assumptions" rule collapses
+      into the three Market Sizing dimension checkboxes (6 items after
+      estimate+assumptions split).
+  After dedup V1 yields 15 distinct items; expansion to 28 splits
+  TAM/SAM/SOM into estimate+assumptions (+3 net), treats each of the 4
+  required output sections as a separate item (+3 net vs. "all required
+  sections present"), and adds an Executive Summary / Key Findings /
+  Strategic Recommendations section check to mirror the V2 Step 6 output
+  contract. See docs/implementation-artifacts/E42-S2-port-gaia-market-research-28-item-checklist-to-v2.md.
+-->
+
+- [script-verifiable] SV-01 — Output artifact exists at docs/planning-artifacts/market-research.md
+- [script-verifiable] SV-02 — Output artifact is non-empty
+- [script-verifiable] SV-03 — Artifact has frontmatter or top-level title
+- [script-verifiable] SV-04 — Market/industry clearly defined
+- [script-verifiable] SV-05 — Geographic scope stated
+- [script-verifiable] SV-06 — Executive Summary section present
+- [script-verifiable] SV-07 — Competitive Analysis section present
+- [script-verifiable] SV-08 — Customer Segments section present
+- [script-verifiable] SV-09 — Market Sizing section present
+- [script-verifiable] SV-10 — Key Findings section present
+- [script-verifiable] SV-11 — Strategic Recommendations section present
+- [script-verifiable] SV-12 — At least 3 competitors analyzed
+- [script-verifiable] SV-13 — Competitive positioning matrix included
+- [script-verifiable] SV-14 — TAM estimate provided with assumptions
+- [script-verifiable] SV-15 — SAM estimate provided with assumptions
+- [script-verifiable] SV-16 — SOM estimate provided with assumptions
+- [script-verifiable] SV-17 — Web access guard / availability noted
+- [script-verifiable] SV-18 — Limitation noted in output if web access unavailable
+- [LLM-checkable] LLM-01 — Target customer segments defined with evidence
+- [LLM-checkable] LLM-02 — User behavior patterns identified
+- [LLM-checkable] LLM-03 — Underserved customer needs highlighted
+- [LLM-checkable] LLM-04 — Strengths clearly articulated for each competitor
+- [LLM-checkable] LLM-05 — Weaknesses clearly articulated for each competitor
+- [LLM-checkable] LLM-06 — Competitive positioning mapped clearly
+- [LLM-checkable] LLM-07 — TAM assumptions clearly justified
+- [LLM-checkable] LLM-08 — SAM assumptions clearly justified
+- [LLM-checkable] LLM-09 — SOM assumptions clearly justified
+- [LLM-checkable] LLM-10 — Strategic recommendations actionable and grounded
+
 ## Finalize
 
 !${CLAUDE_PLUGIN_ROOT}/skills/gaia-market-research/scripts/finalize.sh

@@ -3,18 +3,18 @@
 #
 # E42-S14 extends the bare-bones Cluster 11 finalize scaffolding with a
 # 21-item post-completion checklist (7 script-verifiable + 14
-# LLM-checkable) derived from the V1
-# _gaia/testing/workflows/edit-test-plan/checklist.md reconciled with
-# V1 instructions.xml per docs/v1-v2-command-gap-analysis.md §6.
+# LLM-checkable) derived from the V1 edit-test-plan checklist
+# reconciled with the V1 instructions per
+# docs/v1-v2-command-gap-analysis.md §6.
 #
 # V1 source reconciliation:
-#   - V1 checklist.md ships 11 `- [ ]` bullets under five H2 sections
+#   - V1 checklist ships 11 `- [ ]` bullets under five H2 sections
 #     (Edit Quality, New Test Cases, Coverage, Version History, Output
 #     Verification). The story 21-item count is authoritative per
 #     docs/v1-v2-command-gap-analysis.md §6 and epics-and-stories.md
 #     §E42-S14.
-#   - The remaining 10 items are reconciled from V1 instructions.xml
-#     step outputs (test plan loaded, highest test case ID identified,
+#   - The remaining 10 items are reconciled from V1 instruction step
+#     outputs (test plan loaded, highest test case ID identified,
 #     existing test areas identified, change scope captured with
 #     feature + FR/NFR IDs, PRD context consulted, architecture
 #     context consulted, new test cases defined with required fields,
@@ -120,7 +120,7 @@ pattern_present() {
 # Pass when a Version History table row carries a date, a change
 # description, a test-case ID, and an FR/NFR anchor. Structural proxy
 # for V1 "Version note added with date, change summary, new test case
-# IDs" (checklist.md Version History).
+# IDs" (V1 Version History bullet).
 version_history_row_present() {
   local f="$1"
   awk '
@@ -190,7 +190,7 @@ elif [ -n "$ARTIFACT" ] && [ -f "$ARTIFACT" ] && [ -s "$ARTIFACT" ]; then
   LLM-07 — Test scope section updated to reflect expanded coverage
   LLM-08 — Coverage summary updated (if present)
 
-  [reconciled from V1 instructions.xml]
+  [reconciled from V1 instruction step outputs]
   LLM-09 — Existing test plan loaded from docs/test-artifacts/test-plan.md (Step 1 output)
   LLM-10 — Highest existing test case ID identified for auto-increment (Step 1)
   LLM-11 — Existing test areas/categories identified before editing (Step 1)

@@ -3,7 +3,8 @@
 #
 # E42-S14 extends the bare-bones Cluster 11 finalize scaffolding with an
 # 8-item post-completion checklist (6 script-verifiable + 2 LLM-checkable)
-# derived from the V1 _gaia/testing/workflows/test-design/checklist.md.
+# derived from the V1 test-design checklist (see the
+# docs/v1-v2-command-gap-analysis.md §5 entry for the verbatim V1 source).
 # See docs/implementation-artifacts/E42-S14-* for the V1 → V2 mapping.
 #
 # Responsibilities (per brief §Cluster 11 + story E42-S14):

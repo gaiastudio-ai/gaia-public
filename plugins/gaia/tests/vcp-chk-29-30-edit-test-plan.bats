@@ -85,7 +85,7 @@ teardown() { common_teardown; }
   [[ "$output" == *"[V1 category: Edit Quality]"* ]]
   [[ "$output" == *"[V1 category: New Test Cases]"* ]]
   [[ "$output" == *"[V1 category: Coverage]"* ]]
-  [[ "$output" == *"[reconciled from V1 instructions.xml]"* ]]
+  [[ "$output" == *"[reconciled from V1 instruction step outputs]"* ]]
 }
 
 # -------------------------------------------------------------------------

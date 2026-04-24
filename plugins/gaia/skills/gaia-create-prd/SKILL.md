@@ -41,6 +41,8 @@ This skill is the native Claude Code conversion of the legacy `_gaia/lifecycle/w
 - Extract: scope and boundaries, risks and assumptions, competitive landscape, success metrics.
 - If `docs/planning-artifacts/prd.md` already exists: warn "An existing PRD was found at docs/planning-artifacts/prd.md. Continuing will overwrite it. Confirm with user before proceeding."
 
+> `!scripts/write-checkpoint.sh gaia-create-prd 1 project_name="$PROJECT_NAME" prd_version="$PRD_VERSION" feature_slug="$FEATURE_SLUG"`
+
 ### Step 2 — User Interviews
 
 Delegate to the **pm** subagent (Derek) via `agents/pm` to conduct user interviews.
@@ -53,6 +55,8 @@ The pm subagent asks the user:
 
 Structure responses into user need statements.
 
+> `!scripts/write-checkpoint.sh gaia-create-prd 2 project_name="$PROJECT_NAME" prd_version="$PRD_VERSION" feature_slug="$FEATURE_SLUG"`
+
 ### Step 3 — Functional Requirements
 
 Delegate to the **pm** subagent (Derek) to elicit and structure functional requirements:
@@ -61,6 +65,8 @@ Delegate to the **pm** subagent (Derek) to elicit and structure functional requi
 - Each feature needs: description, user story format, acceptance criteria.
 - Assign unique IDs: FR-001, FR-002, ... — IDs are sequential and never reused.
 - Cross-reference with product brief: verify each FR is traceable to the brief's proposed solution or key features. Flag any FR that introduces scope not present in the brief — confirm with user before including.
+
+> `!scripts/write-checkpoint.sh gaia-create-prd 3 project_name="$PROJECT_NAME" prd_version="$PRD_VERSION" feature_slug="$FEATURE_SLUG"`
 
 ### Step 4 — Non-Functional Requirements
 
@@ -71,15 +77,21 @@ Delegate to the **pm** subagent (Derek) to define non-functional requirements:
 - Assign unique IDs: NFR-001, NFR-002, ... — IDs are sequential and never reused.
 - Each NFR MUST include a measurable target with a specific threshold (e.g., "response time < 200ms at p95", "99.9% uptime", "WCAG 2.1 AA compliance"). Reject vague qualifiers like "fast", "secure", "scalable" without numeric criteria.
 
+> `!scripts/write-checkpoint.sh gaia-create-prd 4 project_name="$PROJECT_NAME" prd_version="$PRD_VERSION" feature_slug="$FEATURE_SLUG"`
+
 ### Step 5 — User Journeys
 
 - Map key user flows with happy path and error paths.
 - Include: entry point, steps, decision points, exit conditions.
 
+> `!scripts/write-checkpoint.sh gaia-create-prd 5 project_name="$PROJECT_NAME" prd_version="$PRD_VERSION" feature_slug="$FEATURE_SLUG"`
+
 ### Step 6 — Data Requirements
 
 - Identify data stored, processed, and exchanged.
 - Define data retention, privacy, and security policies.
+
+> `!scripts/write-checkpoint.sh gaia-create-prd 6 project_name="$PROJECT_NAME" prd_version="$PRD_VERSION" feature_slug="$FEATURE_SLUG"`
 
 ### Step 7 — Integration Requirements
 
@@ -87,11 +99,15 @@ Delegate to the **pm** subagent (Derek) to define non-functional requirements:
 - Define integration patterns and data exchange formats.
 - For each critical dependency: define failure mode, fallback behavior, and SLA expectations.
 
+> `!scripts/write-checkpoint.sh gaia-create-prd 7 project_name="$PROJECT_NAME" prd_version="$PRD_VERSION" feature_slug="$FEATURE_SLUG"`
+
 ### Step 8 — Out of Scope
 
 - List features, integrations, and use cases explicitly excluded from this release.
 - For each exclusion: state what is excluded and why (deferred, not needed, separate product).
 - Cross-reference with product brief: items listed as out-of-scope in the brief's "Scope and Boundaries" section must appear here. Flag any brief out-of-scope item missing from this list.
+
+> `!scripts/write-checkpoint.sh gaia-create-prd 8 project_name="$PROJECT_NAME" prd_version="$PRD_VERSION" feature_slug="$FEATURE_SLUG"`
 
 ### Step 9 — Constraints and Assumptions
 
@@ -99,11 +115,15 @@ Delegate to the **pm** subagent (Derek) to define non-functional requirements:
 - List all assumptions that requirements depend on.
 - Cross-reference with product brief: carry forward every risk and assumption from the brief's "Risks and Assumptions" section. Each must appear in this section or be explicitly noted as resolved with justification.
 
+> `!scripts/write-checkpoint.sh gaia-create-prd 9 project_name="$PROJECT_NAME" prd_version="$PRD_VERSION" feature_slug="$FEATURE_SLUG"`
+
 ### Step 10 — Success Criteria
 
 - Define measurable acceptance criteria for each feature.
 - Define overall product success metrics.
 - Cross-reference with product brief: every metric from the brief's "Success Metrics" section must have a corresponding measurable criterion in the PRD. Flag any brief metric not covered.
+
+> `!scripts/write-checkpoint.sh gaia-create-prd 10 project_name="$PROJECT_NAME" prd_version="$PRD_VERSION" feature_slug="$FEATURE_SLUG"`
 
 ### Step 11 — Generate Output
 
@@ -124,6 +144,8 @@ Write the PRD to `docs/planning-artifacts/prd.md` with all sections populated:
 - Requirements Summary table (all FR and NFR IDs with description, priority, status)
 - Open Questions
 
+> `!scripts/write-checkpoint.sh gaia-create-prd 11 project_name="$PROJECT_NAME" prd_version="$PRD_VERSION" feature_slug="$FEATURE_SLUG" --paths docs/planning-artifacts/prd.md`
+
 ### Step 12 — Adversarial Review
 
 - Read `${CLAUDE_PLUGIN_ROOT}/knowledge/adversarial-triggers.yaml` to evaluate trigger rules. (This policy table ships inside the plugin under ADR-041's `knowledge/` convention; the legacy v1 location `_gaia/_config/adversarial-triggers.yaml` is retired and no longer used.) Determine the current `change_type`: if invoked with a change_type context (e.g., from add-feature triage), use that value. If no context is available (standalone PRD creation), default to "feature".
@@ -131,12 +153,16 @@ Write the PRD to `docs/planning-artifacts/prd.md` with all sections populated:
 - If adversarial is true: spawn a subagent to run the adversarial review task against `docs/planning-artifacts/prd.md`.
 - When subagent returns: verify `adversarial-review-prd-*.md` exists in `docs/planning-artifacts/`.
 
+> `!scripts/write-checkpoint.sh gaia-create-prd 12 project_name="$PROJECT_NAME" prd_version="$PRD_VERSION" feature_slug="$FEATURE_SLUG"`
+
 ### Step 13 — Incorporate Adversarial Findings
 
 - Read `docs/planning-artifacts/adversarial-review-prd-*.md` — extract critical and high severity findings.
 - For each critical/high finding: add as a new requirement or refine an existing requirement in the PRD.
 - Add a "## Review Findings Incorporated" section to the PRD listing each finding, its severity, and how it was addressed (new requirement added / existing requirement refined / acknowledged as risk).
 - Write the updated PRD to `docs/planning-artifacts/prd.md`.
+
+> `!scripts/write-checkpoint.sh gaia-create-prd 13 project_name="$PROJECT_NAME" prd_version="$PRD_VERSION" feature_slug="$FEATURE_SLUG" --paths docs/planning-artifacts/prd.md`
 
 ## Finalize
 

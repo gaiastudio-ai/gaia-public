@@ -36,12 +36,16 @@ This skill is the native Claude Code conversion of the legacy `_gaia/lifecycle/w
 - Extract: user personas, user journeys, and functional requirements.
 - If `docs/planning-artifacts/ux-design.md` already exists: warn "An existing UX design was found at docs/planning-artifacts/ux-design.md. Continuing will overwrite it. Confirm with user before proceeding."
 
+> `!scripts/write-checkpoint.sh gaia-create-ux 1 project_name="$PROJECT_NAME" ux_slug="$UX_SLUG" prd_path="$PRD_PATH"`
+
 ### Step 2 — User Personas
 
 Delegate to the **ux-designer** subagent (Christy) via `agents/ux-designer` to refine persona definitions.
 
 - Refine persona definitions from PRD.
 - Add: scenarios, goals, tech proficiency, accessibility needs.
+
+> `!scripts/write-checkpoint.sh gaia-create-ux 2 project_name="$PROJECT_NAME" ux_slug="$UX_SLUG" prd_path="$PRD_PATH"`
 
 ### Step 3 — Information Architecture
 
@@ -51,6 +55,8 @@ Delegate to the **ux-designer** subagent (Christy) via `agents/ux-designer` to d
 - Define content hierarchy and page relationships.
 - Map each page or section to the FR IDs it serves — every page must trace to at least one FR. Flag any user-facing FR from the PRD that has no corresponding page in the sitemap.
 
+> `!scripts/write-checkpoint.sh gaia-create-ux 3 project_name="$PROJECT_NAME" ux_slug="$UX_SLUG" prd_path="$PRD_PATH"`
+
 ### Step 4 — Wireframes
 
 Delegate to the **ux-designer** subagent (Christy) via `agents/ux-designer` to create wireframes.
@@ -58,6 +64,8 @@ Delegate to the **ux-designer** subagent (Christy) via `agents/ux-designer` to c
 - Create text-based wireframe descriptions for key screens.
 - Define layout, component placement, interaction patterns.
 - Annotate each wireframe with the FR IDs it addresses. Flag any FR with user-facing behavior that has no wireframe representation.
+
+> `!scripts/write-checkpoint.sh gaia-create-ux 4 project_name="$PROJECT_NAME" ux_slug="$UX_SLUG" prd_path="$PRD_PATH"`
 
 ### Step 5 — Interaction Patterns
 
@@ -68,17 +76,23 @@ Delegate to the **ux-designer** subagent (Christy) via `agents/ux-designer` to d
 - Document form behaviors, validation, error states.
 - Map each interaction flow to the corresponding user journey from the PRD. Every PRD user journey must have a defined interaction pattern.
 
+> `!scripts/write-checkpoint.sh gaia-create-ux 5 project_name="$PROJECT_NAME" ux_slug="$UX_SLUG" prd_path="$PRD_PATH"`
+
 ### Step 6 — Accessibility
 
 - Define WCAG compliance targets (A, AA, AAA).
 - Plan keyboard navigation, screen reader support.
 - Define color contrast and text sizing standards.
 
+> `!scripts/write-checkpoint.sh gaia-create-ux 6 project_name="$PROJECT_NAME" ux_slug="$UX_SLUG" prd_path="$PRD_PATH"`
+
 ### Step 7 — Figma MCP Detection and Mode Selection
 
 - Probe for available Figma MCP server.
 - If Figma MCP available: present mode selection — [Generate] Create Figma frames alongside ux-design.md | [Import] Import existing Figma designs (read-only) | [Skip] Text-only UX spec, no Figma integration.
 - If not available: skip Figma integration — proceed with text-only UX design output. Log: "No Figma MCP server detected. Generating markdown-only ux-design.md."
+
+> `!scripts/write-checkpoint.sh gaia-create-ux 7 project_name="$PROJECT_NAME" ux_slug="$UX_SLUG" prd_path="$PRD_PATH"`
 
 ### Step 8 — Generate Mode (if selected)
 
@@ -87,6 +101,8 @@ Delegate to the **ux-designer** subagent (Christy) via `agents/ux-designer` to d
 - Set up prototype flows and asset export configuration.
 - Record Figma node IDs and enhance ux-design.md with Figma metadata.
 
+> `!scripts/write-checkpoint.sh gaia-create-ux 8 project_name="$PROJECT_NAME" ux_slug="$UX_SLUG" prd_path="$PRD_PATH"`
+
 ### Step 9 — Import Mode (if selected)
 
 - Validate Figma file key, discover pages and frames.
@@ -94,17 +110,23 @@ Delegate to the **ux-designer** subagent (Christy) via `agents/ux-designer` to d
 - Build screen inventory and component specs.
 - Generate ux-design.md content from imported Figma data.
 
+> `!scripts/write-checkpoint.sh gaia-create-ux 9 project_name="$PROJECT_NAME" ux_slug="$UX_SLUG" prd_path="$PRD_PATH"`
+
 ### Step 10 — Generate Output
 
 Write the UX design document to `docs/planning-artifacts/ux-design.md` with: personas, information architecture, wireframe descriptions, interaction patterns, component specifications, accessibility plan, FR-to-Screen Mapping table. Include Figma metadata sections if Generate or Import mode was active.
 
 The `ux-design-assessment-template.md` carried in this skill directory is available for brownfield UX assessments — reference it at `${CLAUDE_PLUGIN_ROOT}/skills/gaia-create-ux/ux-design-assessment-template.md`.
 
+> `!scripts/write-checkpoint.sh gaia-create-ux 10 project_name="$PROJECT_NAME" ux_slug="$UX_SLUG" prd_path="$PRD_PATH" --paths docs/planning-artifacts/ux-design.md`
+
 ### Step 11 — Optional: Accessibility Review
 
 - Ask if the user wants to review the UX design for WCAG 2.1 accessibility compliance.
 - If yes: spawn a subagent to run the accessibility review.
 - If skip: accessibility review can be run anytime later with `/gaia-review-a11y`.
+
+> `!scripts/write-checkpoint.sh gaia-create-ux 11 project_name="$PROJECT_NAME" ux_slug="$UX_SLUG" prd_path="$PRD_PATH"`
 
 ## Finalize
 

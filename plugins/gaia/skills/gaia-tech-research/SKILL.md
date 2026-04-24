@@ -75,6 +75,69 @@ Write a structured technical research report to `docs/planning-artifacts/technic
 
 > `!scripts/write-checkpoint.sh gaia-tech-research 5 technology="$TECHNOLOGY" evaluation_criteria="$EVALUATION_CRITERIA" --paths docs/planning-artifacts/technical-research.md`
 
+## Validation
+
+<!--
+  E42-S4 — V1→V2 22-item checklist port (FR-341, FR-359).
+  Classification (22 items total):
+    - Script-verifiable: 13 (SV-01..SV-13) — enforced by finalize.sh.
+    - LLM-checkable:      9 (LLM-01..LLM-09) — evaluated by the host LLM
+      against the technical-research artifact below.
+  Exit code 0 when all script-verifiable items PASS; non-zero otherwise.
+  Dedup / expand rule applied to the V1 surface (2 validation-rules +
+  11 checkboxes = 13 V1 items, expanded to 22 as follows):
+    - "At least 2 alternatives compared" (V1 validation-rule) becomes
+      SV-12, the AC2 anchor — backed by the alternatives_count helper
+      in finalize.sh and guarded by VCP-CHK-08.
+    - "Trade-off analysis included" (V1 validation-rule) splits into
+      section-present (SV-09 ## Trade-off Analysis) and matrix-populated
+      (SV-13 pros/cons matrix included) so an empty heading cannot
+      spoof a PASS.
+    - V1 Scope (Technologies / Use case / Constraints) maps 1:1 to
+      SV-04, SV-05, SV-06.
+    - V1 Evaluation (Maturity / Community / Licensing) is reclassified
+      as LLM-checkable (LLM-02, LLM-03, LLM-04) because assessing
+      accuracy requires semantic judgement, not keyword matching.
+    - V1 Trade-offs (Pros/cons matrix / Alternatives compared /
+      Recommendation rationale) split: matrix presence → SV-13,
+      alternatives count → SV-12, rationale quality → LLM-06.
+    - V1 Output Verification ("All required sections present") expands
+      into one check per V2 Step 5 required section — Technology
+      Overview (SV-07), Evaluation Matrix (SV-08), Trade-off Analysis
+      (SV-09), Recommendation (SV-10), Migration/Adoption (SV-11) —
+      so each section fails independently rather than as a single
+      binary.
+    - Web Access checkboxes from V1 fold into LLM-08 (semantic check
+      on the limitation wording).
+    - Observability items (non-empty artifact, frontmatter/title)
+      surface as SV-02 and SV-03 so automated infrastructure can catch
+      empty or malformed outputs before humans review them.
+  See docs/implementation-artifacts/E42-S4-port-gaia-tech-research-22-item-checklist-to-v2.md.
+-->
+
+- [script-verifiable] SV-01 — Output artifact exists at docs/planning-artifacts/technical-research.md
+- [script-verifiable] SV-02 — Output artifact is non-empty
+- [script-verifiable] SV-03 — Artifact has frontmatter or top-level title
+- [script-verifiable] SV-04 — Technologies clearly identified
+- [script-verifiable] SV-05 — Use case context provided
+- [script-verifiable] SV-06 — Constraints documented
+- [script-verifiable] SV-07 — Technology Overview section present
+- [script-verifiable] SV-08 — Evaluation Matrix section present
+- [script-verifiable] SV-09 — Trade-off Analysis section present
+- [script-verifiable] SV-10 — Recommendation section present
+- [script-verifiable] SV-11 — Migration / Adoption Considerations section present
+- [script-verifiable] SV-12 — At least 2 alternatives compared
+- [script-verifiable] SV-13 — Pros/cons matrix included
+- [LLM-checkable] LLM-01 — Trade-off analysis explores meaningful dimensions, not advocacy
+- [LLM-checkable] LLM-02 — Maturity assessment reflects real signals (release cadence, stability)
+- [LLM-checkable] LLM-03 — Community and ecosystem evaluation grounded in evidence
+- [LLM-checkable] LLM-04 — Licensing analysis accurate for the intended deployment model
+- [LLM-checkable] LLM-05 — Alternatives compared across dimensions that matter for this use case
+- [LLM-checkable] LLM-06 — Recommendation rationale follows from the trade-off analysis
+- [LLM-checkable] LLM-07 — Migration / adoption considerations account for team ramp-up and timeline
+- [LLM-checkable] LLM-08 — Web access availability and limitations noted if web access unavailable
+- [LLM-checkable] LLM-09 — Risk factors acknowledged and tied to the recommendation
+
 ## Finalize
 
 !${CLAUDE_PLUGIN_ROOT}/skills/gaia-tech-research/scripts/finalize.sh

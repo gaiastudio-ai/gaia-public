@@ -13,14 +13,22 @@ load 'test_helper.bash'
 FIXTURES="$BATS_TEST_DIRNAME/fixtures/e42-s13-readiness-check"
 SKILL_DIR="$BATS_TEST_DIRNAME/../skills/gaia-readiness-check"
 FINALIZE="$SKILL_DIR/scripts/finalize.sh"
-REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../../.." && pwd)"
 
 setup() {
   common_setup
   export CHECKPOINT_PATH="$TEST_TMP/_memory/checkpoints"
   mkdir -p "$CHECKPOINT_PATH"
   export LIFECYCLE_EVENTS_LOG="$TEST_TMP/_memory/lifecycle-events.ndjson"
-  export PROJECT_ROOT="$REPO_ROOT"
+  # Seed a self-contained PROJECT_ROOT with the upstream artifacts
+  # the fixtures reference — so the PRD/arch/test-plan presence checks
+  # pass on the positive path and the 3-missing fixture fails ONLY on
+  # the 3 intended anchors (not on incidental "upstream file missing"
+  # noise).
+  export PROJECT_ROOT="$TEST_TMP/project"
+  mkdir -p "$PROJECT_ROOT/docs/planning-artifacts" "$PROJECT_ROOT/docs/test-artifacts"
+  : > "$PROJECT_ROOT/docs/planning-artifacts/prd.md"
+  : > "$PROJECT_ROOT/docs/planning-artifacts/architecture.md"
+  : > "$PROJECT_ROOT/docs/test-artifacts/test-plan.md"
 }
 
 teardown() { common_teardown; }

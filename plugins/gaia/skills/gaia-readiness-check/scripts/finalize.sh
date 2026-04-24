@@ -75,24 +75,28 @@ die() { log "$*"; exit 1; }
 # fires. If unset, fall back to
 # docs/planning-artifacts/readiness-report.md. If neither is present
 # the checklist is simply skipped (observability still runs).
-# PROJECT_ROOT is used for the fallback artifact lookup AND for
-# upstream-artifact presence checks (AC-EC5). When unset, defaults to
-# CWD — which matches invocation from the repository root under normal
-# /gaia-dev-story usage. Sibling tests that seed a scratch PROJECT_ROOT
-# (legacy gaia-readiness-check.bats 'succeeds with mock' test) get a
-# clean skip because their $PROJECT_ROOT/docs/planning-artifacts/
-# readiness-report.md does not exist.
-PROJECT_ROOT="${PROJECT_ROOT:-$PWD}"
+# PROJECT_ROOT is used only for upstream-artifact presence checks
+# (AC-EC5) against the READINESS_ARTIFACT body. Precedence:
+# PROJECT_ROOT → CLAUDE_PROJECT_ROOT → $PWD. The audit-v2-migration
+# harness (E28-S200) sets CLAUDE_PROJECT_ROOT; explicit bats tests set
+# PROJECT_ROOT; interactive /gaia-readiness-check invocations use $PWD.
+PROJECT_ROOT="${PROJECT_ROOT:-${CLAUDE_PROJECT_ROOT:-$PWD}}"
 
+# Resolve the artifact to validate. The checklist only runs when
+# READINESS_ARTIFACT is EXPLICITLY set — we do NOT auto-pick up a
+# readiness-report.md on disk, because the audit-v2-migration harness
+# (enriched fixture mode) pre-creates a placeholder
+# docs/planning-artifacts/readiness-report.md to satisfy downstream
+# skills' validate-gate.sh probes. Auto-validating that placeholder
+# would be a false positive regression — the audit would record
+# finalize.sh FAIL when in fact nothing asked for validation.
+# Interactive /gaia-readiness-check runs that want validation set
+# READINESS_ARTIFACT explicitly via the skill's orchestrator wiring.
 ARTIFACT=""
 ARTIFACT_REQUESTED=0
 if [ -n "${READINESS_ARTIFACT:-}" ]; then
   ARTIFACT_REQUESTED=1
   ARTIFACT="$READINESS_ARTIFACT"
-else
-  if [ -f "$PROJECT_ROOT/docs/planning-artifacts/readiness-report.md" ]; then
-    ARTIFACT="$PROJECT_ROOT/docs/planning-artifacts/readiness-report.md"
-  fi
 fi
 
 # ---------- 1. Run the 65-item checklist ----------

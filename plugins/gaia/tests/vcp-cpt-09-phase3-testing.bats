@@ -202,107 +202,44 @@ PHASE3_TEST_STEPS=(8 6 5 5 6 9 5 8)
 
 # ---------- AC1/AC3/AC6 (VCP-CPT-11): schema consistency across all 8 skills ----------
 
-@test "VCP-CPT-11 AC1/AC6: simulating gaia-test-design 8-step run writes 8 sequential checkpoints" {
-  local slug="gaia-test-design"
-  local artifact="$TEST_TMP/test-plan.md"
-  printf '# test-plan\n' > "$artifact"
-  local n
-  for n in $(seq 1 8); do
-    if [ "$n" = "7" ]; then
-      "$SCRIPT" "$slug" "$n" story_key=E1-S1 test_plan_path="$artifact" --paths "$artifact"
-    else
-      "$SCRIPT" "$slug" "$n" story_key=E1-S1 test_plan_path="$artifact"
-    fi
-    sleep 0.002
-  done
-  local dir="$CHECKPOINT_ROOT/$slug"
-  [ -d "$dir" ]
-  local count
-  count=$(find "$dir" -name '*.json' -type f | wc -l | tr -d ' ')
-  [ "$count" = "8" ]
-  local numbers
-  numbers=$(find "$dir" -name '*.json' -type f -exec jq -r '.step_number' {} \; | sort -n | tr '\n' ' ')
-  [ "$numbers" = "1 2 3 4 5 6 7 8 " ]
-}
+# Per-skill step-count coverage consolidated into one data-driven test to keep
+# the job inside the 2-minute bats CI budget. Runs one step of each
+# non-multi-file skill with the step count drawn from PHASE3_TEST_STEPS, then
+# asserts the resulting directory has exactly N JSON files with sequential
+# step_numbers 1..N. gaia-ci-setup has its own @test below because it also
+# validates the multi-file step (AC-EC8).
 
-@test "VCP-CPT-11 AC1/AC6: simulating gaia-edit-test-plan 6-step run writes 6 sequential checkpoints" {
-  local slug="gaia-edit-test-plan"
-  local artifact="$TEST_TMP/test-plan.md"
-  printf '# tp\n' > "$artifact"
-  local n
-  for n in $(seq 1 6); do
-    if [ "$n" = "5" ]; then
-      "$SCRIPT" "$slug" "$n" test_plan_path="$artifact" edit_mode=add --paths "$artifact"
-    else
-      "$SCRIPT" "$slug" "$n" test_plan_path="$artifact" edit_mode=add
-    fi
-    sleep 0.002
+@test "VCP-CPT-11 AC1/AC6: per-skill step-count coverage (single-file skills)" {
+  # slug|expected|key_var_1|val_1|key_var_2|val_2
+  local spec
+  for spec in \
+    "gaia-test-design|8|story_key|E1-S1|test_plan_path|docs/test-artifacts/test-plan.md" \
+    "gaia-edit-test-plan|6|test_plan_path|docs/test-artifacts/test-plan.md|edit_mode|add" \
+    "gaia-test-framework|5|detected_stack|typescript|framework_config_path|jest.config.ts" \
+    "gaia-atdd|5|story_key|E1-S1|test_file_path|docs/test-artifacts/atdd-E1-S1.md" \
+    "gaia-trace|6|trace_matrix_path|docs/test-artifacts/traceability-matrix.md|coverage_metrics|full" \
+    "gaia-review-a11y|5|a11y_scope|component|report_path|docs/test-artifacts/a11y.md" \
+    "gaia-val-validate|8|artifact_path|docs/planning-artifacts/prd.md|iteration_number|1"; do
+    local slug expected k1 v1 k2 v2
+    IFS='|' read -r slug expected k1 v1 k2 v2 <<<"$spec"
+    local artifact="$TEST_TMP/$slug.md"
+    printf '# x\n' > "$artifact"
+    local n
+    for n in $(seq 1 "$expected"); do
+      "$SCRIPT" "$slug" "$n" "$k1=$v1" "$k2=$v2" --paths "$artifact"
+    done
+    local dir="$CHECKPOINT_ROOT/$slug"
+    [ -d "$dir" ] || { echo "$slug: checkpoint dir missing"; return 1; }
+    local count
+    count=$(find "$dir" -name '*.json' -type f | wc -l | tr -d ' ')
+    [ "$count" = "$expected" ] || { echo "$slug: expected $expected checkpoints, got $count"; return 1; }
+    local numbers expected_seq
+    numbers=$(find "$dir" -name '*.json' -type f -exec jq -r '.step_number' {} \; | sort -n | tr '\n' ' ')
+    expected_seq=$(seq 1 "$expected" | tr '\n' ' ')
+    [ "$numbers" = "$expected_seq" ] || {
+      echo "$slug: expected sequence '$expected_seq', got '$numbers'"; return 1
+    }
   done
-  local dir="$CHECKPOINT_ROOT/$slug"
-  [ -d "$dir" ]
-  local count
-  count=$(find "$dir" -name '*.json' -type f | wc -l | tr -d ' ')
-  [ "$count" = "6" ]
-}
-
-@test "VCP-CPT-11 AC1/AC6: simulating gaia-test-framework 5-step run writes 5 sequential checkpoints" {
-  local slug="gaia-test-framework"
-  local artifact="$TEST_TMP/framework.config.js"
-  printf 'x\n' > "$artifact"
-  local n
-  for n in $(seq 1 5); do
-    if [ "$n" = "5" ]; then
-      "$SCRIPT" "$slug" "$n" detected_stack=typescript framework_config_path="$artifact" --paths "$artifact"
-    else
-      "$SCRIPT" "$slug" "$n" detected_stack=typescript framework_config_path="$artifact"
-    fi
-    sleep 0.002
-  done
-  local dir="$CHECKPOINT_ROOT/$slug"
-  [ -d "$dir" ]
-  local count
-  count=$(find "$dir" -name '*.json' -type f | wc -l | tr -d ' ')
-  [ "$count" = "5" ]
-}
-
-@test "VCP-CPT-11 AC1/AC6: simulating gaia-atdd 5-step run writes 5 sequential checkpoints" {
-  local slug="gaia-atdd"
-  local artifact="$TEST_TMP/atdd-E1.md"
-  printf '# atdd\n' > "$artifact"
-  local n
-  for n in $(seq 1 5); do
-    if [ "$n" = "4" ]; then
-      "$SCRIPT" "$slug" "$n" story_key=E1-S1 test_file_path="$artifact" --paths "$artifact"
-    else
-      "$SCRIPT" "$slug" "$n" story_key=E1-S1 test_file_path="$artifact"
-    fi
-    sleep 0.002
-  done
-  local dir="$CHECKPOINT_ROOT/$slug"
-  [ -d "$dir" ]
-  local count
-  count=$(find "$dir" -name '*.json' -type f | wc -l | tr -d ' ')
-  [ "$count" = "5" ]
-}
-
-@test "VCP-CPT-11 AC1/AC6: simulating gaia-trace 6-step run writes 6 sequential checkpoints" {
-  local slug="gaia-trace"
-  local artifact="$TEST_TMP/trace.md"
-  printf '# trace\n' > "$artifact"
-  local n
-  for n in $(seq 1 6); do
-    if [ "$n" = "5" ]; then
-      "$SCRIPT" "$slug" "$n" trace_matrix_path="$artifact" coverage_metrics=full --paths "$artifact"
-    else
-      "$SCRIPT" "$slug" "$n" trace_matrix_path="$artifact" coverage_metrics=full
-    fi
-    sleep 0.002
-  done
-  local dir="$CHECKPOINT_ROOT/$slug"
-  [ -d "$dir" ]
-  local count
-  count=$(find "$dir" -name '*.json' -type f | wc -l | tr -d ' ')
-  [ "$count" = "6" ]
 }
 
 @test "VCP-CPT-11 AC1/AC6/AC-EC8: simulating gaia-ci-setup 9-step run writes 9 sequential checkpoints with multi-file step" {
@@ -320,7 +257,6 @@ PHASE3_TEST_STEPS=(8 6 5 5 6 9 5 8)
     else
       "$SCRIPT" "$slug" "$n" ci_provider=github_actions ci_config_path="$f1"
     fi
-    sleep 0.002
   done
   local dir="$CHECKPOINT_ROOT/$slug"
   [ -d "$dir" ]
@@ -334,46 +270,6 @@ PHASE3_TEST_STEPS=(8 6 5 5 6 9 5 8)
   local step8_checksums
   step8_checksums=$(find "$dir" -name '*-step-8.json' -type f -exec jq -r '.file_checksums | length' {} \;)
   [ "$step8_checksums" = "2" ]
-}
-
-@test "VCP-CPT-11 AC1/AC6: simulating gaia-review-a11y 5-step run writes 5 sequential checkpoints" {
-  local slug="gaia-review-a11y"
-  local artifact="$TEST_TMP/a11y-report.md"
-  printf '# a11y\n' > "$artifact"
-  local n
-  for n in $(seq 1 5); do
-    if [ "$n" = "5" ]; then
-      "$SCRIPT" "$slug" "$n" a11y_scope=component report_path="$artifact" --paths "$artifact"
-    else
-      "$SCRIPT" "$slug" "$n" a11y_scope=component report_path="$artifact"
-    fi
-    sleep 0.002
-  done
-  local dir="$CHECKPOINT_ROOT/$slug"
-  [ -d "$dir" ]
-  local count
-  count=$(find "$dir" -name '*.json' -type f | wc -l | tr -d ' ')
-  [ "$count" = "5" ]
-}
-
-@test "VCP-CPT-11 AC1/AC6: simulating gaia-val-validate 8-step run writes 8 sequential checkpoints" {
-  local slug="gaia-val-validate"
-  local artifact="$TEST_TMP/artifact.md"
-  printf '# a\n' > "$artifact"
-  local n
-  for n in $(seq 1 8); do
-    if [ "$n" = "7" ]; then
-      "$SCRIPT" "$slug" "$n" artifact_path="$artifact" iteration_number=1 --paths "$artifact"
-    else
-      "$SCRIPT" "$slug" "$n" artifact_path="$artifact" iteration_number=1
-    fi
-    sleep 0.002
-  done
-  local dir="$CHECKPOINT_ROOT/$slug"
-  [ -d "$dir" ]
-  local count
-  count=$(find "$dir" -name '*.json' -type f | wc -l | tr -d ' ')
-  [ "$count" = "8" ]
 }
 
 # ---------- VCP-CPT-11 AC6: schema consistency across all 8 skills ----------

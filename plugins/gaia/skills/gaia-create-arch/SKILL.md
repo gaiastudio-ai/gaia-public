@@ -153,6 +153,88 @@ Delegate to the **architect** subagent (Theo) via `agents/architect` to compile 
 
 > `!scripts/write-checkpoint.sh gaia-create-arch 12 project_name="$PROJECT_NAME" arch_version="$ARCH_VERSION" --paths docs/planning-artifacts/architecture.md`
 
+## Validation
+
+<!--
+  E42-S8 — V1→V2 33-item checklist port (FR-341, FR-359, VCP-CHK-15, VCP-CHK-16).
+  Classification (33 items total):
+    - Script-verifiable: 25 (SV-01..SV-25) — enforced by finalize.sh.
+    - LLM-checkable:      8 (LLM-01..LLM-08) — evaluated by the host LLM
+      against the architecture artifact at finalize time.
+  Exit code 0 when all 25 script-verifiable items PASS; non-zero otherwise.
+
+  The V1 source checklist at _gaia/lifecycle/workflows/3-solutioning/create-architecture/
+  checklist.md carried 17 bulleted items. The story 33-item count is
+  authoritative: the 17 V1 bullets are expanded here to 33 by
+  (a) adding envelope items SV-01..SV-03 (artifact presence, non-empty,
+  frontmatter), (b) splitting "All required sections present" into
+  per-section presence checks (SV-04..SV-11 — System Overview,
+  Architecture Decisions, System Components, Data Architecture,
+  Integration Points, Infrastructure, Security Architecture,
+  Cross-Cutting Concerns), (c) preserving the V1 body-sanity anchors
+  verbatim as SV-12..SV-19 (Stack selected with rationale, Component
+  diagram described, Service boundaries defined, Data model defined,
+  Data flow documented, Endpoints overviewed, Auth strategy defined,
+  Deployment topology described), (d) adding Decision Log structural
+  checks (SV-20..SV-22 — table present, ADRs present (V1 "Decisions
+  recorded"), ADR fields populated), (e) preserving SV-23 (cross-
+  cutting documented) and gate/output items SV-24..SV-25 (Review
+  Findings Incorporated section; FR-### traceability), and (f) pulling
+  8 LLM-checkable items (LLM-01..LLM-08) from the V1 semantic bullets
+  (tech-stack trade-offs, communication pattern coherence, ADR
+  rationale quality, Decision-to-Requirement coverage, security vs
+  threat model, env progression, cross-cutting adequacy, adversarial
+  incorporation traceability).
+
+  The VCP-CHK-16 anchor is SV-21 — "Decisions recorded". This is the
+  V1 phrase verbatim and MUST appear in violation output when the
+  Decision Log table is heading-only (AC-EC5).
+
+  Per-item LLM-checkable timeout contract: 30s wall-clock per item
+  (AC-EC7). Malformed verdict (no explicit PASS/FAIL) is treated as
+  FAIL — never skip (AC-EC4).
+
+  Invoked by `finalize.sh` at post-complete (per §10.31.1). Validation
+  runs BEFORE the checkpoint and lifecycle-event writes (observability
+  is never suppressed by checklist outcome — story AC5).
+
+  See docs/implementation-artifacts/E42-S8-port-gaia-create-arch-33-item-checklist-to-v2.md.
+-->
+
+- [script-verifiable] SV-01 — Output file exists at docs/planning-artifacts/architecture.md
+- [script-verifiable] SV-02 — Output artifact is non-empty
+- [script-verifiable] SV-03 — Artifact has frontmatter or top-level title
+- [script-verifiable] SV-04 — System Overview section present
+- [script-verifiable] SV-05 — Architecture Decisions section present (Decision Log)
+- [script-verifiable] SV-06 — System Components section present
+- [script-verifiable] SV-07 — Data Architecture section present
+- [script-verifiable] SV-08 — Integration Points section present
+- [script-verifiable] SV-09 — Infrastructure section present
+- [script-verifiable] SV-10 — Security Architecture section present
+- [script-verifiable] SV-11 — Cross-Cutting Concerns section present
+- [script-verifiable] SV-12 — Stack selected with rationale
+- [script-verifiable] SV-13 — Component diagram described
+- [script-verifiable] SV-14 — Service boundaries defined
+- [script-verifiable] SV-15 — Data model defined
+- [script-verifiable] SV-16 — Data flow documented
+- [script-verifiable] SV-17 — Endpoints overviewed
+- [script-verifiable] SV-18 — Auth strategy defined
+- [script-verifiable] SV-19 — Deployment topology described
+- [script-verifiable] SV-20 — Decision Log table present with markdown table structure
+- [script-verifiable] SV-21 — Decisions recorded (Decision Log table has at least one ADR row)
+- [script-verifiable] SV-22 — Each ADR has context, decision, consequences (ADR row fields populated)
+- [script-verifiable] SV-23 — Cross-cutting concerns documented
+- [script-verifiable] SV-24 — Review Findings Incorporated section present
+- [script-verifiable] SV-25 — At least one FR-### identifier referenced (traceability)
+- [LLM-checkable] LLM-01 — Trade-offs documented (tech-stack choices justified against alternatives)
+- [LLM-checkable] LLM-02 — Communication patterns specified (sync vs async, at-least-once vs exactly-once)
+- [LLM-checkable] LLM-03 — Each ADR has context, decision, consequences with sound rationale
+- [LLM-checkable] LLM-04 — Decision-to-Requirement Mapping — every ADR maps to at least one FR/NFR; no orphaned FR/NFR
+- [LLM-checkable] LLM-05 — Security architecture addresses identified threats (threat-model cross-reference where present)
+- [LLM-checkable] LLM-06 — Environments defined (dev, staging, prod) with progression rules explicit
+- [LLM-checkable] LLM-07 — Monitoring, logging, and error-handling strategies adequate for the system scale
+- [LLM-checkable] LLM-08 — Adversarial review findings properly incorporated with traceable before/after mapping
+
 ## Finalize
 
 !${CLAUDE_PLUGIN_ROOT}/skills/gaia-create-arch/scripts/finalize.sh

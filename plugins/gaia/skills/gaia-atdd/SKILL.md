@@ -83,6 +83,41 @@ This skill is the native Claude Code conversion of the legacy `_gaia/testing/wor
 
 > `!scripts/write-checkpoint.sh gaia-atdd 5 story_key="$STORY_KEY" test_file_path="docs/test-artifacts/atdd-$STORY_KEY.md" ac_count="$AC_COUNT" stage=validated`
 
+## Validation
+
+<!--
+  E42-S15 — V1→V2 5-item checklist port (FR-341, FR-359, VCP-CHK-33, VCP-CHK-34).
+  Classification (5 items total — V1 verbatim, no extras):
+    - Script-verifiable: 1 (SV-01) — enforced by finalize.sh.
+    - LLM-checkable:     4 (LLM-01..LLM-04) — evaluated by the host LLM
+      against the atdd-{story_key}.md artifact at finalize time.
+  Exit code 0 when the 1 script-verifiable item PASSes; non-zero otherwise.
+
+  V1 source: 5 items (clean). V1 → V2 mapping (1:1, no drop, no merge):
+    V1 "Acceptance criteria loaded from story/PRD"        → LLM-01 (semantic)
+    V1 "Each AC mapped to exactly one test"               → LLM-02 (semantic)
+    V1 "Tests fail initially (red phase)"                 → LLM-03 (semantic)
+    V1 "Tests are atomic and independent"                 → LLM-04 (semantic)
+    V1 "Test-to-AC traceability documented"               → SV-01 (heading + table)
+
+  Only the traceability item is mechanically observable in artifact body
+  (## AC-to-Test Mapping heading + |AC*| table row); the other four are
+  semantic ATDD-quality judgements that require host LLM evaluation
+  against the story / PRD context.
+
+  Invoked by `finalize.sh` at post-complete (per architecture §10.31.1).
+  Validation runs BEFORE the checkpoint and lifecycle-event writes
+  (observability is never suppressed by checklist outcome — story AC6).
+
+  See docs/implementation-artifacts/E42-S15-port-gaia-test-framework-atdd-ci-setup-checklists-to-v2.md.
+-->
+
+- [script-verifiable] SV-01 — Test-to-AC traceability documented
+- [LLM-checkable] LLM-01 — Acceptance criteria loaded from story/PRD
+- [LLM-checkable] LLM-02 — Each AC mapped to exactly one test
+- [LLM-checkable] LLM-03 — Tests fail initially (red phase)
+- [LLM-checkable] LLM-04 — Tests are atomic and independent
+
 ## Finalize
 
 !${CLAUDE_PLUGIN_ROOT}/skills/gaia-atdd/scripts/finalize.sh

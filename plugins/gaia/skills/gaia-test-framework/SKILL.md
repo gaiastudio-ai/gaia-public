@@ -87,6 +87,41 @@ Write the test framework setup document to `docs/test-artifacts/test-framework-s
 
 > `!scripts/write-checkpoint.sh gaia-test-framework 5 detected_stack="$DETECTED_STACK" framework_config_path="$FRAMEWORK_CONFIG_PATH" stage=output-generated --paths docs/test-artifacts/test-framework-setup.md`
 
+## Validation
+
+<!--
+  E42-S15 — V1→V2 7-item checklist port (FR-341, FR-359, VCP-CHK-31, VCP-CHK-32).
+  Classification (7 items total — V1 verbatim, no extras):
+    - Script-verifiable: 4 (SV-01..SV-04) — enforced by finalize.sh.
+    - LLM-checkable:     3 (LLM-01..LLM-03) — evaluated by the host LLM
+      against the test-framework-setup.md artifact at finalize time.
+  Exit code 0 when all 4 script-verifiable items PASS; non-zero otherwise.
+
+  V1 source: 7 items (clean). V1 → V2 mapping (1:1, no drop, no merge):
+    V1 "Project stack detected correctly"                 → LLM-01 (semantic)
+    V1 "Framework recommendation matches stack"           → LLM-02 (semantic)
+    V1 "Config files generated"                           → SV-01 (heading + config-file regex)
+    V1 "Folder structure scaffolded"                      → SV-02 (heading + tests/ regex)
+    V1 "Test runner script configured and executable"     → SV-03 (heading + runner regex)
+    V1 "Fixture architecture designed"                    → SV-04 (heading)
+    V1 "No actual test implementations created — tests
+        are written in Phase 4"                           → LLM-03 (semantic, negative)
+
+  Invoked by `finalize.sh` at post-complete (per architecture §10.31.1).
+  Validation runs BEFORE the checkpoint and lifecycle-event writes
+  (observability is never suppressed by checklist outcome — story AC6).
+
+  See docs/implementation-artifacts/E42-S15-port-gaia-test-framework-atdd-ci-setup-checklists-to-v2.md.
+-->
+
+- [script-verifiable] SV-01 — Config files generated
+- [script-verifiable] SV-02 — Folder structure scaffolded
+- [script-verifiable] SV-03 — Test runner script configured and executable
+- [script-verifiable] SV-04 — Fixture architecture designed
+- [LLM-checkable] LLM-01 — Project stack detected correctly
+- [LLM-checkable] LLM-02 — Framework recommendation matches stack
+- [LLM-checkable] LLM-03 — No actual test implementations created — tests are written in Phase 4
+
 ## Finalize
 
 !${CLAUDE_PLUGIN_ROOT}/skills/gaia-test-framework/scripts/finalize.sh

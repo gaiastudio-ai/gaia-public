@@ -128,6 +128,70 @@ The `ux-design-assessment-template.md` carried in this skill directory is availa
 
 > `!scripts/write-checkpoint.sh gaia-create-ux 11 project_name="$PROJECT_NAME" ux_slug="$UX_SLUG" prd_path="$PRD_PATH"`
 
+## Validation
+
+<!--
+  E42-S7 — V1→V2 26-item checklist port (FR-341, FR-359, VCP-CHK-13, VCP-CHK-14).
+  Classification (26 items total):
+    - Script-verifiable: 18 (SV-01..SV-18) — enforced by finalize.sh.
+    - LLM-checkable:      8 (LLM-01..LLM-08) — evaluated by the host LLM
+      against the UX design artifact at finalize time.
+  Exit code 0 when all 18 script-verifiable items PASS; non-zero otherwise.
+
+  The V1 source checklist at _gaia/lifecycle/workflows/2-planning/create-ux-design/
+  checklist.md carried 14 bulleted items. The story 26-item count is
+  authoritative: the 14 V1 bullets are expanded here to 26 by
+  (a) adding envelope items SV-01..SV-03 (artifact presence, non-empty,
+  frontmatter), (b) splitting "All required sections present" into per-
+  section presence checks (SV-04..SV-10 — Personas, Information Architecture,
+  Wireframes, Interaction Patterns, Accessibility, Components, FR-to-Screen
+  Mapping), (c) adding per-section body-sanity checks (SV-11..SV-15), each
+  using the V1 item string verbatim as the item description so violation
+  output reproduces the V1 anchor exactly, (d) adding structural checks
+  for the FR-to-Screen Mapping table (SV-16..SV-17), (e) adding an FR-###
+  traceability regex (SV-18), and (f) pulling 8 LLM-checkable items
+  (LLM-01..LLM-08) from the V1 semantic bullets (persona coherence, IA
+  plausibility, wireframe sufficiency, keyboard/screen-reader coverage,
+  user-journey coverage, component-description specificity).
+
+  The VCP-CHK-14 anchor is SV-13 — "Key screens described". This is the
+  V1 phrase verbatim and MUST appear in violation output when the
+  Wireframes section is empty.
+
+  Invoked by `finalize.sh` at post-complete (per §10.31.1). Validation
+  runs BEFORE the checkpoint and lifecycle-event writes (observability
+  is never suppressed by checklist outcome — story AC5).
+
+  See docs/implementation-artifacts/E42-S7-port-gaia-create-ux-26-item-checklist-to-v2.md.
+-->
+
+- [script-verifiable] SV-01 — Output file exists at docs/planning-artifacts/ux-design.md
+- [script-verifiable] SV-02 — Output artifact is non-empty
+- [script-verifiable] SV-03 — Artifact has frontmatter or top-level title
+- [script-verifiable] SV-04 — Personas section present
+- [script-verifiable] SV-05 — Information Architecture section present (sitemap)
+- [script-verifiable] SV-06 — Wireframes section present
+- [script-verifiable] SV-07 — Interaction Patterns section present
+- [script-verifiable] SV-08 — Accessibility section present
+- [script-verifiable] SV-09 — Components section present
+- [script-verifiable] SV-10 — FR-to-Screen Mapping section present
+- [script-verifiable] SV-11 — Personas refined with scenarios
+- [script-verifiable] SV-12 — Sitemap defined
+- [script-verifiable] SV-13 — Key screens described
+- [script-verifiable] SV-14 — Common UI patterns documented
+- [script-verifiable] SV-15 — WCAG compliance target stated
+- [script-verifiable] SV-16 — FR-to-Screen Mapping table present with markdown table structure
+- [script-verifiable] SV-17 — FR-to-Screen Mapping table has at least one data row
+- [script-verifiable] SV-18 — At least one FR-### identifier referenced (traceability)
+- [LLM-checkable] LLM-01 — Personas coherent with scenarios, goals, and tech proficiency
+- [LLM-checkable] LLM-02 — Every PRD FR maps to at least one page or screen in the sitemap
+- [LLM-checkable] LLM-03 — Navigation structure clear (sitemap groupings are plausible)
+- [LLM-checkable] LLM-04 — Layout and component placement defined for every key wireframe
+- [LLM-checkable] LLM-05 — Form behaviors specified and error states defined across interaction patterns
+- [LLM-checkable] LLM-06 — Keyboard navigation planned and screen reader support addressed
+- [LLM-checkable] LLM-07 — Each PRD user journey has a corresponding interaction flow
+- [LLM-checkable] LLM-08 — Component descriptions specific enough for implementation (not vague)
+
 ## Finalize
 
 !${CLAUDE_PLUGIN_ROOT}/skills/gaia-create-ux/scripts/finalize.sh

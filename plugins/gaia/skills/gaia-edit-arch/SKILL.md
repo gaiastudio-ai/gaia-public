@@ -140,6 +140,81 @@ This is the cascade-aware behavior preserved from the legacy edit-architecture w
 
 > `!scripts/write-checkpoint.sh gaia-edit-arch 7 project_name="$PROJECT_NAME" edit_scope=cascade cascade_impact="$CASCADE_IMPACT"`
 
+## Validation
+
+<!--
+  E42-S9 — V1→V2 25-item checklist port (FR-341, FR-359, VCP-CHK-17, VCP-CHK-18).
+  Classification (25 items total):
+    - Script-verifiable: 17 (SV-01..SV-17) — enforced by finalize.sh.
+    - LLM-checkable:      8 (LLM-01..LLM-08) — evaluated by the host LLM
+      against the edited architecture artifact at finalize time.
+  Exit code 0 when all 17 script-verifiable items PASS; non-zero otherwise.
+
+  The V1 source checklist at _gaia/lifecycle/workflows/3-solutioning/edit-architecture/
+  checklist.md carried 14 bulleted items across six V1 categories
+  (Edit Quality, ADR Quality, Version History, Review Gate, Cascade
+  Assessment, Output Verification). The story 25-item count is
+  authoritative per docs/v1-v2-command-gap-analysis.md §4; the 14 V1
+  bullets are expanded to 25 by reconciling items dropped from V1
+  checklist.md but preserved in V1 instructions.xml step outputs
+  (per story Task 1.3):
+    - envelope items (SV-01, SV-02: output file saved, non-empty)
+    - structural Decision Log checks (SV-08 table, SV-10 ADR rows populated)
+    - cascade-row coverage (SV-15 all four canonical downstream artifacts)
+    - cascade classification populated (SV-16)
+    - sidecar memory write referenced (SV-17, per V1 step 7)
+    - semantic LLM items (LLM-01..LLM-08: requested changes applied,
+      preservation, consistency, ADR rationale, cascade plausibility,
+      adversarial review status, findings traceability, next-step
+      communication).
+
+  V1 category coverage mapping (25 items):
+    Edit Quality         — SV-01, SV-02, SV-03, SV-04, LLM-01, LLM-02, LLM-03  (7)
+    ADR Quality          — SV-07, SV-08, SV-09, SV-10, SV-11, SV-12, LLM-04    (7)
+    Version History      — SV-05, SV-06                                        (2)
+    Review Gate          — SV-13, LLM-06, LLM-07                               (3)
+    Cascade Assessment   — SV-14, SV-15, SV-16, LLM-05                         (4)
+    Output Verification  — SV-17, LLM-08                                        (2)
+    Total                                                                      25
+
+  The VCP-CHK-18 anchor is SV-05/SV-06 — "Version History" section
+  and table-row presence. This is the V1 phrase verbatim and MUST
+  appear in violation output when the Version History section is
+  missing or empty (AC2).
+
+  Invoked by `finalize.sh` at post-complete (per §10.31.1). Validation
+  runs BEFORE the checkpoint and lifecycle-event writes (observability
+  is never suppressed by checklist outcome — story AC5).
+
+  See docs/implementation-artifacts/E42-S9-port-gaia-edit-arch-25-item-checklist-to-v2.md.
+-->
+
+- [script-verifiable] SV-01 — Output file saved to docs/planning-artifacts/architecture.md
+- [script-verifiable] SV-02 — Output artifact is non-empty
+- [script-verifiable] SV-03 — Unchanged sections preserved (System Overview still present)
+- [script-verifiable] SV-04 — Architecture version incremented (version marker present)
+- [script-verifiable] SV-05 — Version History section present
+- [script-verifiable] SV-06 — Version History table has a version note row
+- [script-verifiable] SV-07 — Architecture Decisions section present (Decision Log)
+- [script-verifiable] SV-08 — Decision Log table present with markdown table structure
+- [script-verifiable] SV-09 — New ADR(s) created (Decision Log table has at least one ADR row)
+- [script-verifiable] SV-10 — Each ADR has context, decision, consequences (ADR-N rows populated)
+- [script-verifiable] SV-11 — Addresses field maps to FR/NFR IDs (FR-### identifier referenced)
+- [script-verifiable] SV-12 — Superseded ADRs marked with status update
+- [script-verifiable] SV-13 — Review Findings Incorporated section present
+- [script-verifiable] SV-14 — Cascade Assessment section present (Pending Cascades retained)
+- [script-verifiable] SV-15 — Cascade impact classified for all four downstream artifacts
+- [script-verifiable] SV-16 — Cascade classification populated (NONE/MINOR/SIGNIFICANT)
+- [script-verifiable] SV-17 — Changes recorded in architect-sidecar memory (sidecar reference present)
+- [LLM-checkable] LLM-01 — Requested changes applied correctly (edit matches the change request)
+- [LLM-checkable] LLM-02 — Unchanged sections preserved exactly (no silent drops or reorders)
+- [LLM-checkable] LLM-03 — Consistency maintained across sections (no contradictions introduced)
+- [LLM-checkable] LLM-04 — Each new ADR has context, decision, consequences with sound rationale
+- [LLM-checkable] LLM-05 — Cascade impact classifications are plausible for the scope of change
+- [LLM-checkable] LLM-06 — Adversarial review completed OR explicitly skipped for minor edits
+- [LLM-checkable] LLM-07 — Review Findings Incorporated traceable (before/after mapping clear if review ran)
+- [LLM-checkable] LLM-08 — Next steps communicated to user appropriately for the cascade outcome
+
 ## Finalize
 
 !${CLAUDE_PLUGIN_ROOT}/skills/gaia-edit-arch/scripts/finalize.sh

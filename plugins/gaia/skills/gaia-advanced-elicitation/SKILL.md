@@ -105,6 +105,9 @@ Write a structured elicitation report to `docs/planning-artifacts/elicitation-re
 [Source: _gaia/lifecycle/workflows/1-analysis/advanced-elicitation/instructions.xml]
 [Source: _gaia/lifecycle/workflows/1-analysis/advanced-elicitation/workflow.yaml]
 
+> After artifact write: run open-question detection snippet
+> `!${CLAUDE_PLUGIN_ROOT}/scripts/detect-open-questions.sh docs/planning-artifacts/elicitation-report-${DATE}.md`
+
 > `!scripts/write-checkpoint.sh gaia-advanced-elicitation 5 elicitation_topic="$ELICITATION_TOPIC" technique="$TECHNIQUE" --paths docs/planning-artifacts/elicitation-report-${DATE}.md`
 
 ## Finalize

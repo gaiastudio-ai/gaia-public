@@ -81,6 +81,9 @@ This skill is the native Claude Code conversion of the legacy `_gaia/testing/wor
   - Bundle size budgets and enforcement
 - Write output to `docs/test-artifacts/performance-test-plan-{date}.md`.
 
+> After artifact write: run open-question detection snippet
+> `!${CLAUDE_PLUGIN_ROOT}/scripts/detect-open-questions.sh docs/test-artifacts/performance-test-plan-${DATE}.md`
+
 ## Finalize
 
 !${CLAUDE_PLUGIN_ROOT}/skills/gaia-perf-testing/scripts/finalize.sh

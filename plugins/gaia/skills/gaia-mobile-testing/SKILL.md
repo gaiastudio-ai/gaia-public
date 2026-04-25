@@ -80,6 +80,9 @@ This skill is the native Claude Code conversion of the legacy `_gaia/testing/wor
   - Touch interaction and gesture testing procedures
 - Write output to `docs/test-artifacts/mobile-test-plan-{date}.md`.
 
+> After artifact write: run open-question detection snippet
+> `!${CLAUDE_PLUGIN_ROOT}/scripts/detect-open-questions.sh docs/test-artifacts/mobile-test-plan-${DATE}.md`
+
 ## Finalize
 
 !${CLAUDE_PLUGIN_ROOT}/skills/gaia-mobile-testing/scripts/finalize.sh

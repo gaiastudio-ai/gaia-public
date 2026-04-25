@@ -73,6 +73,9 @@ Write a structured technical research report to `docs/planning-artifacts/technic
 [Source: _gaia/lifecycle/workflows/1-analysis/technical-research/instructions.xml]
 [Source: _gaia/lifecycle/workflows/1-analysis/technical-research/workflow.yaml]
 
+> After artifact write: run open-question detection snippet
+> `!${CLAUDE_PLUGIN_ROOT}/scripts/detect-open-questions.sh docs/planning-artifacts/technical-research.md`
+
 > `!scripts/write-checkpoint.sh gaia-tech-research 5 technology="$TECHNOLOGY" evaluation_criteria="$EVALUATION_CRITERIA" --paths docs/planning-artifacts/technical-research.md`
 
 ## Validation

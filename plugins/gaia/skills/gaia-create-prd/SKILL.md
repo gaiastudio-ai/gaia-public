@@ -144,6 +144,9 @@ Write the PRD to `docs/planning-artifacts/prd.md` with all sections populated:
 - Requirements Summary table (all FR and NFR IDs with description, priority, status)
 - Open Questions
 
+> After artifact write: run open-question detection snippet
+> `!${CLAUDE_PLUGIN_ROOT}/scripts/detect-open-questions.sh docs/planning-artifacts/prd.md`
+
 > `!scripts/write-checkpoint.sh gaia-create-prd 11 project_name="$PROJECT_NAME" prd_version="$PRD_VERSION" feature_slug="$FEATURE_SLUG" --paths docs/planning-artifacts/prd.md`
 
 ### Step 12 — Adversarial Review
@@ -161,6 +164,9 @@ Write the PRD to `docs/planning-artifacts/prd.md` with all sections populated:
 - For each critical/high finding: add as a new requirement or refine an existing requirement in the PRD.
 - Add a "## Review Findings Incorporated" section to the PRD listing each finding, its severity, and how it was addressed (new requirement added / existing requirement refined / acknowledged as risk).
 - Write the updated PRD to `docs/planning-artifacts/prd.md`.
+
+> After artifact write: run open-question detection snippet
+> `!${CLAUDE_PLUGIN_ROOT}/scripts/detect-open-questions.sh docs/planning-artifacts/prd.md`
 
 > `!scripts/write-checkpoint.sh gaia-create-prd 13 project_name="$PROJECT_NAME" prd_version="$PRD_VERSION" feature_slug="$FEATURE_SLUG" --paths docs/planning-artifacts/prd.md`
 

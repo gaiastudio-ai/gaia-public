@@ -118,6 +118,9 @@ Write the UX design document to `docs/planning-artifacts/ux-design.md` with: per
 
 The `ux-design-assessment-template.md` carried in this skill directory is available for brownfield UX assessments — reference it at `${CLAUDE_PLUGIN_ROOT}/skills/gaia-create-ux/ux-design-assessment-template.md`.
 
+> After artifact write: run open-question detection snippet
+> `!${CLAUDE_PLUGIN_ROOT}/scripts/detect-open-questions.sh docs/planning-artifacts/ux-design.md`
+
 > `!scripts/write-checkpoint.sh gaia-create-ux 10 project_name="$PROJECT_NAME" ux_slug="$UX_SLUG" prd_path="$PRD_PATH" --paths docs/planning-artifacts/ux-design.md`
 
 ### Step 11 — Optional: Accessibility Review

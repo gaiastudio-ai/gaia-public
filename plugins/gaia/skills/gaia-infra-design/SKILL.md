@@ -85,6 +85,9 @@ Delegate to the **devops** subagent (Soren) via `agents/devops` to define observ
 - Record key decisions in devops-sidecar memory.
 - Write the infrastructure design document to `docs/planning-artifacts/infrastructure-design.md` with: environment matrix, deployment topology, IaC structure, observability plan, and decision rationale.
 
+> After artifact write: run open-question detection snippet
+> `!${CLAUDE_PLUGIN_ROOT}/scripts/detect-open-questions.sh docs/planning-artifacts/infrastructure-design.md`
+
 > `!scripts/write-checkpoint.sh gaia-infra-design 6 project_name="$PROJECT_NAME" target_environments="$TARGET_ENVIRONMENTS" iac_stack="$IAC_STACK" stage=output --paths docs/planning-artifacts/infrastructure-design.md`
 
 ## Validation

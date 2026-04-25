@@ -83,6 +83,9 @@ Write a structured market research report to `docs/planning-artifacts/market-res
 [Source: _gaia/lifecycle/workflows/1-analysis/market-research/instructions.xml]
 [Source: _gaia/lifecycle/workflows/1-analysis/market-research/workflow.yaml]
 
+> After artifact write: run open-question detection snippet
+> `!${CLAUDE_PLUGIN_ROOT}/scripts/detect-open-questions.sh docs/planning-artifacts/market-research.md`
+
 > `!scripts/write-checkpoint.sh gaia-market-research 6 research_topic="$RESEARCH_TOPIC" competitor_set="$COMPETITOR_SET" --paths docs/planning-artifacts/market-research.md`
 
 ## Validation

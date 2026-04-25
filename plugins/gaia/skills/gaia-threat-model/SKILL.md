@@ -104,6 +104,9 @@ Delegate to the **security** subagent (Zara) via `agents/security` to extract re
 - Record key decisions in security-sidecar memory.
 - Write the threat model document to `docs/planning-artifacts/threat-model.md` with: assets table, STRIDE analysis per component, DREAD scores, risk levels, mitigation strategies, and security requirements list.
 
+> After artifact write: run open-question detection snippet
+> `!${CLAUDE_PLUGIN_ROOT}/scripts/detect-open-questions.sh docs/planning-artifacts/threat-model.md`
+
 > `!scripts/write-checkpoint.sh gaia-threat-model 7 project_name="$PROJECT_NAME" threat_model_scope=output stride_stage=complete --paths docs/planning-artifacts/threat-model.md`
 
 ## Validation

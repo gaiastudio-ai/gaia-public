@@ -80,6 +80,35 @@ Where `{slug}` is a short kebab-case slug derived from the project vision (e.g.,
 
 > `!scripts/write-checkpoint.sh gaia-brainstorm 5 slug="$SLUG" technique="$TECHNIQUE" --paths docs/creative-artifacts/brainstorm-${SLUG}.md`
 
+### Step 6 — Val Auto-Fix Loop (E44-S2 / ADR-058)
+
+> Reuses the canonical pattern at `gaia-public/plugins/gaia/skills/gaia-val-validate/SKILL.md`
+> § "Auto-Fix Loop Pattern". Do not duplicate the spec here; cite this anchor.
+
+**Guards (run before invocation):**
+
+- Artifact-existence guard (AC-EC3): if not exists `docs/creative-artifacts/brainstorm-{slug}.md` -> skip Val auto-review and exit (no Val invocation, no checkpoint, no iteration log).
+- Val-skill-availability guard (AC-EC6): if `/gaia-val-validate` SKILL.md is not resolvable at runtime -> warn `Val auto-review unavailable: /gaia-val-validate not found`, preserve the artifact, and exit cleanly.
+
+**Loop:**
+
+1. iteration = 1.
+2. Invoke `/gaia-val-validate` with `artifact_path = docs/creative-artifacts/brainstorm-{slug}.md`, `artifact_type = brainstorm`.
+3. If findings is empty: proceed past the loop.
+4. If findings contains only INFO: log informational notes, proceed past the loop.
+5. If findings contains CRITICAL or WARNING:
+     a. Apply a fix to `docs/creative-artifacts/brainstorm-{slug}.md` addressing the findings.
+     b. Append an iteration log record to checkpoint `custom.val_loop_iterations`.
+     c. iteration += 1.
+     d. If iteration <= 3: go to step 2.
+     e. Else: present the iteration-3 prompt verbatim (centralized in `gaia-val-validate` SKILL.md § "Auto-Fix Loop Pattern") and dispatch.
+
+YOLO INVARIANT: the iteration-3 prompt MUST NOT be auto-answered under YOLO. This wire-in does not introduce a YOLO bypass branch. See ADR-057 FR-YOLO-2(e) and ADR-058 for the hard-gate contract.
+
+> Val auto-review per E44-S2 pattern (ADR-058, architecture.md §10.31.2). The `brainstorm` artifact_type may not have a canonical document-ruleset; per E44-S1 AC-EC1 Val skips structural validation for unknown types and still runs factual-claim validation.
+
+> `!scripts/write-checkpoint.sh gaia-brainstorm 6 slug="$SLUG" technique="$TECHNIQUE" stage=val-auto-review --paths docs/creative-artifacts/brainstorm-${SLUG}.md`
+
 ## Validation
 
 <!--

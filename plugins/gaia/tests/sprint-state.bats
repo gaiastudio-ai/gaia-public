@@ -361,6 +361,78 @@ EOF
   [ "$done_count" -eq 3 ] || { echo "expected 3 done entries, got $done_count:"; cat "$ART/sprint-status.yaml"; false; }
 }
 
+# --- Direct unit tests for canonical_states_hint and assert_canonical_state -
+# These tests extract the two new helpers and the prerequisites from the
+# canonical script and execute them in isolation. Avoids sourcing the whole
+# script (which would trigger main "$@" at file end). The function names
+# referenced here also satisfy the NFR-052 textual coverage gate in
+# run-with-coverage.sh.
+
+# Build a minimal harness: write a small bash script that defines die()
+# and CANONICAL_STATES, then sources only the helper definitions extracted
+# from sprint-state.sh by sed range, then runs the requested call.
+_run_helper() {
+  local call="$1"
+  local harness_script
+  harness_script=$(cat <<'OUTER'
+#!/usr/bin/env bash
+set -uo pipefail
+die() { printf 'sprint-state.sh: error: %s\n' "$*" >&2; exit 1; }
+CANONICAL_STATES=(backlog validating ready-for-dev in-progress blocked review done)
+is_canonical_state() {
+  local candidate="$1" s
+  for s in "${CANONICAL_STATES[@]}"; do
+    [ "$s" = "$candidate" ] && return 0
+  done
+  return 1
+}
+OUTER
+)
+  # Append the two helper definitions extracted from the canonical script.
+  # The block runs from the canonical_states_hint definition through the end
+  # of assert_canonical_state. Using sed -n with anchors keeps the test
+  # honest — if either function is renamed or removed, extraction returns
+  # empty and the test fails loudly.
+  local extracted
+  extracted=$(sed -n '/^canonical_states_hint() {/,/^}/p; /^assert_canonical_state() {/,/^}/p' "$SCRIPT")
+  [ -n "$extracted" ] || { echo "extraction failed — helpers not found in $SCRIPT"; return 1; }
+  printf '%s\n%s\n%s\n' "$harness_script" "$extracted" "$call"
+}
+
+@test "sprint-state.sh: canonical_states_hint renders the enum as 'a | b | c | ...'" {
+  local prog
+  prog=$(_run_helper 'canonical_states_hint')
+  run bash -c "$prog"
+  [ "$status" -eq 0 ]                      || { echo "canonical_states_hint exit=$status output=$output"; false; }
+  [[ "$output" == *"backlog"*       ]]     || { echo "missing backlog: $output";       false; }
+  [[ "$output" == *"validating"*    ]]     || { echo "missing validating: $output";    false; }
+  [[ "$output" == *"ready-for-dev"* ]]     || { echo "missing ready-for-dev: $output"; false; }
+  [[ "$output" == *"in-progress"*   ]]     || { echo "missing in-progress: $output";   false; }
+  [[ "$output" == *"review"*        ]]     || { echo "missing review: $output";        false; }
+  [[ "$output" == *"done"*          ]]     || { echo "missing done: $output";          false; }
+  [[ "$output" == *"|"*             ]]     || { echo "missing separator: $output";     false; }
+}
+
+@test "sprint-state.sh: assert_canonical_state accepts every canonical value" {
+  for s in backlog validating ready-for-dev in-progress blocked review done; do
+    local prog
+    prog=$(_run_helper "assert_canonical_state '$s' 'test'")
+    run bash -c "$prog"
+    [ "$status" -eq 0 ] || { echo "assert_canonical_state rejected canonical '$s': $output"; false; }
+  done
+}
+
+@test "sprint-state.sh: assert_canonical_state rejects non-canonical with enum hint" {
+  local prog
+  prog=$(_run_helper "assert_canonical_state PASSED 'test write' 2>&1")
+  run bash -c "$prog"
+  [ "$status" -ne 0 ]                  || { echo "expected die() on PASSED, got 0; output=$output"; false; }
+  [[ "$output" == *"PASSED"*  ]]       || { echo "missing offending value: $output"; false; }
+  [[ "$output" == *"backlog"* ]]       || { echo "missing enum hint: $output";      false; }
+  [[ "$output" == *"done"*    ]]       || { echo "missing enum hint: $output";      false; }
+  [[ "$output" == *"test write"* ]]    || { echo "missing context label: $output";  false; }
+}
+
 # --- Wrapper-sync invariant (E38-S8, AC4 / ADR-055 §10.29.3) -----------------
 
 @test "sprint-state.sh: AC4 wrapper copy is byte-identical to canonical script" {

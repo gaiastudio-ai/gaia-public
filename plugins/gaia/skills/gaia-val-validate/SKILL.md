@@ -99,6 +99,164 @@ The contract is exercised by three VCP test cases:
 
 VCP-VALV-01 and VCP-VAL-03 execute inside the broader VCP test orchestrator, not as standalone bats tests.
 
+## Auto-Fix Loop Pattern
+
+> Canonical, copy-pasteable specification of the 3-iteration Val auto-fix loop that every V2 upstream skill (E44-S3..S6 wire-in: 18 skills total) embeds verbatim. Implements ADR-058 (architecture.md §12) and FR-344 (prd.md §5). Implementing story: **E44-S2**. This section is the single source of truth — consumer SKILL.md files reference it rather than duplicating it.
+
+### State Machine (Canonical)
+
+After an upstream skill writes an artifact to disk, it enters this loop. The loop is orchestrated at LLM runtime — there is no foundation script for the loop body itself; consumer skills follow the prose contract below.
+
+1. `iteration = 1`.
+2. Invoke `/gaia-val-validate` with `artifact_path` and `artifact_type` per the **Upstream Integration Contract** above.
+3. If the `findings` array is **empty** → exit loop, skill proceeds.
+4. If `findings` contain **only INFO** severity entries → log them as informational notes, exit loop, skill proceeds (INFO is informational-only and **does not trigger** auto-fix per ADR-058 §10.31.2 — see AC-EC10).
+5. If `findings` contain **CRITICAL or WARNING** → apply a fix to the artifact addressing those findings, then record an iteration log entry (see *Iteration Log Record Shape* below).
+6. `iteration += 1`.
+7. If `iteration <= 3` → goto step 2.
+8. Else → **HALT**. Present the canonical iteration-3 user prompt (see *Iteration-3 User Prompt* below) and dispatch to the continue / accept-as-is / abort handler.
+
+### Severity Handling
+
+- **CRITICAL** → drives the loop; the upstream skill MUST attempt a fix and re-invoke Val.
+- **WARNING** → drives the loop; same handling as CRITICAL.
+- **INFO** → informational-only; does NOT trigger auto-fix. INFO findings are logged into the iteration record and surfaced to the user but the loop terminates as if findings were empty (AC-EC10).
+
+Only CRITICAL or WARNING entries cause the loop to advance into a fix attempt.
+
+### Iteration-3 User Prompt
+
+When iteration 3 completes and findings still contain CRITICAL or WARNING, the upstream skill MUST present this exact prompt — character-for-character identical across all 18 consumer skills (AC2):
+
+```
+Iteration 3 of Val auto-fix did not converge. Choose: [c] Continue — apply next fix and re-send | [a] Accept as-is — record unresolved findings as open questions | [x] Abort — preserve checkpoint and exit
+```
+
+**Input parsing.** Accept the following inputs case-insensitively:
+
+- `c`, `continue` → Continue handler.
+- `a`, `accept` → Accept-as-is handler.
+- `x`, `abort` → Abort handler.
+
+Any other input (including empty string, whitespace-only, or unmapped keys) MUST cause the prompt to **re-display unchanged**. There is no implicit default and the skill does not proceed on ambiguous input (AC-EC3).
+
+#### Continue handler
+
+The next fix is applied and Val is re-invoked. This invocation is logged as iteration 4 (or 5, 6, ...). The 3-iteration cap **does not re-arm** — instead, every subsequent failed re-validation re-presents the same 3-option prompt. There is **no implicit cap** after the first escape — the user is the only escape hatch from this point on (AC3 post-escape semantics).
+
+#### Accept-as-is handler
+
+The skill writes the unresolved findings into a `## Open Questions` section appended to the end of the artifact. If a `## Open Questions` section already exists the new entries are appended underneath; otherwise the section is created (AC-EC6). Each unresolved finding is recorded with this row template:
+
+```
+- **[{severity}]** {description} — Location: {location}. _Unresolved after 3 Val iterations; accepted by user on {YYYY-MM-DD}._
+```
+
+The acceptance decision is recorded in the checkpoint (`custom.val_loop_iterations[*].user_decision = "accept-as-is"`) so `/gaia-resume` can surface it. The skill then proceeds.
+
+#### Abort handler
+
+The checkpoint is preserved at the current iteration and the skill exits with a non-zero return code. The user is informed that `/gaia-resume` can recover the loop state.
+
+### YOLO Hard-Gate Invariant
+
+The 3-iteration cap and the iteration-3 user prompt are **invariant under YOLO mode** (ADR-058 + ADR-057 FR-YOLO-2(e)). YOLO mode MUST NOT auto-answer the prompt and there MUST NOT be a code branch that skips the prompt under YOLO (AC6).
+
+If the runtime attempts to **bypass** the prompt under YOLO (e.g., by auto-selecting `accept`), the loop MUST log a hard-gate violation record into the iteration log and HALT regardless of upstream caller state (AC-EC7). Bypass-attempt records carry `event_type = "yolo_hard_gate_violation"` and include the bypass attempt's iteration number, the attempted answer, and a stack trace excerpt where available.
+
+### Iteration Log Record Shape
+
+Every iteration produces one log record. Records are routed into the ADR-059 checkpoint `custom:` namespace under the reserved key `val_loop_iterations` (an array, append-only per iteration). The shape per record:
+
+| Field | Type | Description |
+|---|---|---|
+| `iteration_number` | int | 1-indexed iteration counter. Iterations after a user "continue" escape are 4, 5, 6, ... and remain distinguishable by this field (AC4). |
+| `timestamp` | string (ISO 8601) | When the record was written. |
+| `findings` | array | The full Val response `findings` array for this iteration. Severity-classified per the Upstream Integration Contract. |
+| `fix_diff_summary` | string | Unified-diff excerpt or patch hash describing the fix applied at the end of this iteration. Empty string for iterations that did not apply a fix (clean / INFO-only). |
+| `revalidation_outcome` | enum | One of `clean`, `info_only`, `findings_present`, `val_invocation_failed`. |
+| `tokens_consumed` | int \| null | Per-iteration token count (input context + Val response + fix generation). `null` if the runtime token-counting primitive is unavailable (AC-EC8). |
+| `user_decision` | enum \| null | Set only on iteration 3+ records when the prompt was shown: `continue`, `accept-as-is`, `abort`. `null` otherwise. |
+| `event_type` | enum \| null | Set to `yolo_hard_gate_violation` on bypass-attempt records; `null` otherwise. |
+
+The iteration log is **distinguishable by iteration number** so each iteration's findings list and fix diff are independently inspectable (AC4). Live-debugging logs may also be written to stderr, but the **checkpoint is authoritative** for `/gaia-resume`.
+
+### Thrash Detection
+
+A "thrash iteration" is one where `sha256(artifact_bytes_after_fix) == sha256(artifact_bytes_before_fix)` AND the `findings` set is byte-identical to the previous iteration's findings (no convergence, no divergence — the fix was a no-op).
+
+When thrash is detected:
+
+- Emit a `"thrash"` warning into the iteration log tagged with the iteration number (AC-EC4).
+- **Still increments the iteration counter** and proceeds to the next iteration. Thrashes are logged but do NOT short-circuit the 3-cap — short-circuiting would prematurely trigger the user prompt and could mask real progress on a subsequent iteration.
+
+### Token Budget (NFR-VCP-2)
+
+The pattern targets the following token-budget envelope, verified by VCP-FIX-08:
+
+- **Per-iteration cost ≤ 2x** the single-pass `/gaia-val-validate` baseline (one call to Val on a representative 5–10 KB artifact, no fix generation).
+- **3-iteration total cost ≤ 6x** baseline.
+
+Token consumption is measured per iteration via the LLM runtime's token-count return value and persisted in `tokens_consumed`. If the runtime token-counting primitive is **unavailable** at runtime, the loop proceeds normally and a single one-line "measurement unavailable" note is logged into the iteration record (AC-EC8). NFR-VCP-2 verification then falls back to off-line sampling.
+
+### Error Handling Outside the Cap
+
+The 3-iteration cap counts only **completed** Val invocations. The following do NOT count against the cap and instead halt with a clear error preserving the checkpoint:
+
+- **Val invocation failure** (timeout, subagent crash, model unavailable) — log `revalidation_outcome = val_invocation_failed`, halt, surface the error to the user. No silent retry-as-success (AC-EC2).
+- **Artifact path missing at Val invocation time** (file removed between write and validate) — halt before invoking Val with `artifact not found: {path}`. Do not create a phantom iteration 1 (AC-EC9).
+
+### Concurrency
+
+Each upstream skill invocation has its own iteration counter and its own checkpoint path. There is **no shared mutable loop state** across skill invocations. Two skills validating the same artifact concurrently produce two independent iteration logs distinguishable by checkpoint path and timestamp (AC-EC5).
+
+### Consumer-Skill Snippet (Copy-Pasteable)
+
+E44-S3..S6 wire this snippet into 18 upstream skills. Embed it as a numbered sub-step sequence immediately after the artifact-write step. Replace the `{ARTIFACT_PATH}` and `{ARTIFACT_TYPE}` placeholders with the upstream skill's values.
+
+```text
+### Step N+1 — Val Auto-Fix Loop (E44-S2 / ADR-058)
+
+> Reuses the canonical pattern at gaia-public/plugins/gaia/skills/gaia-val-validate/SKILL.md
+> § "Auto-Fix Loop Pattern". Do not duplicate the spec here; cite this anchor.
+
+1. iteration = 1.
+2. Invoke /gaia-val-validate with artifact_path={ARTIFACT_PATH}, artifact_type={ARTIFACT_TYPE}.
+3. If findings is empty: proceed past the loop.
+4. If findings contains only INFO: log informational notes, proceed past the loop.
+5. If findings contains CRITICAL or WARNING:
+     a. Apply a fix to {ARTIFACT_PATH} addressing the findings.
+     b. Append an iteration log record to checkpoint custom.val_loop_iterations.
+     c. iteration += 1.
+     d. If iteration <= 3: go to step 2.
+     e. Else: present the iteration-3 prompt verbatim (below) and dispatch.
+
+### Iteration-3 prompt (verbatim — identical across all 18 consumer skills)
+
+   Iteration 3 of Val auto-fix did not converge. Choose: [c] Continue — apply
+   next fix and re-send | [a] Accept as-is — record unresolved findings as open
+   questions | [x] Abort — preserve checkpoint and exit
+
+Accept c/continue, a/accept, x/abort case-insensitively. Reject anything else
+by re-displaying the prompt. Continue → iteration += 1, go to step 2 (no
+implicit cap — user is the escape hatch). Accept-as-is → append unresolved
+findings under ## Open Questions, record decision in checkpoint, proceed.
+Abort → preserve checkpoint, exit non-zero, inform user about /gaia-resume.
+
+YOLO INVARIANT: the iteration-3 prompt MUST NOT be auto-answered under YOLO.
+Bypass attempts log a yolo_hard_gate_violation record and HALT.
+```
+
+### Cross-References
+
+- **ADR-058** (architecture.md §12) — Val Auto-Fix Loop Contract for V2 Skills (decision, alternatives, consequences, ADR-017 supersession, relationship to ADR-057 FR-YOLO-2(e)).
+- **ADR-057** (architecture.md §12) — YOLO mode contract; FR-YOLO-2(e) hard-gate invariant.
+- **ADR-059** (architecture.md §12) — Checkpoint schema; reserves `custom.val_loop_iterations` for this pattern.
+- **FR-344** (prd.md §5) — Val auto-fix loop functional requirement.
+- **FR-357** (prd.md §5) — `/gaia-val-validate` upstream integration & auto-fix loop.
+- **NFR-VCP-2** (prd.md §5) — Token budget (per-iteration ≤ 2x, 3-iteration total ≤ 6x baseline).
+- **ADR-017** — Superseded by ADR-058. The deprecated `val_validate_output: true` flag is a no-op under this pattern.
+
 ## Critical Rules
 
 - Val is READ-ONLY on the target artifact -- never modify the artifact content itself, only append findings

@@ -3,6 +3,13 @@ name: gaia-create-arch
 description: Design system architecture through collaborative discovery with the architect subagent (Theo) — Cluster 6 architecture skill. Use when the user wants to produce a validated architecture document from an existing PRD, covering technology selection, system components, data architecture, API design, infrastructure, security architecture, and architecture decision records.
 context: fork
 allowed-tools: [Read, Write, Edit, Grep, Glob, Bash, Agent]
+# Discover-Inputs Protocol (ADR-062 / FR-346 / E45-S4)
+# Strategy: INDEX_GUIDED — the PRD is typically 20K+ tokens. Load the PRD
+# index (heading scan or §N.x table of contents) first; fetch named
+# sections on demand in later steps. Falls back to FULL_LOAD when the PRD
+# lacks parseable headings.
+discover_inputs: INDEX_GUIDED
+discover_inputs_target: docs/planning-artifacts/prd.md
 ---
 
 ## Setup
@@ -34,11 +41,19 @@ This skill is the native Claude Code conversion of the legacy `_gaia/lifecycle/w
 
 ### Step 1 — Load Upstream Artifacts
 
-- Read `docs/planning-artifacts/prd.md` — extract requirements (functional and non-functional).
+> **Loading strategy: INDEX_GUIDED per ADR-062.** The PRD is routinely
+> 20K+ tokens — full-loading it here burns the context budget before
+> architecture authoring even begins. Heading-scan `prd.md` first (e.g.,
+> `grep -nE '^#{1,3} ' docs/planning-artifacts/prd.md`) to build a section
+> index. Fetch §N.x bodies on demand in later steps (`sed -n` between
+> heading anchors). If the PRD has no parseable headings, fall back to
+> FULL_LOAD and log the fallback in the checkpoint.
+
+- Heading-scan `docs/planning-artifacts/prd.md` to build a section index of requirements (functional and non-functional). Do NOT read the full body up front.
 - GATE: verify prd.md contains a "## Review Findings Incorporated" section. If missing, HALT — run /gaia-create-prd first to complete adversarial review and PRD refinement.
-- Read `docs/planning-artifacts/ux-design.md` if available — extract UI requirements.
-- Check for brownfield artifacts: `docs/planning-artifacts/brownfield-assessment.md` and `docs/planning-artifacts/project-documentation.md`. If either exists, load them — these contain existing codebase analysis that must inform architecture decisions even if the PRD is not in brownfield mode.
-- Check for `docs/planning-artifacts/threat-model.md`. If it exists, load it — identified threats and mitigations must inform the security architecture in Step 7.
+- Heading-scan `docs/planning-artifacts/ux-design.md` if available — record section anchors for UI requirements.
+- Check for brownfield artifacts: `docs/planning-artifacts/brownfield-assessment.md` and `docs/planning-artifacts/project-documentation.md`. If either exists, heading-scan them — these contain existing codebase analysis that must inform architecture decisions even if the PRD is not in brownfield mode.
+- Check for `docs/planning-artifacts/threat-model.md`. If it exists, heading-scan it — identified threats and mitigations must inform the security architecture in Step 7. Section bodies are loaded on demand by later steps.
 
 > `!scripts/write-checkpoint.sh gaia-create-arch 1 project_name="$PROJECT_NAME" arch_version="$ARCH_VERSION"`
 

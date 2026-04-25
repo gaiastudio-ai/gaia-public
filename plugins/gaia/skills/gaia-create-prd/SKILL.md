@@ -4,6 +4,12 @@ description: Create a Product Requirements Document through collaborative discov
 argument-hint: "[product-brief-path]"
 context: fork
 allowed-tools: [Read, Write, Edit, Grep, Glob, Bash, Agent]
+# Discover-Inputs Protocol (ADR-062 / FR-346 / E45-S4)
+# Strategy: INDEX_GUIDED — load product brief + research artifact indexes
+# (TOC, heading scan) first; fetch named sections on demand in later steps.
+# Falls back to FULL_LOAD when an upstream artifact lacks parseable headings.
+discover_inputs: INDEX_GUIDED
+discover_inputs_target: "docs/creative-artifacts/product-brief.md, docs/creative-artifacts/market-research.md, docs/creative-artifacts/domain-research.md, docs/creative-artifacts/tech-research.md"
 ---
 
 ## Setup
@@ -35,10 +41,18 @@ This skill is the native Claude Code conversion of the legacy `_gaia/lifecycle/w
 
 ### Step 1 — Load Product Brief
 
+> **Loading strategy: INDEX_GUIDED per ADR-062.** The product brief plus the
+> three research artifacts can total 30K+ tokens combined. Load each
+> artifact's index first (heading scan via `grep -nE '^#{1,3} '`) — do NOT
+> read full bodies up front. Fetch named sections on demand in later steps
+> (e.g., extract `## Vision Statement` only when Step 4 requires it). If an
+> artifact has no parseable headings, fall back to FULL_LOAD for that file
+> only.
+
 - Validate that `[product-brief-path]` argument was provided. If missing, fail fast: "product-brief-path required — provide the path to the product brief file."
-- Read the product brief at the supplied path.
-- Extract: vision, target users, problem statement, proposed solution.
-- Extract: scope and boundaries, risks and assumptions, competitive landscape, success metrics.
+- Heading-scan the product brief at the supplied path (build a section index).
+- Heading-scan available research artifacts (`docs/creative-artifacts/market-research*.md`, `domain-research*.md`, `tech-research*.md`) — index-only, not full bodies.
+- Extract section anchors (not contents) for: vision, target users, problem statement, proposed solution, scope and boundaries, risks and assumptions, competitive landscape, success metrics. Section bodies are loaded on demand by later steps.
 - If `docs/planning-artifacts/prd.md` already exists: warn "An existing PRD was found at docs/planning-artifacts/prd.md. Continuing will overwrite it. Confirm with user before proceeding."
 
 > `!scripts/write-checkpoint.sh gaia-create-prd 1 project_name="$PROJECT_NAME" prd_version="$PRD_VERSION" feature_slug="$FEATURE_SLUG"`

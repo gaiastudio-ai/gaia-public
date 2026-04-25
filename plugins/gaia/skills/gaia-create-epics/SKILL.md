@@ -3,6 +3,14 @@ name: gaia-create-epics
 description: Break requirements into epics and user stories through collaborative discovery with the architect (Theo) and pm (Derek) subagents — Cluster 6 architecture skill. Use when the user wants to decompose a PRD and architecture into implementation-ready epics and stories with dependency topology, risk levels from the test plan, and priority ordering.
 context: fork
 allowed-tools: [Read, Write, Edit, Grep, Glob, Bash, Agent]
+# Discover-Inputs Protocol (ADR-062 / FR-346 / E45-S4)
+# Strategy: INDEX_GUIDED — three large upstream artifacts (PRD,
+# architecture, test plan) routinely total 50K+ tokens. Load each
+# artifact's index (heading scan) first; fetch named sections on demand in
+# later steps. Falls back to FULL_LOAD when an artifact lacks parseable
+# headings.
+discover_inputs: INDEX_GUIDED
+discover_inputs_target: "docs/planning-artifacts/prd.md, docs/planning-artifacts/architecture.md, docs/test-artifacts/test-plan.md"
 ---
 
 ## Setup
@@ -37,12 +45,19 @@ This skill is the native Claude Code conversion of the legacy `_gaia/lifecycle/w
 
 ### Step 1 — Load Upstream Artifacts
 
-- Read `docs/planning-artifacts/prd.md` — extract functional requirements.
+> **Loading strategy: INDEX_GUIDED per ADR-062.** Three large upstream
+> artifacts (PRD, architecture, test plan) routinely total 50K+ tokens.
+> Heading-scan each artifact first to build a section index — do NOT read
+> the full bodies up front. Fetch named sections on demand in later steps
+> (`sed -n` between heading anchors). If any artifact lacks parseable
+> headings, fall back to FULL_LOAD for that file only.
+
+- Heading-scan `docs/planning-artifacts/prd.md` to build a section index of functional requirements.
 - GATE: verify prd.md exists. If missing, HALT — run /gaia-create-prd first.
-- Read `docs/planning-artifacts/architecture.md` — extract technical components.
+- Heading-scan `docs/planning-artifacts/architecture.md` to build a section index of technical components.
 - GATE: verify architecture.md contains a "## Review Findings Incorporated" section. If missing, HALT — run /gaia-create-arch first to complete adversarial review and architecture refinement.
-- Read `docs/test-artifacts/test-plan.md` — extract risk assessment (high-risk areas: revenue-critical, security-sensitive, complex logic). This file was already validated by `scripts/setup.sh` via the enforced quality gate.
-- Read `docs/planning-artifacts/ux-design.md` if available — extract UI flows, component hierarchy, interaction patterns, and accessibility requirements. Set `has_ux_design` flag.
+- Heading-scan `docs/test-artifacts/test-plan.md` for the risk-assessment section index (high-risk areas: revenue-critical, security-sensitive, complex logic). This file was already validated by `scripts/setup.sh` via the enforced quality gate. Section bodies are loaded on demand.
+- Heading-scan `docs/planning-artifacts/ux-design.md` if available for UI-flow / component-hierarchy / interaction-pattern / accessibility section anchors. Set `has_ux_design` flag.
 
 > `!scripts/write-checkpoint.sh gaia-create-epics 1 project_name="$PROJECT_NAME" prd_version="$PRD_VERSION" architecture_version="$ARCHITECTURE_VERSION"`
 

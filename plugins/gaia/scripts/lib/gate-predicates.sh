@@ -111,14 +111,28 @@ _gate_extract_block() {
 }
 
 # _gate_check_file_exists <glob>
-# Return 0 if the glob matches >= 1 path under the current PWD.
-# The glob is expanded by bash, not by find — keeps the behaviour
-# obvious (relative to PWD) and avoids spawning find for a hot-path
-# predicate.
+# Return 0 if the glob matches >= 1 path. Relative globs are anchored to
+# $PROJECT_ROOT when set (set by setup.sh after resolve-config.sh runs);
+# otherwise to the current PWD. The glob is expanded by bash, not by
+# find, to keep the hot path lightweight.
 _gate_check_file_exists() {
-  local glob="$1" f
-  # Disable nullglob temporarily so the un-expanded literal does not
-  # leak through if no match exists.
+  local glob="$1" f base
+  # Anchor relative globs to PROJECT_ROOT when set so audit/e2e
+  # harnesses that don't cd into the project root still resolve
+  # correctly. Absolute globs are left alone.
+  # Resolve project root from the conventions used across GAIA:
+  #   1. project_root (lowercase, exported by resolve-config.sh)
+  #   2. PROJECT_ROOT (uppercase, set by e2e harnesses)
+  #   3. CLAUDE_PROJECT_ROOT (Claude Code plugin harness convention)
+  case "$glob" in
+    /*) ;;  # absolute — use as-is
+    *)
+      base="${project_root:-${PROJECT_ROOT:-${CLAUDE_PROJECT_ROOT:-}}}"
+      if [ -n "$base" ] && [ -d "$base" ]; then
+        glob="$base/$glob"
+      fi
+      ;;
+  esac
   set +o noglob 2>/dev/null || true
   for f in $glob; do
     if [ -e "$f" ]; then return 0; fi

@@ -134,6 +134,11 @@ is_allowlisted() {
   # retired `_gaia/_config/` pattern as literals — they ARE the pattern the
   # test enforces zero-of, so the filename mentions are contractual.
   [[ "$path" == */plugins/gaia/tests/knowledge-paths-guard.bats ]] && return 0
+  # E45-S1 — static-next-steps.bats is the parity guard for ADR-060 / FR-348.
+  # VCP-NXT-11 asserts zero `lifecycle-sequence.yaml` references across the 10
+  # target SKILL.md files; the literal token appears in assertions and prose
+  # comments because it IS the pattern the test enforces zero-of.
+  [[ "$path" == */plugins/gaia/tests/static-next-steps.bats ]] && return 0
   # The Cluster 19 parity guard ASSERTS zero engine loads — preserve verbatim.
   [[ "$path" == */plugins/gaia/test/e28-s133-full-lifecycle-atdd.bats ]] && return 0
   # Comment-only references in foundation scripts (see plan v4 Modified-files table).

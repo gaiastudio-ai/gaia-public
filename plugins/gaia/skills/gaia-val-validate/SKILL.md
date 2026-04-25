@@ -182,6 +182,77 @@ Every iteration produces one log record. Records are routed into the ADR-059 che
 
 The iteration log is **distinguishable by iteration number** so each iteration's findings list and fix diff are independently inspectable (AC4). Live-debugging logs may also be written to stderr, but the **checkpoint is authoritative** for `/gaia-resume`.
 
+### Iteration Log Format
+
+> **Implementing story:** E44-S8 (observability + logging contract). E44-S2 owns the loop body; E44-S8 owns the per-iteration record-shape contract, the JSON example below, the post-escape flag semantics, and VCP-FIX-07 (the thrash-observability LLM-checkable test that witnesses this format).
+
+The iteration log is the structured, per-iteration record stream emitted by the auto-fix loop. Audit, debug, and resume consumers read this log to reconstruct what each iteration saw, fixed, and produced — without re-running the loop or scraping free-text logs.
+
+**Storage location.** The log lives in the ADR-059 checkpoint `custom:` namespace under the reserved key `val_loop_iterations` (an array of records, append-only per iteration). Each consumer skill writes its own checkpoint under `_memory/checkpoints/{skill-name}/{timestamp}-step-{N}.json`; the array is namespaced inside that file's `custom` block. There is **no parallel log file** — the checkpoint is the single source of truth.
+
+**Append-only invariant.** Each iteration appends one record. Records are **immutable once written** — subsequent iterations append a new record, never mutate prior records. This preserves audit integrity and lets thrash detection compare iteration N to iteration N-1 deterministically.
+
+**Programmatic parsing.** Consumers (`/gaia-resume`, debug scripts, audit tooling) parse the array with a standard JSON reader — the field names and enum values above are the contract. No regex scraping is required (AC2).
+
+**Post-escape iterations (Task 2.3).** When the user selects `continue` at the iteration-3 prompt (AC3 of E44-S2), the loop re-enters with monotonic iteration numbers 4, 5, 6, … Each post-escape record carries `post_escape: true` so an audit can distinguish a 5-iteration run that respected the cap-then-continue contract from a hypothetical bug that ignored the cap. Records 1–3 either omit the field or set it to `false` (the absence is treated as `false` by parsers).
+
+**Concrete example — 3-iteration thrash (VCP-FIX-07 witness).**
+
+```json
+{
+  "custom": {
+    "val_loop_iterations": [
+      {
+        "iteration_number": 1,
+        "timestamp": "2026-04-25T14:02:11Z",
+        "findings": [
+          {"severity": "CRITICAL", "description": "referenced file not found: docs/missing.md", "location": "prd.md:42"}
+        ],
+        "fix_diff_summary": "patched prd.md:42 → corrected path to docs/planning-artifacts/prd.md",
+        "revalidation_outcome": "findings_present",
+        "tokens_consumed": 4820,
+        "user_decision": null,
+        "event_type": null
+      },
+      {
+        "iteration_number": 2,
+        "timestamp": "2026-04-25T14:02:38Z",
+        "findings": [
+          {"severity": "CRITICAL", "description": "referenced file not found: docs/missing.md", "location": "prd.md:42"}
+        ],
+        "fix_diff_summary": "no-op (byte-identical fix; thrash detected vs iteration 1)",
+        "revalidation_outcome": "findings_present",
+        "tokens_consumed": 4790,
+        "user_decision": null,
+        "event_type": null
+      },
+      {
+        "iteration_number": 3,
+        "timestamp": "2026-04-25T14:03:04Z",
+        "findings": [
+          {"severity": "CRITICAL", "description": "referenced file not found: docs/missing.md", "location": "prd.md:42"}
+        ],
+        "fix_diff_summary": "no-op (byte-identical fix; thrash detected vs iteration 2)",
+        "revalidation_outcome": "findings_present",
+        "tokens_consumed": 4815,
+        "user_decision": null,
+        "event_type": null
+      }
+    ]
+  }
+}
+```
+
+A post-escape iteration 4 record (after the user chooses `continue` at the iteration-3 prompt) would carry `"post_escape": true` alongside the canonical fields above.
+
+**Cross-references for auditors.**
+
+- **ADR-058** (architecture.md §10.31.2 / §12) — Val Auto-Fix Loop Contract; observability requirement (point 4 of the ADR).
+- **ADR-059** (architecture.md §10.31.3 / §12) — Checkpoint schema and write infrastructure; reserves the `custom:` namespace and the `val_loop_iterations` key.
+- **FR-344** (prd.md §5) — Val auto-fix loop functional requirement; per-iteration logging clause.
+- **VCP-FIX-07** (test-plan.md §11.46.4) — Thrash-detection observability LLM-checkable test that witnesses this format.
+- **`/gaia-resume`** is the primary consumer: it reads `custom.val_loop_iterations` from the latest checkpoint to restore prior iteration state across sessions (AC4). Post-hoc debug scripts are the secondary consumer.
+
 ### Thrash Detection
 
 A "thrash iteration" is one where `sha256(artifact_bytes_after_fix) == sha256(artifact_bytes_before_fix)` AND the `findings` set is byte-identical to the previous iteration's findings (no convergence, no divergence — the fix was a no-op).

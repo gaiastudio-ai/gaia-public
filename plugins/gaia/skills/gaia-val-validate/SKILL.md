@@ -86,6 +86,7 @@ The 3-iteration auto-fix loop in ADR-058 §10.31.2 calls Val multiple times agai
 - Val MUST NOT cache findings from prior invocations for the same `artifact_path`. Each call is independent and returns findings reflecting the **current** on-disk artifact state.
 - Previously-reported findings that have been fixed MUST NOT reappear in the next invocation's `findings` array. Findings that remain unfixed MAY reappear (the upstream loop counts iterations, not findings).
 - Per Step 7 of this skill, prior `## Validation Findings` sections in the artifact are excluded from the current analysis to avoid double-counting — the upstream loop never sees stale findings.
+- `/gaia-val-validate` does NOT self-invoke (E44-S6 Task 4.3): the skill is upstream-triggered only and never wraps its own output in the auto-fix loop. The 3-iteration loop is owned and counted by the upstream caller (E44-S3 / E44-S4 / E44-S5 / E44-S6 wire-ins). Introducing a self-invocation branch would cause double-counted iterations and unbounded recursion.
 
 Cross-reference: ADR-058 §10.31.2 (loop protocol) for how the 3-iteration counter, escalation behavior, and INFO-level handling interact with this contract.
 

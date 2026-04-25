@@ -30,7 +30,7 @@ This skill is the native Claude Code conversion of the legacy `_gaia/testing/wor
 - Test planning is delegated to the test-architect subagent (Sable) via native Claude Code subagent invocation -- do NOT inline Sable's persona into this skill body. If the test-architect subagent is not available or not registered, halt with: "test-architect subagent not available -- ensure E28-S21 agents are installed."
 - Template resolution: load `test-plan-template.md` from this skill directory. If `custom/templates/test-plan-template.md` exists and is non-empty, use the custom template instead -- the custom template takes full precedence over the bundled default (ADR-020 / FR-101).
 - Output ALL artifacts to `docs/test-artifacts/`.
-- The legacy `val_validate_output: true` flag is preserved -- the output test plan should be validated when Val integration is active.
+- Val auto-review runs unconditionally via the direct-call contract from E44-S1 -- the deprecated frontmatter flag is superseded by the Step 8 auto-fix loop wired in by E44-S6 (see Step 8 below; ADR-058 / architecture.md §10.31.2).
 
 ## Steps
 
@@ -120,14 +120,45 @@ Delegate to the **test-architect** subagent (Sable) via `agents/test-architect` 
 
 > `!scripts/write-checkpoint.sh gaia-test-design 7 story_key="$STORY_KEY" test_plan_path="docs/test-artifacts/test-plan.md" stage=output-generated --paths docs/test-artifacts/test-plan.md`
 
-### Step 8 -- Optional: Scaffold Test Framework
+### Step 8 -- Val Auto-Fix Loop (E44-S2 / ADR-058)
+
+> Reuses the canonical pattern at `gaia-public/plugins/gaia/skills/gaia-val-validate/SKILL.md`
+> § "Auto-Fix Loop Pattern". Do not duplicate the spec here; cite this anchor.
+
+**Guards (run before invocation):**
+
+- Artifact-existence guard (AC-EC3): if not exists `docs/test-artifacts/test-plan.md` -> skip Val auto-review and exit (no Val invocation, no checkpoint, no iteration log).
+- Val-skill-availability guard (AC-EC6): if `/gaia-val-validate` SKILL.md is not resolvable at runtime -> warn `Val auto-review unavailable: /gaia-val-validate not found`, preserve the artifact, and exit cleanly.
+
+**Loop:**
+
+1. iteration = 1.
+2. Invoke `/gaia-val-validate` with `artifact_path = docs/test-artifacts/test-plan.md`, `artifact_type = test-plan`.
+3. If findings is empty: proceed past the loop.
+4. If findings contains only INFO: log informational notes, proceed past the loop.
+5. If findings contains CRITICAL or WARNING:
+     a. Apply a fix to `docs/test-artifacts/test-plan.md` addressing the findings.
+     b. Append an iteration log record to checkpoint `custom.val_loop_iterations`.
+     c. iteration += 1.
+     d. If iteration <= 3: go to step 2.
+     e. Else: present the iteration-3 prompt verbatim (centralized in `gaia-val-validate` SKILL.md § "Auto-Fix Loop Pattern") and dispatch.
+
+YOLO INVARIANT: the iteration-3 prompt MUST NOT be auto-answered under YOLO. This wire-in does not introduce a YOLO bypass branch. See ADR-057 FR-YOLO-2(e) and ADR-058 for the hard-gate contract.
+
+> Val auto-review per E44-S2 pattern (ADR-058, architecture.md §10.31.2). Validation runs against the Step 7 artifact write.
+
+> Test Notes: VCP-VAL-04 (`docs/test-artifacts/test-plan.md §11.46.3`) covers this wire-in.
+
+> `!scripts/write-checkpoint.sh gaia-test-design 8 story_key="$STORY_KEY" test_plan_path="docs/test-artifacts/test-plan.md" stage=val-auto-review --paths docs/test-artifacts/test-plan.md`
+
+### Step 9 -- Optional: Scaffold Test Framework
 
 - Check if the project already has a test framework configured (look for jest.config, vitest.config, playwright.config, pytest.ini, build.gradle test blocks, etc.).
 - If no test framework is detected: suggest running `/gaia-test-framework` to scaffold the test framework with appropriate tooling, folder structure, fixture patterns, and a sample test.
 - If a test framework already exists: skip this step -- the framework is already configured.
 - This step is informational only -- the actual scaffolding is handled by the separate `/gaia-test-framework` skill.
 
-> `!scripts/write-checkpoint.sh gaia-test-design 8 story_key="$STORY_KEY" test_plan_path="docs/test-artifacts/test-plan.md" stage=scaffold-suggestion`
+> `!scripts/write-checkpoint.sh gaia-test-design 9 story_key="$STORY_KEY" test_plan_path="docs/test-artifacts/test-plan.md" stage=scaffold-suggestion`
 
 ## Validation
 

@@ -68,7 +68,7 @@ EOF
 # ----------------------------------
 # Print the YAML frontmatter (everything between the first two '---' lines)
 # to stdout. Empty if no frontmatter.
-extract_frontmatter() {
+_extract_frontmatter() {
     local f="$1"
     awk '
         BEGIN { in_fm = 0; seen = 0 }
@@ -85,7 +85,7 @@ extract_frontmatter() {
 # Print the comma-separated list of step numbers declared in `yolo_steps:`,
 # or empty string if the key is absent or the array is empty.
 # Supports inline form: `yolo_steps: [1, 3, 5]` or `yolo_steps: []`.
-extract_yolo_steps() {
+_extract_yolo_steps() {
     local fm="$1"
     printf '%s\n' "$fm" | awk '
         /^yolo_steps:[[:space:]]*\[/ {
@@ -104,7 +104,7 @@ extract_yolo_steps() {
 # Print the highest step number declared in the SKILL.md body. Recognizes
 # headings of the form `## Step N:` or `### Step N:` (case-insensitive on
 # "Step"). Returns 0 if no step headings found.
-count_steps() {
+_count_steps() {
     local f="$1"
     awk '
         BEGIN { max = 0 }
@@ -126,7 +126,7 @@ count_steps() {
 # Print the block of text from "## Step N:" (or "### Step N:") through to
 # the next "## Step" (or "### Step") heading or EOF. Empty if step not
 # found.
-extract_step_block() {
+_extract_step_block() {
     local f="$1" n="$2"
     awk -v want="$n" '
         BEGIN { capture = 0 }
@@ -148,7 +148,7 @@ extract_step_block() {
 # -------------------------------------
 # Return 0 if the frontmatter declares `quality_gates.pre_start` (any
 # non-empty form), else 1.
-has_pre_start_gate() {
+_has_pre_start_gate() {
     local fm="$1"
     printf '%s\n' "$fm" | awk '
         /^quality_gates:/ { in_qg = 1; next }
@@ -163,7 +163,7 @@ has_pre_start_gate() {
 # Echo a hard-gate category code (b|c|d|e|f) and return 0 if the step block
 # matches a hard gate; return 1 otherwise. (Category 'a' is handled at the
 # frontmatter level via has_pre_start_gate against step number 1.)
-classify_step_hard_gate() {
+_classify_step_hard_gate() {
     local block="$1"
     local lower
     lower=$(printf '%s' "$block" | tr '[:upper:]' '[:lower:]')
@@ -206,21 +206,21 @@ classify_step_hard_gate() {
 # --------------------------
 # Lint a single SKILL.md and print FAIL / WARN lines. Returns 0 if no
 # hard-gate violations; non-zero otherwise. Warnings do NOT affect exit.
-lint_skill() {
+_lint_skill() {
     local f="$1"
     local skill_id
     skill_id=$(basename "$(dirname "$f")")
 
     local fm steps_csv max_step block code
-    fm=$(extract_frontmatter "$f")
-    steps_csv=$(extract_yolo_steps "$fm")
+    fm=$(_extract_frontmatter "$f")
+    steps_csv=$(_extract_yolo_steps "$fm")
 
     # Empty/missing yolo_steps -> silent no-op (ECI-498).
     if [ -z "$steps_csv" ]; then
         return 0
     fi
 
-    max_step=$(count_steps "$f")
+    max_step=$(_count_steps "$f")
     local violations=0
 
     local IFS=','
@@ -243,19 +243,19 @@ lint_skill() {
         # Category (a) — declared at frontmatter level. If yolo_steps lists
         # step 1 AND the skill declares quality_gates.pre_start, this is a
         # pre-start-gate hard-gate violation regardless of step body text.
-        if [ "$s" -eq 1 ] && has_pre_start_gate "$fm"; then
+        if [ "$s" -eq 1 ] && _has_pre_start_gate "$fm"; then
             echo "FAIL  $skill_id  yolo_steps step 1 covers HARD-GATE category (a) pre-start quality gate"
             violations=$((violations + 1))
             continue
         fi
 
         # Categories (b..f) — inspect the step block.
-        block=$(extract_step_block "$f" "$s")
+        block=$(_extract_step_block "$f" "$s")
         if [ -z "$block" ]; then
             continue
         fi
 
-        if code=$(classify_step_hard_gate "$block"); then
+        if code=$(_classify_step_hard_gate "$block"); then
             echo "FAIL  $skill_id  yolo_steps step $s covers HARD-GATE category ($code)"
             violations=$((violations + 1))
         fi
@@ -280,7 +280,7 @@ lint_yolo_steps() {
 
     local f
     while IFS= read -r f; do
-        lint_skill "$f"
+        _lint_skill "$f"
         total_fail=$((total_fail + $?))
     done < <(find "$root" -name 'SKILL.md' -type f 2>/dev/null | sort)
 

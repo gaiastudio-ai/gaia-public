@@ -166,3 +166,7 @@ Delegate to the **devops** subagent (Soren) via `agents/devops` to define observ
 ## Finalize
 
 !${CLAUDE_PLUGIN_ROOT}/skills/gaia-infra-design/scripts/finalize.sh
+
+## Next Steps
+
+- **Primary:** `/gaia-trace` — regenerate the requirements-to-tests traceability matrix once infra is designed.

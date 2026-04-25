@@ -136,5 +136,5 @@ Write a structured domain research report to `docs/planning-artifacts/domain-res
 
 ## Next Steps
 
-- Primary: `/gaia-tech-research` — evaluate technology options for the project.
-- Alternative: `/gaia-product-brief` — if all research is complete.
+- **Primary:** `/gaia-product-brief` — consolidate domain findings into a structured product brief.
+- **Alternative:** `/gaia-tech-research` — when technology trade-offs still need evaluation before the brief.

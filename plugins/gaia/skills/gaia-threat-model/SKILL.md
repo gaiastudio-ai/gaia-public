@@ -184,3 +184,7 @@ Delegate to the **security** subagent (Zara) via `agents/security` to extract re
 ## Finalize
 
 !${CLAUDE_PLUGIN_ROOT}/skills/gaia-threat-model/scripts/finalize.sh
+
+## Next Steps
+
+- **Primary:** `/gaia-infra-design` — design the infrastructure topology and IaC with the threat model in scope.

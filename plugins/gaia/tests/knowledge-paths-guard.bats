@@ -210,8 +210,16 @@ teardown() { common_teardown; }
   [ "$status" -eq 0 ]
 }
 
-@test "S196 AC9a: brainstorm SKILL.md resolves lifecycle-sequence.yaml via \${CLAUDE_PLUGIN_ROOT}/knowledge/" {
-  run grep -q 'CLAUDE_PLUGIN_ROOT.*knowledge/lifecycle-sequence\.yaml' "$SKILLS_DIR/gaia-brainstorm/SKILL.md"
+@test "S196 AC9a (superseded by ADR-060/E45-S1): brainstorm SKILL.md no longer references lifecycle-sequence.yaml" {
+  # E28-S196 originally required gaia-brainstorm to resolve lifecycle-sequence.yaml
+  # via ${CLAUDE_PLUGIN_ROOT}/knowledge/. ADR-060 / FR-348 (E45-S1) supersedes this:
+  # the 10 lifecycle skills now ship a static `## Next Steps` H2 section instead of
+  # any dynamic lifecycle-sequence.yaml lookup. The new contract is the inverse —
+  # zero references to lifecycle-sequence.yaml in gaia-brainstorm/SKILL.md, plus a
+  # `## Next Steps` section pointing at /gaia-product-brief.
+  run grep -q 'lifecycle-sequence\.yaml' "$SKILLS_DIR/gaia-brainstorm/SKILL.md"
+  [ "$status" -ne 0 ]
+  run grep -qE '^## Next Steps[[:space:]]*$' "$SKILLS_DIR/gaia-brainstorm/SKILL.md"
   [ "$status" -eq 0 ]
 }
 

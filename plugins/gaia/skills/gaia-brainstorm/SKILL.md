@@ -71,7 +71,7 @@ Write a structured brainstorm artifact to `docs/creative-artifacts/brainstorm-{s
 - Competitive landscape
 - Opportunity areas (ranked)
 - Parking Lot (deprioritized ideas with reasoning and revival conditions)
-- Next steps per `${CLAUDE_PLUGIN_ROOT}/knowledge/lifecycle-sequence.yaml` (routing table ships inside the plugin under ADR-041's `knowledge/` convention; the legacy v1 location `_gaia/_config/lifecycle-sequence.yaml` is retired and no longer used)
+- Next steps (see the static `## Next Steps` section at the end of this skill — primary successor is `/gaia-product-brief`)
 
 Where `{slug}` is a short kebab-case slug derived from the project vision (e.g., `brainstorm-ai-code-review.md`).
 
@@ -123,6 +123,7 @@ Where `{slug}` is a short kebab-case slug derived from the project vision (e.g.,
 
 ## Next Steps
 
-- Primary: `/gaia-market-research` — conduct market research to validate competitive landscape.
-- Alternative: `/gaia-domain-research` — if domain-specific research is needed first.
-- Alternative: `/gaia-tech-research` — if technology evaluation is needed first.
+- **Primary:** `/gaia-product-brief` — convert the brainstorm into a structured product brief.
+- **Alternative:** `/gaia-market-research` — validate the competitive landscape before briefing.
+- **Alternative:** `/gaia-domain-research` — when domain-specific research is needed first.
+- **Alternative:** `/gaia-tech-research` — when technology evaluation must precede the brief.

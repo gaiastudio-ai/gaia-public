@@ -145,6 +145,6 @@ Write a structured market research report to `docs/planning-artifacts/market-res
 
 ## Next Steps
 
-- Primary: `/gaia-domain-research` — research the domain or industry in depth.
-- Alternative: `/gaia-tech-research` — if technology evaluation is needed.
-- Alternative: `/gaia-product-brief` — if all research is complete.
+- **Primary:** `/gaia-product-brief` — consolidate market findings into a structured product brief.
+- **Alternative:** `/gaia-domain-research` — when domain or industry depth is still needed.
+- **Alternative:** `/gaia-tech-research` — when technology evaluation must run before the brief.

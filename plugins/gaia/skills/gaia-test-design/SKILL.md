@@ -174,3 +174,7 @@ Delegate to the **test-architect** subagent (Sable) via `agents/test-architect` 
 ## Finalize
 
 !${CLAUDE_PLUGIN_ROOT}/skills/gaia-test-design/scripts/finalize.sh
+
+## Next Steps
+
+- **Primary:** `/gaia-create-epics` — convert the test plan risks into an epic and story breakdown.

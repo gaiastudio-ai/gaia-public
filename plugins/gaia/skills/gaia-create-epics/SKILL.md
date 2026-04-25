@@ -118,6 +118,9 @@ Write the epics and stories document to `docs/planning-artifacts/epics-and-stori
   - AC1: {criteria}
 ```
 
+> After artifact write: run open-question detection snippet
+> `!${CLAUDE_PLUGIN_ROOT}/scripts/detect-open-questions.sh docs/planning-artifacts/epics-and-stories.md`
+
 > `!scripts/write-checkpoint.sh gaia-create-epics 8 project_name="$PROJECT_NAME" prd_version="$PRD_VERSION" epic_count="$EPIC_COUNT" story_count="$STORY_COUNT" --paths docs/planning-artifacts/epics-and-stories.md`
 
 ### Step 9 — Brownfield: Generate Onboarding Knowledge Base (optional)

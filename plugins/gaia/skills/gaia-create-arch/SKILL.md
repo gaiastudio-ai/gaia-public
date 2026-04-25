@@ -126,6 +126,9 @@ Delegate to the **architect** subagent (Theo) via `agents/architect` to compile 
 - Greenfield: include technology stack, system architecture, data architecture, API design, infrastructure plan, ADR references, and Decision-to-Requirement Mapping table.
 - Brownfield: include C4 diagrams, sequence diagrams, data flow diagram, as-is/target delta table, migration strategy, and cross-references.
 
+> After artifact write: run open-question detection snippet
+> `!${CLAUDE_PLUGIN_ROOT}/scripts/detect-open-questions.sh docs/planning-artifacts/architecture.md`
+
 > `!scripts/write-checkpoint.sh gaia-create-arch 9 project_name="$PROJECT_NAME" arch_version="$ARCH_VERSION" --paths docs/planning-artifacts/architecture.md`
 
 ### Step 10 — Optional: API Design Review
@@ -150,6 +153,9 @@ Delegate to the **architect** subagent (Theo) via `agents/architect` to compile 
 - For each critical/high finding: update the architecture — add missing components, revise decisions, strengthen security/scalability, update ADRs.
 - Add a "## Review Findings Incorporated" section to the architecture document listing each finding, its severity, and how it was addressed.
 - Write the final architecture document.
+
+> After artifact write: run open-question detection snippet
+> `!${CLAUDE_PLUGIN_ROOT}/scripts/detect-open-questions.sh docs/planning-artifacts/architecture.md`
 
 > `!scripts/write-checkpoint.sh gaia-create-arch 12 project_name="$PROJECT_NAME" arch_version="$ARCH_VERSION" --paths docs/planning-artifacts/architecture.md`
 

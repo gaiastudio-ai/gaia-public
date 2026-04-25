@@ -68,6 +68,9 @@ This skill is the native Claude Code conversion of the legacy create-story workf
 - Write test scenarios table.
 - Write the story file to `docs/implementation-artifacts/{story_key}-{slug}.md`.
 
+> After artifact write: run open-question detection snippet
+> `!${CLAUDE_PLUGIN_ROOT}/scripts/detect-open-questions.sh docs/implementation-artifacts/${STORY_KEY}-${SLUG}.md`
+
 ### Step 5 -- Register in Sprint Status
 
 - Call `scripts/update-story-status.sh {story_key} backlog` to register the story in `sprint-status.yaml`.

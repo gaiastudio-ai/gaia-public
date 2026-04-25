@@ -70,5 +70,9 @@ Run the selected technique round by round:
    it's valuable, first concrete next step.
 4. Render the artifact from `brainstorming-template.md` and write it to
    `docs/creative-artifacts/brainstorming-{date}.md`.
+
+> After artifact write: run open-question detection snippet
+> `!${CLAUDE_PLUGIN_ROOT}/scripts/detect-open-questions.sh docs/creative-artifacts/brainstorming-${DATE}.md`
+
 5. Report the output path and suggest `/gaia-market-research`,
    `/gaia-domain-research`, or `/gaia-tech-research` as follow-ups.

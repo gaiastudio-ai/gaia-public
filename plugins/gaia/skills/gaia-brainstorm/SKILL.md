@@ -75,6 +75,9 @@ Write a structured brainstorm artifact to `docs/creative-artifacts/brainstorm-{s
 
 Where `{slug}` is a short kebab-case slug derived from the project vision (e.g., `brainstorm-ai-code-review.md`).
 
+> After artifact write: run open-question detection snippet
+> `!${CLAUDE_PLUGIN_ROOT}/scripts/detect-open-questions.sh docs/creative-artifacts/brainstorm-${SLUG}.md`
+
 > `!scripts/write-checkpoint.sh gaia-brainstorm 5 slug="$SLUG" technique="$TECHNIQUE" --paths docs/creative-artifacts/brainstorm-${SLUG}.md`
 
 ## Validation

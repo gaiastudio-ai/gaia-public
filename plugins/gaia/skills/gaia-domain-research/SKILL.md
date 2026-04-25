@@ -73,6 +73,9 @@ Write a structured domain research report to `docs/planning-artifacts/domain-res
 [Source: _gaia/lifecycle/workflows/1-analysis/domain-research/instructions.xml]
 [Source: _gaia/lifecycle/workflows/1-analysis/domain-research/workflow.yaml]
 
+> After artifact write: run open-question detection snippet
+> `!${CLAUDE_PLUGIN_ROOT}/scripts/detect-open-questions.sh docs/planning-artifacts/domain-research.md`
+
 > `!scripts/write-checkpoint.sh gaia-domain-research 5 domain="$DOMAIN" research_scope="$RESEARCH_SCOPE" --paths docs/planning-artifacts/domain-research.md`
 
 ## Validation

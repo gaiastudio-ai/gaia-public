@@ -115,6 +115,9 @@ Delegate to the **test-architect** subagent (Sable) via `agents/test-architect` 
 - Compile the test plan by populating the template with: risk assessment (Step 2), legacy integration boundaries (Step 3, if applicable), test strategy (Step 4), test plan details (Step 5), quality gates (Step 6).
 - Write the compiled test plan to `docs/test-artifacts/test-plan.md`.
 
+> After artifact write: run open-question detection snippet
+> `!${CLAUDE_PLUGIN_ROOT}/scripts/detect-open-questions.sh docs/test-artifacts/test-plan.md`
+
 > `!scripts/write-checkpoint.sh gaia-test-design 7 story_key="$STORY_KEY" test_plan_path="docs/test-artifacts/test-plan.md" stage=output-generated --paths docs/test-artifacts/test-plan.md`
 
 ### Step 8 -- Optional: Scaffold Test Framework

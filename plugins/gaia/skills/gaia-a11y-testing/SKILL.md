@@ -82,6 +82,9 @@ This skill is the native Claude Code conversion of the legacy `_gaia/testing/wor
   - References to relevant WCAG 2.1 success criteria
 - Write output to `docs/test-artifacts/accessibility-report-{date}.md`.
 
+> After artifact write: run open-question detection snippet
+> `!${CLAUDE_PLUGIN_ROOT}/scripts/detect-open-questions.sh docs/test-artifacts/accessibility-report-${DATE}.md`
+
 ## Finalize
 
 !${CLAUDE_PLUGIN_ROOT}/skills/gaia-a11y-testing/scripts/finalize.sh

@@ -1,22 +1,24 @@
 #!/usr/bin/env bash
-# finalize.sh — gaia-val-validate skill finalize (E28-S78)
+# finalize.sh — gaia-review-api skill finalize (E45-S3 wire-in)
 #
-# Follows the shared finalize.sh pattern from E28-S17.
+# Story: E45-S3 (Auto-save session memory at finalize for 24 Phase 1-3 skills)
+# ADRs:  ADR-061 (scope-bounded auto-save), ADR-057 (Phase 4 boundary)
 #
-# Responsibilities:
-#   1. Write a checkpoint via the shared checkpoint.sh foundation script
-#   2. Emit a lifecycle event via lifecycle-event.sh
+# This skill did not previously have a finalize.sh shim; it is added here
+# solely to provide a wire-in point for the ADR-061 auto-save helper. The
+# skill body itself does not write artifacts that need post_complete
+# checklist enforcement, so this finalize stays minimal: emit observability
+# (checkpoint, lifecycle event) and call the auto-save helper.
 #
 # Exit codes:
-#   0 — finalize succeeded
-#   1 — checkpoint write or lifecycle event emission failed
+#   0  always (auto-save failures are non-blocking per AC-EC4)
 
 set -euo pipefail
 LC_ALL=C
 export LC_ALL
 
-SCRIPT_NAME="gaia-val-validate/finalize.sh"
-WORKFLOW_NAME="gaia-val-validate"
+SCRIPT_NAME="gaia-review-api/finalize.sh"
+WORKFLOW_NAME="review-api-design"
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PLUGIN_SCRIPTS_DIR="$(cd "$SCRIPT_DIR/../../../scripts" && pwd)"
@@ -25,29 +27,20 @@ CHECKPOINT="$PLUGIN_SCRIPTS_DIR/checkpoint.sh"
 LIFECYCLE_EVENT="$PLUGIN_SCRIPTS_DIR/lifecycle-event.sh"
 
 log() { printf '%s: %s\n' "$SCRIPT_NAME" "$*" >&2; }
-die() { log "$*"; exit 1; }
 
-# ---------- 1. Write checkpoint ----------
+# ---------- 1. Write checkpoint (observability) ----------
 if [ -x "$CHECKPOINT" ]; then
-  if ! "$CHECKPOINT" write --workflow "$WORKFLOW_NAME" --step 8 >/dev/null 2>&1; then
-    die "checkpoint.sh write failed for $WORKFLOW_NAME"
-  fi
-  log "checkpoint written for $WORKFLOW_NAME"
-else
-  log "checkpoint.sh not found at $CHECKPOINT — skipping checkpoint write (non-fatal)"
+  "$CHECKPOINT" write --workflow "$WORKFLOW_NAME" --step end >/dev/null 2>&1 || \
+    log "checkpoint.sh write failed for $WORKFLOW_NAME (non-fatal)"
 fi
 
-# ---------- 2. Emit lifecycle event ----------
+# ---------- 2. Emit lifecycle event (observability) ----------
 if [ -x "$LIFECYCLE_EVENT" ]; then
-  if ! "$LIFECYCLE_EVENT" --type workflow_complete --workflow "$WORKFLOW_NAME" >/dev/null 2>&1; then
-    die "lifecycle-event.sh emit failed for $WORKFLOW_NAME"
-  fi
-  log "lifecycle event emitted for $WORKFLOW_NAME"
-else
-  log "lifecycle-event.sh not found at $LIFECYCLE_EVENT — skipping event emission (non-fatal)"
+  "$LIFECYCLE_EVENT" --type workflow_complete --workflow "$WORKFLOW_NAME" >/dev/null 2>&1 || \
+    log "lifecycle-event.sh emit failed for $WORKFLOW_NAME (non-fatal)"
 fi
 
-# ---------- 4. Auto-save session memory (E45-S3 / ADR-061) ----------
+# ---------- 3. Auto-save session memory (E45-S3 / ADR-061) ----------
 # Phase 1-3 skills auto-save a session summary to the agent sidecar via
 # the shared lib helper. Phase 4 skills (e.g. /gaia-dev-story) short-
 # circuit to a no-op so the interactive prompt mandated by ADR-057 /

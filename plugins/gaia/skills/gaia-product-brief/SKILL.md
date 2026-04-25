@@ -4,6 +4,12 @@ description: Create a product brief through collaborative discovery — Cluster 
 argument-hint: "[product name or focus]"
 context: fork
 allowed-tools: [Read, Write, Glob, Grep, Bash]
+# Discover-Inputs Protocol (ADR-062 / FR-346 / E45-S4)
+# Strategy: INDEX_GUIDED — load brainstorm/research artifact indexes (TOC,
+# heading scan) first; fetch named sections on demand in later steps.
+# Falls back to FULL_LOAD when an upstream artifact lacks parseable headings.
+discover_inputs: INDEX_GUIDED
+discover_inputs_target: docs/creative-artifacts/
 # Quality gates (FR-347, FR-358 — E45-S2 reference implementation)
 # pre_start: enforced by scripts/setup.sh before Step 1 runs.
 # post_complete: enforced by scripts/finalize.sh against the generated
@@ -55,12 +61,20 @@ This skill is the native Claude Code conversion of the legacy `_gaia/lifecycle/w
 
 ### Step 1 — Discover Inputs
 
-- Load prior brainstorm output if available (e.g., `docs/creative-artifacts/brainstorm-*.md`).
-- Load market research if available.
-- Load domain research if available.
-- Load technical research if available.
-- Load any other creative outputs under `docs/creative-artifacts/`.
-- Summarize what upstream context was found and flag any missing inputs to the user before proceeding.
+> **Loading strategy: INDEX_GUIDED per ADR-062.** Brainstorm output and
+> research artifacts can be 10K+ tokens each. For each upstream artifact,
+> load the index/TOC first (heading scan with `grep -nE '^#{1,3} '` or read
+> `index.md` if present) — do NOT read the full body up front. Fetch named
+> sections on demand in later steps (`sed -n '/^## Section/,/^## /p`). If an
+> artifact has no parseable headings, fall back to FULL_LOAD for that file
+> only and log the fallback in the checkpoint.
+
+- Scan prior brainstorm output if available (heading scan over `docs/creative-artifacts/brainstorm-*.md`).
+- Scan market research if available (heading scan over `docs/creative-artifacts/market-research*.md`).
+- Scan domain research if available (heading scan over `docs/creative-artifacts/domain-research*.md`).
+- Scan technical research if available (heading scan over `docs/creative-artifacts/tech-research*.md`).
+- Scan any other creative outputs under `docs/creative-artifacts/` for relevant indexes.
+- Summarize what upstream context was found (section list, not full content) and flag any missing inputs to the user before proceeding.
 
 > `!scripts/write-checkpoint.sh gaia-product-brief 1 product_name="$PRODUCT_NAME" target_user="$TARGET_USER"`
 

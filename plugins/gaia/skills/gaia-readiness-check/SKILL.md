@@ -3,6 +3,15 @@ name: gaia-readiness-check
 description: Validate implementation readiness by checking all planning and testing artifacts for completeness, consistency, and cross-artifact contradictions — Cluster 6 architecture skill. Enforces two mandatory quality gates (traceability-matrix.md and ci-setup.md must exist) per ADR-042, then delegates readiness assessment to the architect and devops subagents.
 context: fork
 allowed-tools: [Read, Write, Edit, Grep, Glob, Bash, Agent]
+# Discover-Inputs Protocol (ADR-062 / FR-346 / E45-S4)
+# Strategy: INDEX_GUIDED — readiness-check cross-references many large
+# upstream artifacts (PRD, architecture, test plan, epics/stories,
+# traceability matrix, ci-setup, threat-model, infra-design). Load each
+# artifact's index (heading scan) first; fetch named sections on demand
+# during cross-reference checks. Falls back to FULL_LOAD when an artifact
+# lacks parseable headings.
+discover_inputs: INDEX_GUIDED
+discover_inputs_target: "docs/planning-artifacts/prd.md, docs/planning-artifacts/architecture.md, docs/test-artifacts/test-plan.md, docs/planning-artifacts/epics-and-stories.md"
 ---
 
 ## Setup
@@ -35,16 +44,25 @@ This skill is the native Claude Code conversion of the legacy `_gaia/lifecycle/w
 
 ### Step 1 — Load All Artifacts
 
-- Read `docs/planning-artifacts/prd.md` — extract requirements (functional and non-functional).
-- Read `docs/planning-artifacts/ux-design.md` if available — extract UI requirements.
-- Read `docs/planning-artifacts/architecture.md` — extract architecture decisions and components.
-- Read `docs/planning-artifacts/epics-and-stories.md` — extract story coverage.
-- Read `docs/test-artifacts/traceability-matrix.md` — extract requirement coverage summary.
-- Read `docs/test-artifacts/ci-setup.md` — extract pipeline quality gates summary.
-- Read `docs/test-artifacts/test-plan.md` if exists — extract risk assessment.
-- Read `docs/planning-artifacts/threat-model.md` if exists — extract security requirements.
-- Read `docs/planning-artifacts/infrastructure-design.md` if exists — extract deployment topology.
-- Note any missing artifacts immediately.
+> **Loading strategy: INDEX_GUIDED per ADR-062.** Readiness-check
+> cross-references up to nine large upstream artifacts — full-loading them
+> all would routinely exceed 80K tokens. Heading-scan each artifact first
+> (`grep -nE '^#{1,3} '`) to build a section index. The cross-reference
+> checks in Steps 2-9 fetch named sections on demand (`sed -n` between
+> heading anchors) — never the full body. If any artifact lacks parseable
+> headings, fall back to FULL_LOAD for that file only and log the fallback
+> in the checkpoint.
+
+- Heading-scan `docs/planning-artifacts/prd.md` for the requirements section index (functional and non-functional).
+- Heading-scan `docs/planning-artifacts/ux-design.md` if available for the UI-requirements section index.
+- Heading-scan `docs/planning-artifacts/architecture.md` for architecture-decision and component section anchors.
+- Heading-scan `docs/planning-artifacts/epics-and-stories.md` for the story-coverage section index.
+- Heading-scan `docs/test-artifacts/traceability-matrix.md` for the requirement-coverage summary section.
+- Heading-scan `docs/test-artifacts/ci-setup.md` for the pipeline quality-gates summary section.
+- Heading-scan `docs/test-artifacts/test-plan.md` if exists for the risk-assessment section.
+- Heading-scan `docs/planning-artifacts/threat-model.md` if exists for security-requirement section anchors.
+- Heading-scan `docs/planning-artifacts/infrastructure-design.md` if exists for deployment-topology section anchors.
+- Note any missing artifacts immediately. Section bodies are loaded on demand by Steps 2-9 via `sed -n` between heading anchors.
 
 > `!scripts/write-checkpoint.sh gaia-readiness-check 1 project_name="$PROJECT_NAME" gate_status=pending artifacts_inspected_count="$ARTIFACTS_INSPECTED_COUNT" stage=load`
 

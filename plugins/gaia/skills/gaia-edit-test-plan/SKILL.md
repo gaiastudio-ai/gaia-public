@@ -3,6 +3,12 @@ name: gaia-edit-test-plan
 description: Edit an existing test plan by adding new test cases while preserving all existing content. Use when "edit the test plan" or /gaia-edit-test-plan.
 context: fork
 allowed-tools: [Read, Write, Edit, Grep, Glob, Bash]
+# Discover-Inputs Protocol (ADR-062 / FR-346 / E45-S4)
+# Strategy: SELECTIVE_LOAD — load only the named diff sections from PRD
+# and architecture (the requirement and component sections that motivate
+# the new test cases). Never full-load prd.md or architecture.md here.
+discover_inputs: SELECTIVE_LOAD
+discover_inputs_target: "docs/planning-artifacts/prd.md, docs/planning-artifacts/architecture.md"
 ---
 
 ## Setup
@@ -39,13 +45,21 @@ This skill is the native Claude Code conversion of the legacy `_gaia/testing/wor
 
 ### Step 2 — Capture Change Scope
 
+> **Loading strategy: SELECTIVE_LOAD per ADR-062.** Load ONLY the named
+> diff sections from upstream — the FR/NFR sections in `prd.md` and the
+> component / decision sections in `architecture.md` that motivate the new
+> test cases. Do NOT full-load either document. Use `sed -n
+> '/^## FR-NNN/,/^## /p'` (or similar named-section extraction) once the
+> user has identified the affected requirement IDs in the questions below.
+> This is the diff-only / named sections only loading pattern.
+
 Ask the user:
 
 1. What new test cases are needed? Describe the feature or change requiring test coverage.
 2. Which FR/NFR IDs need test coverage?
 
-- Read relevant sections of `docs/planning-artifacts/prd.md` for requirement context (if available).
-- Read relevant sections of `docs/planning-artifacts/architecture.md` for technical context (if available).
+- After the user answers, load ONLY the named diff sections of `docs/planning-artifacts/prd.md` corresponding to the supplied FR/NFR IDs (do NOT read the full PRD).
+- Load ONLY the named diff sections of `docs/planning-artifacts/architecture.md` that correspond to the affected components (do NOT read the full architecture document).
 - Record: new_requirements, change_description, affected_test_areas.
 
 > `!scripts/write-checkpoint.sh gaia-edit-test-plan 2 test_plan_path="docs/test-artifacts/test-plan.md" edit_mode=scope stage=change-scope-captured`

@@ -146,3 +146,7 @@ This skill is the native Claude Code conversion of the legacy `_gaia/testing/wor
 ## Finalize
 
 !${CLAUDE_PLUGIN_ROOT}/skills/gaia-ci-setup/scripts/finalize.sh
+
+## Next Steps
+
+- **Primary:** `/gaia-readiness-check` — validate implementation readiness now that CI is scaffolded.

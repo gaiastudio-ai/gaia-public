@@ -106,3 +106,8 @@ This skill is the native Claude Code conversion of the legacy `_gaia/testing/wor
 ## Finalize
 
 !${CLAUDE_PLUGIN_ROOT}/skills/gaia-trace/scripts/finalize.sh
+
+## Next Steps
+
+- **Primary:** `/gaia-ci-setup` — scaffold the CI pipeline once traceability is green.
+- **Alternative:** `/gaia-readiness-check` — confirm implementation readiness when CI is already in place.

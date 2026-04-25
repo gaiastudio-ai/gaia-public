@@ -252,3 +252,8 @@ Skip this step if mode is greenfield.
 ## Finalize
 
 !${CLAUDE_PLUGIN_ROOT}/skills/gaia-create-epics/scripts/finalize.sh
+
+## Next Steps
+
+- **Primary:** `/gaia-atdd` — generate failing acceptance tests from the highest-risk story in the new backlog.
+- **Alternative:** `/gaia-threat-model` — when security is a primary concern, model threats before ATDD.

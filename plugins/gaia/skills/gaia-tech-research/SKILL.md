@@ -147,5 +147,6 @@ Write a structured technical research report to `docs/planning-artifacts/technic
 
 ## Next Steps
 
-- Primary: `/gaia-product-brief` — consolidate all research into a product brief.
-- Alternative: `/gaia-advanced-elicitation` — if deeper requirements exploration is needed.
+- **Primary:** `/gaia-create-arch` — feed the tech trade-off analysis into the architecture design step.
+- **Alternative:** `/gaia-product-brief` — when consolidating all research into a brief precedes architecture.
+- **Alternative:** `/gaia-advanced-elicitation` — when deeper requirements exploration is still needed.

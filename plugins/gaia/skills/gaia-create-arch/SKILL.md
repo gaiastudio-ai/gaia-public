@@ -146,23 +146,52 @@ Delegate to the **architect** subagent (Theo) via `agents/architect` to compile 
 
 > `!scripts/write-checkpoint.sh gaia-create-arch 9 project_name="$PROJECT_NAME" arch_version="$ARCH_VERSION" --paths docs/planning-artifacts/architecture.md`
 
-### Step 10 — Optional: API Design Review
+### Step 10 — Val Auto-Fix Loop (E44-S2 / ADR-058)
+
+> Reuses the canonical pattern at `gaia-public/plugins/gaia/skills/gaia-val-validate/SKILL.md`
+> § "Auto-Fix Loop Pattern". Do not duplicate the spec here; cite this anchor.
+
+**Guards (run before invocation):**
+
+- Artifact-existence guard (AC-EC3): if not exists `docs/planning-artifacts/architecture.md` -> skip Val auto-review and exit (no Val invocation, no checkpoint, no iteration log).
+- Val-skill-availability guard (AC-EC6): if `/gaia-val-validate` SKILL.md is not resolvable at runtime -> warn `Val auto-review unavailable: /gaia-val-validate not found`, preserve the artifact, and exit cleanly.
+
+**Loop:**
+
+1. iteration = 1.
+2. Invoke `/gaia-val-validate` with `artifact_path = docs/planning-artifacts/architecture.md`, `artifact_type = architecture`.
+3. If findings is empty: proceed past the loop.
+4. If findings contains only INFO: log informational notes, proceed past the loop.
+5. If findings contains CRITICAL or WARNING:
+     a. Apply a fix to `docs/planning-artifacts/architecture.md` addressing the findings.
+     b. Append an iteration log record to checkpoint `custom.val_loop_iterations`.
+     c. iteration += 1.
+     d. If iteration <= 3: go to step 2.
+     e. Else: present the iteration-3 prompt verbatim (centralized in `gaia-val-validate` SKILL.md § "Auto-Fix Loop Pattern") and dispatch.
+
+YOLO INVARIANT: the iteration-3 prompt MUST NOT be auto-answered under YOLO. This wire-in does not introduce a YOLO bypass branch. See ADR-057 FR-YOLO-2(e) and ADR-058 for the hard-gate contract.
+
+> Val auto-review per E44-S2 pattern (ADR-058, architecture.md §10.31.2). Validation runs against the Step 9 primary write (artifact-as-drafted). Per story E44-S5 AC-EC9 and the Adversarial-loop Val scope decision in story Dev Notes, Step 13's post-adversarial re-write does NOT trigger a second Val invocation.
+
+> `!scripts/write-checkpoint.sh gaia-create-arch 10 project_name="$PROJECT_NAME" arch_version="$ARCH_VERSION" stage=val-auto-review --paths docs/planning-artifacts/architecture.md`
+
+### Step 11 — Optional: API Design Review
 
 - Ask user: "Would you like to review the API design against REST standards? Recommended if your architecture includes APIs. (yes / skip)"
 - If yes: invoke the API design review task.
 - If skip: API review can be run anytime later with /gaia-review-api.
 
-> `!scripts/write-checkpoint.sh gaia-create-arch 10 project_name="$PROJECT_NAME" arch_version="$ARCH_VERSION" api_review_run="$API_REVIEW_RUN"`
+> `!scripts/write-checkpoint.sh gaia-create-arch 11 project_name="$PROJECT_NAME" arch_version="$ARCH_VERSION" api_review_run="$API_REVIEW_RUN"`
 
-### Step 11 — Adversarial Review
+### Step 12 — Adversarial Review
 
 - Read adversarial-triggers.yaml to evaluate trigger rules.
 - If adversarial review is triggered: spawn a subagent for adversarial review of the architecture document.
 - If not triggered: add "## Review Findings Incorporated" section noting the review was not triggered.
 
-> `!scripts/write-checkpoint.sh gaia-create-arch 11 project_name="$PROJECT_NAME" arch_version="$ARCH_VERSION" adversarial_triggered="$ADVERSARIAL_TRIGGERED"`
+> `!scripts/write-checkpoint.sh gaia-create-arch 12 project_name="$PROJECT_NAME" arch_version="$ARCH_VERSION" adversarial_triggered="$ADVERSARIAL_TRIGGERED"`
 
-### Step 12 — Incorporate Adversarial Findings
+### Step 13 — Incorporate Adversarial Findings
 
 - Read adversarial review findings.
 - For each critical/high finding: update the architecture — add missing components, revise decisions, strengthen security/scalability, update ADRs.
@@ -172,7 +201,7 @@ Delegate to the **architect** subagent (Theo) via `agents/architect` to compile 
 > After artifact write: run open-question detection snippet
 > `!${CLAUDE_PLUGIN_ROOT}/scripts/detect-open-questions.sh docs/planning-artifacts/architecture.md`
 
-> `!scripts/write-checkpoint.sh gaia-create-arch 12 project_name="$PROJECT_NAME" arch_version="$ARCH_VERSION" --paths docs/planning-artifacts/architecture.md`
+> `!scripts/write-checkpoint.sh gaia-create-arch 13 project_name="$PROJECT_NAME" arch_version="$ARCH_VERSION" --paths docs/planning-artifacts/architecture.md`
 
 ## Validation
 

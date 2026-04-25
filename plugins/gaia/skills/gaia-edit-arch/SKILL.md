@@ -121,7 +121,36 @@ Delegate to the **architect** subagent (Theo) via `agents/architect` to record a
 
 > `!scripts/write-checkpoint.sh gaia-edit-arch 6 project_name="$PROJECT_NAME" edit_scope=save arch_version_new="$ARCH_VERSION_NEW" --paths docs/planning-artifacts/architecture.md`
 
-### Step 7 — Cascade Impact Analysis
+### Step 7 — Val Auto-Fix Loop (E44-S2 / ADR-058)
+
+> Reuses the canonical pattern at `gaia-public/plugins/gaia/skills/gaia-val-validate/SKILL.md`
+> § "Auto-Fix Loop Pattern". Do not duplicate the spec here; cite this anchor.
+
+**Guards (run before invocation):**
+
+- Artifact-existence guard (AC-EC3): if not exists `docs/planning-artifacts/architecture.md` -> skip Val auto-review and exit (no Val invocation, no checkpoint, no iteration log).
+- Val-skill-availability guard (AC-EC6): if `/gaia-val-validate` SKILL.md is not resolvable at runtime -> warn `Val auto-review unavailable: /gaia-val-validate not found`, preserve the artifact, and exit cleanly.
+
+**Loop:**
+
+1. iteration = 1.
+2. Invoke `/gaia-val-validate` with `artifact_path = docs/planning-artifacts/architecture.md`, `artifact_type = architecture`.
+3. If findings is empty: proceed past the loop.
+4. If findings contains only INFO: log informational notes, proceed past the loop.
+5. If findings contains CRITICAL or WARNING:
+     a. Apply a fix to `docs/planning-artifacts/architecture.md` addressing the findings.
+     b. Append an iteration log record to checkpoint `custom.val_loop_iterations`.
+     c. iteration += 1.
+     d. If iteration <= 3: go to step 2.
+     e. Else: present the iteration-3 prompt verbatim (centralized in `gaia-val-validate` SKILL.md § "Auto-Fix Loop Pattern") and dispatch.
+
+YOLO INVARIANT: the iteration-3 prompt MUST NOT be auto-answered under YOLO. This wire-in does not introduce a YOLO bypass branch. See ADR-057 FR-YOLO-2(e) and ADR-058 for the hard-gate contract.
+
+> Val auto-review per E44-S2 pattern (ADR-058, architecture.md §10.31.2). Step 6 may have written the artifact twice — once initially and once again after the in-step adversarial subagent incorporated critical/high findings — but Val MUST be invoked exactly ONCE here against the FINAL post-incorporation written state of `docs/planning-artifacts/architecture.md` (story E44-S5 AC8 / AC-EC4). The adversarial incorporation completes inside Step 6 BEFORE the Step 6 checkpoint emits and BEFORE Step 7 is entered, so the artifact this loop reads is always the final state.
+
+> `!scripts/write-checkpoint.sh gaia-edit-arch 7 project_name="$PROJECT_NAME" edit_scope=val-auto-review arch_version_new="$ARCH_VERSION_NEW" stage=val-auto-review --paths docs/planning-artifacts/architecture.md`
+
+### Step 8 — Cascade Impact Analysis
 
 This is the cascade-aware behavior preserved from the legacy edit-architecture workflow — the key semantic that distinguishes editing from creation.
 
@@ -138,7 +167,7 @@ This is the cascade-aware behavior preserved from the legacy edit-architecture w
 - Report cascade assessment to user with recommended next command(s).
 - Record all architecture changes and new ADRs in Theo's memory sidecar.
 
-> `!scripts/write-checkpoint.sh gaia-edit-arch 7 project_name="$PROJECT_NAME" edit_scope=cascade cascade_impact="$CASCADE_IMPACT"`
+> `!scripts/write-checkpoint.sh gaia-edit-arch 8 project_name="$PROJECT_NAME" edit_scope=cascade cascade_impact="$CASCADE_IMPACT"`
 
 ## Validation
 

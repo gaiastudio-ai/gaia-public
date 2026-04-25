@@ -9,16 +9,16 @@
 # assertions: running one step of each of the 8 skills against a fixture,
 # then validating the emitted checkpoint JSON against schema v1.
 #
-# Phase 3 solutioning skills and step counts (from E43-S4):
-#   gaia-create-arch        12 steps
-#   gaia-edit-arch           7 steps
-#   gaia-review-api          5 steps
+# Phase 3 solutioning skills and step counts (post E44-S5 wire-in):
+#   gaia-create-arch        13 steps  (was 12; +1 Val Auto-Fix Loop step at 10)
+#   gaia-edit-arch           8 steps  (was 7;  +1 Val Auto-Fix Loop step at 7)
+#   gaia-review-api          6 steps  (was 5;  +1 Val Auto-Fix Loop step at 6)
 #   gaia-adversarial         4 steps
-#   gaia-create-epics       11 steps
-#   gaia-threat-model        7 steps
-#   gaia-infra-design        6 steps
+#   gaia-create-epics       12 steps  (was 11; +1 Val Auto-Fix Loop step at 9)
+#   gaia-threat-model        8 steps  (was 7;  +1 Val Auto-Fix Loop step at 8)
+#   gaia-infra-design        7 steps  (was 6;  +1 Val Auto-Fix Loop step at 7)
 #   gaia-readiness-check    12 steps
-#                      ---------- total: 64 invocations
+#                      ---------- total: 70 invocations
 #
 # Refs: docs/implementation-artifacts/E43-S4-*.md,
 #       docs/test-artifacts/test-plan.md §11.46.2,
@@ -47,7 +47,7 @@ PHASE3_SOL_SLUGS=(
   gaia-infra-design
   gaia-readiness-check
 )
-PHASE3_SOL_STEPS=(12 7 5 4 11 7 6 12)
+PHASE3_SOL_STEPS=(13 8 6 4 12 8 7 12)
 
 # ---------- AC1/AC2/AC4: canonical invocation line present per step ----------
 
@@ -196,13 +196,13 @@ PHASE3_SOL_STEPS=(12 7 5 4 11 7 6 12)
 
 # ---------- AC1/AC3/AC6 (VCP-CPT-11): schema consistency across all 8 skills ----------
 
-@test "VCP-CPT-11 AC1/AC6: simulating gaia-create-arch 12-step run writes 12 sequential checkpoints" {
+@test "VCP-CPT-11 AC1/AC6: simulating gaia-create-arch 13-step run writes 13 sequential checkpoints" {
   local slug="gaia-create-arch"
   local artifact="$TEST_TMP/architecture.md"
   printf '# arch\n' > "$artifact"
   local n
-  for n in $(seq 1 12); do
-    if [ "$n" = "9" ]; then
+  for n in $(seq 1 13); do
+    if [ "$n" = "9" ] || [ "$n" = "10" ] || [ "$n" = "13" ]; then
       "$SCRIPT" "$slug" "$n" project_name=acme arch_version=1.0.0 --paths "$artifact"
     else
       "$SCRIPT" "$slug" "$n" project_name=acme arch_version=1.0.0
@@ -213,19 +213,19 @@ PHASE3_SOL_STEPS=(12 7 5 4 11 7 6 12)
   [ -d "$dir" ]
   local count
   count=$(find "$dir" -name '*.json' -type f | wc -l | tr -d ' ')
-  [ "$count" = "12" ]
+  [ "$count" = "13" ]
   local numbers
   numbers=$(find "$dir" -name '*.json' -type f -exec jq -r '.step_number' {} \; | sort -n | tr '\n' ' ')
-  [ "$numbers" = "1 2 3 4 5 6 7 8 9 10 11 12 " ]
+  [ "$numbers" = "1 2 3 4 5 6 7 8 9 10 11 12 13 " ]
 }
 
-@test "VCP-CPT-11 AC1/AC6: simulating gaia-edit-arch 7-step run writes 7 sequential checkpoints" {
+@test "VCP-CPT-11 AC1/AC6: simulating gaia-edit-arch 8-step run writes 8 sequential checkpoints" {
   local slug="gaia-edit-arch"
   local artifact="$TEST_TMP/architecture.md"
   printf '# arch\n' > "$artifact"
   local n
-  for n in $(seq 1 7); do
-    if [ "$n" = "6" ]; then
+  for n in $(seq 1 8); do
+    if [ "$n" = "6" ] || [ "$n" = "7" ]; then
       "$SCRIPT" "$slug" "$n" project_name=acme edit_scope=section --paths "$artifact"
     else
       "$SCRIPT" "$slug" "$n" project_name=acme edit_scope=section
@@ -236,16 +236,16 @@ PHASE3_SOL_STEPS=(12 7 5 4 11 7 6 12)
   [ -d "$dir" ]
   local count
   count=$(find "$dir" -name '*.json' -type f | wc -l | tr -d ' ')
-  [ "$count" = "7" ]
+  [ "$count" = "8" ]
 }
 
-@test "VCP-CPT-11 AC1/AC6: simulating gaia-review-api 5-step run writes 5 sequential checkpoints" {
+@test "VCP-CPT-11 AC1/AC6: simulating gaia-review-api 6-step run writes 6 sequential checkpoints" {
   local slug="gaia-review-api"
   local artifact="$TEST_TMP/api-review.md"
   printf '# api\n' > "$artifact"
   local n
-  for n in $(seq 1 5); do
-    if [ "$n" = "5" ]; then
+  for n in $(seq 1 6); do
+    if [ "$n" = "5" ] || [ "$n" = "6" ]; then
       "$SCRIPT" "$slug" "$n" api_spec_path=openapi.yaml review_scope=full --paths "$artifact"
     else
       "$SCRIPT" "$slug" "$n" api_spec_path=openapi.yaml review_scope=full
@@ -256,7 +256,7 @@ PHASE3_SOL_STEPS=(12 7 5 4 11 7 6 12)
   [ -d "$dir" ]
   local count
   count=$(find "$dir" -name '*.json' -type f | wc -l | tr -d ' ')
-  [ "$count" = "5" ]
+  [ "$count" = "6" ]
 }
 
 @test "VCP-CPT-11 AC1/AC6: simulating gaia-adversarial 4-step run writes 4 sequential checkpoints" {
@@ -279,17 +279,20 @@ PHASE3_SOL_STEPS=(12 7 5 4 11 7 6 12)
   [ "$count" = "4" ]
 }
 
-@test "VCP-CPT-11 AC1/AC6/AC-EC8: simulating gaia-create-epics 11-step run writes 11 sequential checkpoints with multi-file step" {
+@test "VCP-CPT-11 AC1/AC6/AC-EC8: simulating gaia-create-epics 12-step run writes 12 sequential checkpoints with multi-file step" {
   local slug="gaia-create-epics"
   local epics="$TEST_TMP/epics-and-stories.md"
   local arch="$TEST_TMP/architecture.md"
   printf '# epics\n' > "$epics"
   printf '# arch\n' > "$arch"
   local n
-  for n in $(seq 1 11); do
+  for n in $(seq 1 12); do
     if [ "$n" = "8" ]; then
       # Multi-file step (AC-EC8 coverage).
       "$SCRIPT" "$slug" "$n" prd_version=1.0 epic_count=4 --paths "$epics" "$arch"
+    elif [ "$n" = "9" ]; then
+      # New Val auto-review step (single-file --paths).
+      "$SCRIPT" "$slug" "$n" prd_version=1.0 epic_count=4 --paths "$epics"
     else
       "$SCRIPT" "$slug" "$n" prd_version=1.0 epic_count=4
     fi
@@ -299,7 +302,7 @@ PHASE3_SOL_STEPS=(12 7 5 4 11 7 6 12)
   [ -d "$dir" ]
   local count
   count=$(find "$dir" -name '*.json' -type f | wc -l | tr -d ' ')
-  [ "$count" = "11" ]
+  [ "$count" = "12" ]
   # Step 8 must record both output paths.
   local step8_paths
   step8_paths=$(find "$dir" -name '*-step-8.json' -type f -exec jq -r '.output_paths | length' {} \;)
@@ -309,13 +312,13 @@ PHASE3_SOL_STEPS=(12 7 5 4 11 7 6 12)
   [ "$step8_checksums" = "2" ]
 }
 
-@test "VCP-CPT-11 AC1/AC6: simulating gaia-threat-model 7-step run writes 7 sequential checkpoints" {
+@test "VCP-CPT-11 AC1/AC6: simulating gaia-threat-model 8-step run writes 8 sequential checkpoints" {
   local slug="gaia-threat-model"
   local artifact="$TEST_TMP/threat-model.md"
   printf '# tm\n' > "$artifact"
   local n
-  for n in $(seq 1 7); do
-    if [ "$n" = "7" ]; then
+  for n in $(seq 1 8); do
+    if [ "$n" = "7" ] || [ "$n" = "8" ]; then
       "$SCRIPT" "$slug" "$n" threat_model_scope=full stride_stage=elevation --paths "$artifact"
     else
       "$SCRIPT" "$slug" "$n" threat_model_scope=full stride_stage=elevation
@@ -326,16 +329,16 @@ PHASE3_SOL_STEPS=(12 7 5 4 11 7 6 12)
   [ -d "$dir" ]
   local count
   count=$(find "$dir" -name '*.json' -type f | wc -l | tr -d ' ')
-  [ "$count" = "7" ]
+  [ "$count" = "8" ]
 }
 
-@test "VCP-CPT-11 AC1/AC6: simulating gaia-infra-design 6-step run writes 6 sequential checkpoints" {
+@test "VCP-CPT-11 AC1/AC6: simulating gaia-infra-design 7-step run writes 7 sequential checkpoints" {
   local slug="gaia-infra-design"
   local artifact="$TEST_TMP/infra.md"
   printf '# infra\n' > "$artifact"
   local n
-  for n in $(seq 1 6); do
-    if [ "$n" = "6" ]; then
+  for n in $(seq 1 7); do
+    if [ "$n" = "6" ] || [ "$n" = "7" ]; then
       "$SCRIPT" "$slug" "$n" target_environments=staging,prod iac_stack=terraform --paths "$artifact"
     else
       "$SCRIPT" "$slug" "$n" target_environments=staging,prod iac_stack=terraform
@@ -346,7 +349,7 @@ PHASE3_SOL_STEPS=(12 7 5 4 11 7 6 12)
   [ -d "$dir" ]
   local count
   count=$(find "$dir" -name '*.json' -type f | wc -l | tr -d ' ')
-  [ "$count" = "6" ]
+  [ "$count" = "7" ]
 }
 
 @test "VCP-CPT-11 AC1/AC6: simulating gaia-readiness-check 12-step run writes 12 sequential checkpoints" {

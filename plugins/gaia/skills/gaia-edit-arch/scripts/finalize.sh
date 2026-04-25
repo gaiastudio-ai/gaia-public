@@ -372,5 +372,28 @@ else
   log "lifecycle-event.sh not found at $LIFECYCLE_EVENT — skipping event emission (non-fatal)"
 fi
 
+# ---------- 4. Auto-save session memory (E45-S3 / ADR-061) ----------
+# Phase 1-3 skills auto-save a session summary to the agent sidecar via
+# the shared lib helper. Phase 4 skills (e.g. /gaia-dev-story) short-
+# circuit to a no-op so the interactive prompt mandated by ADR-057 /
+# FR-YOLO-2(f) is preserved. Failure is non-blocking — the auto-save
+# helper itself logs warnings to stderr but never affects this script's
+# exit code. SKILL_NAME is resolved from the parent directory name so
+# the wire-in is identical across all 24 Phase 1-3 finalize.sh files.
+AUTOSAVE_LIB="$PLUGIN_SCRIPTS_DIR/lib/auto-save-memory.sh"
+SKILL_NAME="$(basename "$(cd "$SCRIPT_DIR/.." && pwd)")"
+if [ -f "$AUTOSAVE_LIB" ]; then
+  # shellcheck disable=SC1090
+  . "$AUTOSAVE_LIB"
+  if ! _auto_save_memory "$SKILL_NAME" "${ARTIFACT:-}"; then
+    AUTOSAVE_RC=$?
+    if [ "$AUTOSAVE_RC" -eq 64 ]; then
+      log "auto-save aborted: cannot resolve agent sidecar for skill $SKILL_NAME"
+    fi
+  fi
+else
+  log "auto-save-memory.sh not found at $AUTOSAVE_LIB — skipping auto-save (non-fatal)"
+fi
+
 log "finalize complete for $WORKFLOW_NAME"
 exit "$CHECKLIST_STATUS"

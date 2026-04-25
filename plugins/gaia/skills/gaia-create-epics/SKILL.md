@@ -138,30 +138,59 @@ Write the epics and stories document to `docs/planning-artifacts/epics-and-stori
 
 > `!scripts/write-checkpoint.sh gaia-create-epics 8 project_name="$PROJECT_NAME" prd_version="$PRD_VERSION" epic_count="$EPIC_COUNT" story_count="$STORY_COUNT" --paths docs/planning-artifacts/epics-and-stories.md`
 
-### Step 9 — Brownfield: Generate Onboarding Knowledge Base (optional)
+### Step 9 — Val Auto-Fix Loop (E44-S2 / ADR-058)
+
+> Reuses the canonical pattern at `gaia-public/plugins/gaia/skills/gaia-val-validate/SKILL.md`
+> § "Auto-Fix Loop Pattern". Do not duplicate the spec here; cite this anchor.
+
+**Guards (run before invocation):**
+
+- Artifact-existence guard (AC-EC3): if not exists `docs/planning-artifacts/epics-and-stories.md` -> skip Val auto-review and exit (no Val invocation, no checkpoint, no iteration log).
+- Val-skill-availability guard (AC-EC6): if `/gaia-val-validate` SKILL.md is not resolvable at runtime -> warn `Val auto-review unavailable: /gaia-val-validate not found`, preserve the artifact, and exit cleanly.
+
+**Loop:**
+
+1. iteration = 1.
+2. Invoke `/gaia-val-validate` with `artifact_path = docs/planning-artifacts/epics-and-stories.md`, `artifact_type = epics-and-stories`.
+3. If findings is empty: proceed past the loop.
+4. If findings contains only INFO: log informational notes, proceed past the loop.
+5. If findings contains CRITICAL or WARNING:
+     a. Apply a fix to `docs/planning-artifacts/epics-and-stories.md` addressing the findings.
+     b. Append an iteration log record to checkpoint `custom.val_loop_iterations`.
+     c. iteration += 1.
+     d. If iteration <= 3: go to step 2.
+     e. Else: present the iteration-3 prompt verbatim (centralized in `gaia-val-validate` SKILL.md § "Auto-Fix Loop Pattern") and dispatch.
+
+YOLO INVARIANT: the iteration-3 prompt MUST NOT be auto-answered under YOLO. This wire-in does not introduce a YOLO bypass branch. See ADR-057 FR-YOLO-2(e) and ADR-058 for the hard-gate contract.
+
+> Val auto-review per E44-S2 pattern (ADR-058, architecture.md §10.31.2). Concurrent invocations of this skill are safe per E44-S5 AC-EC5: each invocation has its own iteration counter (centralized in the canonical pattern), so loop state is per-invocation, not shared.
+
+> `!scripts/write-checkpoint.sh gaia-create-epics 9 project_name="$PROJECT_NAME" prd_version="$PRD_VERSION" stage=val-auto-review --paths docs/planning-artifacts/epics-and-stories.md`
+
+### Step 10 — Brownfield: Generate Onboarding Knowledge Base (optional)
 
 Skip this step if mode is greenfield.
 
 - Generate onboarding doc as a knowledge base index linking to ALL artifacts.
 - Write to `docs/planning-artifacts/brownfield-onboarding.md`.
 
-> `!scripts/write-checkpoint.sh gaia-create-epics 9 project_name="$PROJECT_NAME" prd_version="$PRD_VERSION" epics_mode=brownfield brownfield_onboarding_written="$BROWNFIELD_ONBOARDING_WRITTEN"`
+> `!scripts/write-checkpoint.sh gaia-create-epics 10 project_name="$PROJECT_NAME" prd_version="$PRD_VERSION" epics_mode=brownfield brownfield_onboarding_written="$BROWNFIELD_ONBOARDING_WRITTEN"`
 
-### Step 10 — Edge Case Analysis (optional)
+### Step 11 — Edge Case Analysis (optional)
 
 - Ask: "Would you like to hunt for edge cases in the stories? Recommended to catch gaps before sprint planning. (yes / skip)"
 - If yes: spawn edge case analysis subagent.
 - If skip: edge case analysis can be run anytime later with /gaia-edge-cases.
 
-> `!scripts/write-checkpoint.sh gaia-create-epics 10 project_name="$PROJECT_NAME" prd_version="$PRD_VERSION" edge_cases_run="$EDGE_CASES_RUN"`
+> `!scripts/write-checkpoint.sh gaia-create-epics 11 project_name="$PROJECT_NAME" prd_version="$PRD_VERSION" edge_cases_run="$EDGE_CASES_RUN"`
 
-### Step 11 — Adversarial Review (optional)
+### Step 12 — Adversarial Review (optional)
 
 - Ask: "Would you like to run an adversarial review on the epics and stories? Recommended before sprint planning. (yes / skip)"
 - If yes: spawn adversarial review subagent.
 - If skip: adversarial review can be run anytime later with /gaia-adversarial.
 
-> `!scripts/write-checkpoint.sh gaia-create-epics 11 project_name="$PROJECT_NAME" prd_version="$PRD_VERSION" adversarial_run="$ADVERSARIAL_RUN"`
+> `!scripts/write-checkpoint.sh gaia-create-epics 12 project_name="$PROJECT_NAME" prd_version="$PRD_VERSION" adversarial_run="$ADVERSARIAL_RUN"`
 
 ## Validation
 

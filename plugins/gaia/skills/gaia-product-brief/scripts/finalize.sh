@@ -54,6 +54,8 @@ PLUGIN_SCRIPTS_DIR="$(cd "$SCRIPT_DIR/../../../scripts" && pwd)"
 
 CHECKPOINT="$PLUGIN_SCRIPTS_DIR/checkpoint.sh"
 LIFECYCLE_EVENT="$PLUGIN_SCRIPTS_DIR/lifecycle-event.sh"
+GATE_PREDICATES="$PLUGIN_SCRIPTS_DIR/lib/gate-predicates.sh"
+SKILL_MD_PATH="$(cd "$SCRIPT_DIR/.." && pwd)/SKILL.md"
 
 log() { printf '%s: %s\n' "$SCRIPT_NAME" "$*" >&2; }
 die() { log "$*"; exit 1; }
@@ -88,6 +90,24 @@ else
       ARTIFACT="$newest"
     fi
   fi
+fi
+
+# ---------- 0b. Quality gates: post_complete (E45-S2 / FR-347) ----------
+# Source the shared gate-predicates library and evaluate the
+# post_complete list declared in this skill's SKILL.md frontmatter.
+# Sets GATE_STATUS to 1 if any gate fails. The existing 27-item
+# checklist still runs after — both are aggregated into the final
+# exit code so observability side effects (checkpoint, lifecycle
+# event) always run.
+GATE_STATUS=0
+if [ -f "$GATE_PREDICATES" ] && [ -n "$ARTIFACT" ] && [ -f "$ARTIFACT" ]; then
+  # shellcheck disable=SC1090
+  . "$GATE_PREDICATES"
+  if ! _gate_run_post_complete "$SKILL_MD_PATH" "$ARTIFACT" "$SCRIPT_NAME: quality-gate"; then
+    GATE_STATUS=1
+  fi
+elif [ ! -f "$GATE_PREDICATES" ]; then
+  log "gate-predicates.sh not found at $GATE_PREDICATES — skipping quality gates (non-fatal)"
 fi
 
 # ---------- 1. Run the 27-item checklist ----------
@@ -399,4 +419,10 @@ else
 fi
 
 log "finalize complete for $WORKFLOW_NAME"
-exit "$CHECKLIST_STATUS"
+# Composite exit: non-zero if either the post_complete gate or the
+# existing 27-item checklist failed. Observability side effects
+# (checkpoint, lifecycle event) above still ran regardless.
+if [ "$GATE_STATUS" -ne 0 ] || [ "$CHECKLIST_STATUS" -ne 0 ]; then
+  exit 1
+fi
+exit 0

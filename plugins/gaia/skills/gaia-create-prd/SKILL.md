@@ -163,16 +163,45 @@ Write the PRD to `docs/planning-artifacts/prd.md` with all sections populated:
 
 > `!scripts/write-checkpoint.sh gaia-create-prd 11 project_name="$PROJECT_NAME" prd_version="$PRD_VERSION" feature_slug="$FEATURE_SLUG" --paths docs/planning-artifacts/prd.md`
 
-### Step 12 — Adversarial Review
+### Step 12 — Val Auto-Fix Loop (E44-S2 / ADR-058)
+
+> Reuses the canonical pattern at `gaia-public/plugins/gaia/skills/gaia-val-validate/SKILL.md`
+> § "Auto-Fix Loop Pattern". Do not duplicate the spec here; cite this anchor.
+
+**Guards (run before invocation):**
+
+- Artifact-existence guard (AC-EC3): if not exists `docs/planning-artifacts/prd.md` -> skip Val auto-review and exit (no Val invocation, no checkpoint, no iteration log).
+- Val-skill-availability guard (AC-EC6): if `/gaia-val-validate` SKILL.md is not resolvable at runtime -> warn `Val auto-review unavailable: /gaia-val-validate not found`, preserve the artifact, and exit cleanly.
+
+**Loop:**
+
+1. iteration = 1.
+2. Invoke `/gaia-val-validate` with `artifact_path = docs/planning-artifacts/prd.md`, `artifact_type = prd`.
+3. If findings is empty: proceed past the loop.
+4. If findings contains only INFO: log informational notes, proceed past the loop.
+5. If findings contains CRITICAL or WARNING:
+     a. Apply a fix to `docs/planning-artifacts/prd.md` addressing the findings.
+     b. Append an iteration log record to checkpoint `custom.val_loop_iterations`.
+     c. iteration += 1.
+     d. If iteration <= 3: go to step 2.
+     e. Else: present the iteration-3 prompt verbatim (centralized in `gaia-val-validate` SKILL.md § "Auto-Fix Loop Pattern") and dispatch.
+
+YOLO INVARIANT: the iteration-3 prompt MUST NOT be auto-answered under YOLO. This wire-in does not introduce a YOLO bypass branch. See ADR-057 FR-YOLO-2(e) and ADR-058 for the hard-gate contract.
+
+> Val auto-review per E44-S2 pattern (ADR-058, architecture.md §10.31.2). Validation MUST run against the Step 11 primary write (artifact-as-drafted), not the post-adversarial revision produced by the next steps — see story E44-S4 AC3 rationale.
+
+> `!scripts/write-checkpoint.sh gaia-create-prd 12 project_name="$PROJECT_NAME" prd_version="$PRD_VERSION" feature_slug="$FEATURE_SLUG" stage=val-auto-review --paths docs/planning-artifacts/prd.md`
+
+### Step 13 — Adversarial Review
 
 - Read `${CLAUDE_PLUGIN_ROOT}/knowledge/adversarial-triggers.yaml` to evaluate trigger rules. (This policy table ships inside the plugin under ADR-041's `knowledge/` convention; the legacy v1 location `_gaia/_config/adversarial-triggers.yaml` is retired and no longer used.) Determine the current `change_type`: if invoked with a change_type context (e.g., from add-feature triage), use that value. If no context is available (standalone PRD creation), default to "feature".
 - Look up the trigger rule for `change_type` + artifact "prd". If adversarial is false for this combination: skip the adversarial review. Add a "## Review Findings Incorporated" section with "Adversarial review not triggered — change type: {change_type}".
 - If adversarial is true: spawn a subagent to run the adversarial review task against `docs/planning-artifacts/prd.md`.
 - When subagent returns: verify `adversarial-review-prd-*.md` exists in `docs/planning-artifacts/`.
 
-> `!scripts/write-checkpoint.sh gaia-create-prd 12 project_name="$PROJECT_NAME" prd_version="$PRD_VERSION" feature_slug="$FEATURE_SLUG"`
+> `!scripts/write-checkpoint.sh gaia-create-prd 13 project_name="$PROJECT_NAME" prd_version="$PRD_VERSION" feature_slug="$FEATURE_SLUG"`
 
-### Step 13 — Incorporate Adversarial Findings
+### Step 14 — Incorporate Adversarial Findings
 
 - Read `docs/planning-artifacts/adversarial-review-prd-*.md` — extract critical and high severity findings.
 - For each critical/high finding: add as a new requirement or refine an existing requirement in the PRD.
@@ -182,7 +211,7 @@ Write the PRD to `docs/planning-artifacts/prd.md` with all sections populated:
 > After artifact write: run open-question detection snippet
 > `!${CLAUDE_PLUGIN_ROOT}/scripts/detect-open-questions.sh docs/planning-artifacts/prd.md`
 
-> `!scripts/write-checkpoint.sh gaia-create-prd 13 project_name="$PROJECT_NAME" prd_version="$PRD_VERSION" feature_slug="$FEATURE_SLUG" --paths docs/planning-artifacts/prd.md`
+> `!scripts/write-checkpoint.sh gaia-create-prd 14 project_name="$PROJECT_NAME" prd_version="$PRD_VERSION" feature_slug="$FEATURE_SLUG" --paths docs/planning-artifacts/prd.md`
 
 ## Validation
 

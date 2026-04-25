@@ -39,7 +39,7 @@ PHASE1_SLUGS=(
   gaia-advanced-elicitation
   gaia-product-brief
 )
-PHASE1_STEPS=(6 7 6 6 5 8)
+PHASE1_STEPS=(6 7 6 6 5 9)
 
 # ---------- AC3/AC7: canonical invocation line present per step ----------
 

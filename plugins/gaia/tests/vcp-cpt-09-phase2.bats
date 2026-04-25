@@ -35,7 +35,7 @@ PHASE2_SLUGS=(
   gaia-create-prd
   gaia-create-ux
 )
-PHASE2_STEPS=(13 11)
+PHASE2_STEPS=(14 12)
 
 # ---------- AC1/AC2/AC3: canonical invocation line present per step ----------
 
@@ -167,14 +167,16 @@ PHASE2_STEPS=(13 11)
 
 # ---------- AC1/AC5 (VCP-CPT-02 Phase 2): end-to-end checkpoint sequence ----------
 
-@test "AC1/AC5: simulating gaia-create-prd 13-step run writes 13 sequential checkpoints" {
+@test "AC1/AC5: simulating gaia-create-prd 14-step run writes 14 sequential checkpoints" {
   local slug="gaia-create-prd"
   local artifact="$TEST_TMP/prd.md"
   printf '# prd\n' > "$artifact"
 
   local n
-  for n in $(seq 1 13); do
-    if [ "$n" = "11" ] || [ "$n" = "13" ]; then
+  for n in $(seq 1 14); do
+    # Steps 11 (Generate Output), 12 (Val Auto-Fix Loop), and 14
+    # (Incorporate Adversarial Findings) emit --paths to the prd artifact.
+    if [ "$n" = "11" ] || [ "$n" = "12" ] || [ "$n" = "14" ]; then
       "$SCRIPT" "$slug" "$n" project_name=acme prd_version=1.0.0 feature_slug=checkpoint --paths "$artifact"
     else
       "$SCRIPT" "$slug" "$n" project_name=acme prd_version=1.0.0 feature_slug=checkpoint
@@ -187,21 +189,22 @@ PHASE2_STEPS=(13 11)
 
   local count
   count=$(find "$dir" -name '*.json' -type f | wc -l | tr -d ' ')
-  [ "$count" = "13" ]
+  [ "$count" = "14" ]
 
   local numbers
   numbers=$(find "$dir" -name '*.json' -type f -exec jq -r '.step_number' {} \; | sort -n | tr '\n' ' ')
-  [ "$numbers" = "1 2 3 4 5 6 7 8 9 10 11 12 13 " ]
+  [ "$numbers" = "1 2 3 4 5 6 7 8 9 10 11 12 13 14 " ]
 }
 
-@test "AC2/AC5: simulating gaia-create-ux 11-step run writes 11 sequential checkpoints" {
+@test "AC2/AC5: simulating gaia-create-ux 12-step run writes 12 sequential checkpoints" {
   local slug="gaia-create-ux"
   local artifact="$TEST_TMP/ux.md"
   printf '# ux\n' > "$artifact"
 
   local n
-  for n in $(seq 1 11); do
-    if [ "$n" = "10" ]; then
+  for n in $(seq 1 12); do
+    # Steps 10 (Generate Output) and 11 (Val Auto-Fix Loop) emit --paths.
+    if [ "$n" = "10" ] || [ "$n" = "11" ]; then
       "$SCRIPT" "$slug" "$n" project_name=acme ux_slug=web prd_path=docs/planning-artifacts/prd.md --paths "$artifact"
     else
       "$SCRIPT" "$slug" "$n" project_name=acme ux_slug=web prd_path=docs/planning-artifacts/prd.md
@@ -214,9 +217,9 @@ PHASE2_STEPS=(13 11)
 
   local count
   count=$(find "$dir" -name '*.json' -type f | wc -l | tr -d ' ')
-  [ "$count" = "11" ]
+  [ "$count" = "12" ]
 
   local numbers
   numbers=$(find "$dir" -name '*.json' -type f -exec jq -r '.step_number' {} \; | sort -n | tr '\n' ' ')
-  [ "$numbers" = "1 2 3 4 5 6 7 8 9 10 11 " ]
+  [ "$numbers" = "1 2 3 4 5 6 7 8 9 10 11 12 " ]
 }

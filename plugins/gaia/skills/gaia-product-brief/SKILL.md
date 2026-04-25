@@ -145,6 +145,35 @@ Where `{slug}` is a short kebab-case slug derived from the product vision (e.g.,
 
 > `!scripts/write-checkpoint.sh gaia-product-brief 8 product_name="$PRODUCT_NAME" target_user="$TARGET_USER" --paths docs/creative-artifacts/product-brief-${SLUG}.md`
 
+### Step 9 — Val Auto-Fix Loop (E44-S2 / ADR-058)
+
+> Reuses the canonical pattern at `gaia-public/plugins/gaia/skills/gaia-val-validate/SKILL.md`
+> § "Auto-Fix Loop Pattern". Do not duplicate the spec here; cite this anchor.
+
+**Guards (run before invocation):**
+
+- Artifact-existence guard (AC-EC3): if not exists `docs/creative-artifacts/product-brief-{slug}.md` -> skip Val auto-review and exit (no Val invocation, no checkpoint, no iteration log).
+- Val-skill-availability guard (AC-EC6): if `/gaia-val-validate` SKILL.md is not resolvable at runtime -> warn `Val auto-review unavailable: /gaia-val-validate not found`, preserve the artifact, and exit cleanly.
+
+**Loop:**
+
+1. iteration = 1.
+2. Invoke `/gaia-val-validate` with `artifact_path = docs/creative-artifacts/product-brief-{slug}.md`, `artifact_type = product-brief`.
+3. If findings is empty: proceed past the loop.
+4. If findings contains only INFO: log informational notes, proceed past the loop.
+5. If findings contains CRITICAL or WARNING:
+     a. Apply a fix to `docs/creative-artifacts/product-brief-{slug}.md` addressing the findings.
+     b. Append an iteration log record to checkpoint `custom.val_loop_iterations`.
+     c. iteration += 1.
+     d. If iteration <= 3: go to step 2.
+     e. Else: present the iteration-3 prompt verbatim (centralized in `gaia-val-validate` SKILL.md § "Auto-Fix Loop Pattern") and dispatch.
+
+YOLO INVARIANT: the iteration-3 prompt MUST NOT be auto-answered under YOLO. This wire-in does not introduce a YOLO bypass branch. See ADR-057 FR-YOLO-2(e) and ADR-058 for the hard-gate contract.
+
+> Val auto-review per E44-S2 pattern (ADR-058, architecture.md §10.31.2). The `product-brief` artifact_type uses Val's factual-claim validation against ground-truth plus the document-ruleset for product briefs (per E44-S1).
+
+> `!scripts/write-checkpoint.sh gaia-product-brief 9 product_name="$PRODUCT_NAME" target_user="$TARGET_USER" stage=val-auto-review --paths docs/creative-artifacts/product-brief-${SLUG}.md`
+
 ## Validation
 
 <!--

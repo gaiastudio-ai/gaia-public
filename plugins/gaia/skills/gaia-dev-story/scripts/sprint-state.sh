@@ -644,12 +644,24 @@ cmd_transition() {
 
 # ---------- Subcommand: reconcile (E38-S1, ADR-055 §10.29.1) ----------
 
-# Locate a story file for reconcile. Unlike locate_story_file(), this does NOT
-# enforce the `template: 'story'` filter — reconcile needs to work on the bats
-# test fixtures as well as canonical stories. Returns the first .md match for
-# the given key under IMPLEMENTATION_ARTIFACTS. Case-insensitive glob via
-# nocaseglob so {slug}-story.md fixtures match upper-cased keys on Linux.
-# Returns via stdout. Exits non-zero (return 1) if no file found — caller
+# Locate a story file for reconcile (E38-S7, FR-SPQG-4, ADR-055).
+#
+# Filter the {key}-*.md glob to canonical story files (those whose YAML
+# frontmatter declares `template: 'story'`). This eliminates the prior
+# behaviour where co-located review / qa-tests / security / performance
+# reports could be picked up as the "story" file and trigger spurious
+# parse errors during reconcile.
+#
+# For each glob candidate that is rejected (missing or non-'story' template),
+# emit a structured warning to stderr that names the candidate file:
+#
+#   RECONCILE: {key} candidate {file} skipped — no `template: 'story'` frontmatter
+#
+# This satisfies E38-S7 AC2 / Val WARNING #1: skips are observable, not silent.
+#
+# Case-insensitive glob via nocaseglob so {slug}-story.md fixtures match
+# upper-cased keys on Linux. Returns the first canonical match via stdout.
+# Returns non-zero (return 1) if no canonical story file is found — caller
 # handles the missing-file error.
 reconcile_locate_story_file() {
   local key="$1"
@@ -658,10 +670,23 @@ reconcile_locate_story_file() {
   # shellcheck disable=SC2206
   matches=( "${IMPLEMENTATION_ARTIFACTS}/${key}-"*.md )
   shopt -u nullglob nocaseglob
+
   if [ "${#matches[@]}" -eq 0 ]; then
     return 1
   fi
-  printf '%s' "${matches[0]}"
+
+  local m
+  for m in "${matches[@]}"; do
+    if _is_story_file "$m"; then
+      printf '%s' "$m"
+      return 0
+    fi
+    # Per-candidate structured warning naming the skipped file (Val WARNING #1).
+    printf "RECONCILE: %s candidate %s skipped — no \`template: 'story'\` frontmatter\n" \
+      "$key" "$m" >&2
+  done
+
+  return 1
 }
 
 # Read story-file frontmatter status; prints to stdout. Reuses the stricter

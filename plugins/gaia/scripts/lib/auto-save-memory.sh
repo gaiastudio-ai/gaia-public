@@ -254,6 +254,17 @@ _auto_save_memory() {
         return 64
     fi
 
+    # Fast-path no-op: if the memory infrastructure is not available
+    # (no MEMORY_PATH/config.yaml on disk and no fallback to the cwd's
+    # _memory tree, or memory-writer.sh missing), skip silently. This
+    # keeps test harnesses that exercise finalize.sh in isolation
+    # cheap — they pay no fork/exec/sleep cost. The fast path runs
+    # BEFORE we spawn the background writer.
+    local memdir="${MEMORY_PATH:-_memory}"
+    if [ ! -f "${memdir}/config.yaml" ] || [ ! -x "$_AUTOSAVE_MEMORY_WRITER" ]; then
+        return 0
+    fi
+
     # Compose summary body.
     local body
     body="$(_autosave_compose_summary "$skill" "$@")"
@@ -275,16 +286,20 @@ _auto_save_memory() {
     ) &
     local writer_pid=$!
 
-    local waited=0
+    # Poll every 100ms (10× per second) so a fast write returns quickly.
+    # AUTO_SAVE_LATENCY_THRESHOLD is the wall-clock budget in seconds, so we
+    # multiply by 10 to derive the iteration count.
     local threshold="${AUTO_SAVE_LATENCY_THRESHOLD:-3}"
-    while [ "$waited" -lt "$threshold" ]; do
+    local max_iters=$(( threshold * 10 ))
+    local i=0
+    while [ "$i" -lt "$max_iters" ]; do
         if ! kill -0 "$writer_pid" 2>/dev/null; then
             wait "$writer_pid" 2>/dev/null || true
             _autosave_log "session summary saved synchronously to ${agent}-sidecar (skill: ${skill})"
             return 0
         fi
-        sleep 1
-        waited=$(( waited + 1 ))
+        sleep 0.1
+        i=$(( i + 1 ))
     done
 
     # Threshold exceeded — leave writer running, return control.

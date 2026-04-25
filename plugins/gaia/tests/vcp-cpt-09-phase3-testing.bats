@@ -10,16 +10,17 @@
 # against a fixture, then validating the emitted checkpoint JSON against
 # schema v1.
 #
-# Phase 3 testing skills and step counts (from E43-S5):
-#   gaia-test-design         8 steps
-#   gaia-edit-test-plan      6 steps
+# Phase 3 testing skills and step counts (post E44-S6 wire-in; original
+# E43-S5 counts noted in parens):
+#   gaia-test-design         9 steps  (was 8; +1 Val Auto-Fix Loop step)
+#   gaia-edit-test-plan      7 steps  (was 6; +1 Val Auto-Fix Loop step)
 #   gaia-test-framework      5 steps
 #   gaia-atdd                5 steps
 #   gaia-trace               6 steps
 #   gaia-ci-setup            9 steps
 #   gaia-review-a11y         5 steps
 #   gaia-val-validate        8 steps
-#                      ---------- total: 52 invocations
+#                      ---------- total: 54 invocations
 #
 # Refs: docs/implementation-artifacts/E43-S5-*.md,
 #       docs/test-artifacts/test-plan.md §11.46.2,
@@ -48,7 +49,7 @@ PHASE3_TEST_SLUGS=(
   gaia-review-a11y
   gaia-val-validate
 )
-PHASE3_TEST_STEPS=(8 6 5 5 6 9 5 8)
+PHASE3_TEST_STEPS=(9 7 5 5 6 9 5 8)
 
 # Step-heading variants across the 8 skills:
 #   - em-dash ("— "): gaia-edit-test-plan, gaia-test-framework, gaia-review-a11y
@@ -213,8 +214,8 @@ PHASE3_TEST_STEPS=(8 6 5 5 6 9 5 8)
   # slug|expected|key_var_1|val_1|key_var_2|val_2
   local spec
   for spec in \
-    "gaia-test-design|8|story_key|E1-S1|test_plan_path|docs/test-artifacts/test-plan.md" \
-    "gaia-edit-test-plan|6|test_plan_path|docs/test-artifacts/test-plan.md|edit_mode|add" \
+    "gaia-test-design|9|story_key|E1-S1|test_plan_path|docs/test-artifacts/test-plan.md" \
+    "gaia-edit-test-plan|7|test_plan_path|docs/test-artifacts/test-plan.md|edit_mode|add" \
     "gaia-test-framework|5|detected_stack|typescript|framework_config_path|jest.config.ts" \
     "gaia-atdd|5|story_key|E1-S1|test_file_path|docs/test-artifacts/atdd-E1-S1.md" \
     "gaia-trace|6|trace_matrix_path|docs/test-artifacts/traceability-matrix.md|coverage_metrics|full" \

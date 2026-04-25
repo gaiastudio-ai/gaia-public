@@ -151,17 +151,48 @@ Write the readiness report to `docs/planning-artifacts/readiness-report.md` with
 
 > `!scripts/write-checkpoint.sh gaia-readiness-check 10 project_name="$PROJECT_NAME" gate_status="$GATE_STATUS" artifacts_inspected_count="$ARTIFACTS_INSPECTED_COUNT" stage=report --paths docs/planning-artifacts/readiness-report.md`
 
-### Step 11 — Adversarial Review
+### Step 11 — Val Auto-Fix Loop (E44-S2 / ADR-058)
+
+> Reuses the canonical pattern at `gaia-public/plugins/gaia/skills/gaia-val-validate/SKILL.md`
+> § "Auto-Fix Loop Pattern". Do not duplicate the spec here; cite this anchor.
+
+**Guards (run before invocation):**
+
+- Artifact-existence guard (AC-EC3): if not exists `docs/planning-artifacts/readiness-report.md` -> skip Val auto-review and exit (no Val invocation, no checkpoint, no iteration log).
+- Val-skill-availability guard (AC-EC6): if `/gaia-val-validate` SKILL.md is not resolvable at runtime -> warn `Val auto-review unavailable: /gaia-val-validate not found`, preserve the artifact, and exit cleanly.
+
+**Loop:**
+
+1. iteration = 1.
+2. Invoke `/gaia-val-validate` with `artifact_path = docs/planning-artifacts/readiness-report.md`, `artifact_type = readiness`.
+3. If findings is empty: proceed past the loop.
+4. If findings contains only INFO: log informational notes, proceed past the loop.
+5. If findings contains CRITICAL or WARNING:
+     a. Apply a fix to `docs/planning-artifacts/readiness-report.md` addressing the findings.
+     b. Append an iteration log record to checkpoint `custom.val_loop_iterations`.
+     c. iteration += 1.
+     d. If iteration <= 3: go to step 2.
+     e. Else: present the iteration-3 prompt verbatim (centralized in `gaia-val-validate` SKILL.md § "Auto-Fix Loop Pattern") and dispatch.
+
+YOLO INVARIANT: the iteration-3 prompt MUST NOT be auto-answered under YOLO. This wire-in does not introduce a YOLO bypass branch. See ADR-057 FR-YOLO-2(e) and ADR-058 for the hard-gate contract.
+
+> Val auto-review per E44-S2 pattern (ADR-058, architecture.md §10.31.2). Validation runs against the Step 10 primary write (artifact-as-drafted). Step 13's post-adversarial re-write does NOT trigger a second Val invocation.
+
+> Test Notes: VCP-VAL-04 (`docs/test-artifacts/test-plan.md §11.46.3`) covers this wire-in.
+
+> `!scripts/write-checkpoint.sh gaia-readiness-check 11 project_name="$PROJECT_NAME" gate_status="$GATE_STATUS" artifacts_inspected_count="$ARTIFACTS_INSPECTED_COUNT" stage=val-auto-review --paths docs/planning-artifacts/readiness-report.md`
+
+### Step 12 — Adversarial Review
 
 Invoke an adversarial review of the readiness report for critical scrutiny.
 
-> `!scripts/write-checkpoint.sh gaia-readiness-check 11 project_name="$PROJECT_NAME" gate_status="$GATE_STATUS" artifacts_inspected_count="$ARTIFACTS_INSPECTED_COUNT" stage=adversarial`
+> `!scripts/write-checkpoint.sh gaia-readiness-check 12 project_name="$PROJECT_NAME" gate_status="$GATE_STATUS" artifacts_inspected_count="$ARTIFACTS_INSPECTED_COUNT" stage=adversarial`
 
-### Step 12 — Incorporate Adversarial Findings
+### Step 13 — Incorporate Adversarial Findings
 
 Update the readiness report with adversarial review findings. If any Critical findings exist, set status to FAIL.
 
-> `!scripts/write-checkpoint.sh gaia-readiness-check 12 project_name="$PROJECT_NAME" gate_status="$GATE_STATUS" artifacts_inspected_count="$ARTIFACTS_INSPECTED_COUNT" stage=incorporate --paths docs/planning-artifacts/readiness-report.md`
+> `!scripts/write-checkpoint.sh gaia-readiness-check 13 project_name="$PROJECT_NAME" gate_status="$GATE_STATUS" artifacts_inspected_count="$ARTIFACTS_INSPECTED_COUNT" stage=incorporate --paths docs/planning-artifacts/readiness-report.md`
 
 ## Validation
 

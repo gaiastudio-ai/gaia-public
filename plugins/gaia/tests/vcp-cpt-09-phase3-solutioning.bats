@@ -17,8 +17,8 @@
 #   gaia-create-epics       12 steps  (was 11; +1 Val Auto-Fix Loop step at 9)
 #   gaia-threat-model        8 steps  (was 7;  +1 Val Auto-Fix Loop step at 8)
 #   gaia-infra-design        7 steps  (was 6;  +1 Val Auto-Fix Loop step at 7)
-#   gaia-readiness-check    12 steps
-#                      ---------- total: 70 invocations
+#   gaia-readiness-check    13 steps  (was 12; +1 Val Auto-Fix Loop step at 11 per E44-S6)
+#                      ---------- total: 71 invocations
 #
 # Refs: docs/implementation-artifacts/E43-S4-*.md,
 #       docs/test-artifacts/test-plan.md §11.46.2,
@@ -47,7 +47,7 @@ PHASE3_SOL_SLUGS=(
   gaia-infra-design
   gaia-readiness-check
 )
-PHASE3_SOL_STEPS=(13 8 6 4 12 8 7 12)
+PHASE3_SOL_STEPS=(13 8 6 4 12 8 7 13)
 
 # ---------- AC1/AC2/AC4: canonical invocation line present per step ----------
 
@@ -352,13 +352,13 @@ PHASE3_SOL_STEPS=(13 8 6 4 12 8 7 12)
   [ "$count" = "7" ]
 }
 
-@test "VCP-CPT-11 AC1/AC6: simulating gaia-readiness-check 12-step run writes 12 sequential checkpoints" {
+@test "VCP-CPT-11 AC1/AC6: simulating gaia-readiness-check 13-step run writes 13 sequential checkpoints" {
   local slug="gaia-readiness-check"
   local artifact="$TEST_TMP/readiness.md"
   printf '# r\n' > "$artifact"
   local n
-  for n in $(seq 1 12); do
-    if [ "$n" = "10" ]; then
+  for n in $(seq 1 13); do
+    if [ "$n" = "10" ] || [ "$n" = "11" ] || [ "$n" = "13" ]; then
       "$SCRIPT" "$slug" "$n" gate_status=pass artifacts_inspected_count=7 --paths "$artifact"
     else
       "$SCRIPT" "$slug" "$n" gate_status=pass artifacts_inspected_count=7
@@ -369,7 +369,7 @@ PHASE3_SOL_STEPS=(13 8 6 4 12 8 7 12)
   [ -d "$dir" ]
   local count
   count=$(find "$dir" -name '*.json' -type f | wc -l | tr -d ' ')
-  [ "$count" = "12" ]
+  [ "$count" = "13" ]
 }
 
 # ---------- VCP-CPT-11 AC6: schema consistency across all 8 skills ----------

@@ -32,6 +32,8 @@ PLUGIN_SCRIPTS_DIR="$(cd "$SCRIPT_DIR/../../../scripts" && pwd)"
 RESOLVE_CONFIG="$PLUGIN_SCRIPTS_DIR/resolve-config.sh"
 VALIDATE_GATE="$PLUGIN_SCRIPTS_DIR/validate-gate.sh"
 CHECKPOINT="$PLUGIN_SCRIPTS_DIR/checkpoint.sh"
+GATE_PREDICATES="$PLUGIN_SCRIPTS_DIR/lib/gate-predicates.sh"
+SKILL_MD_PATH="$(cd "$SCRIPT_DIR/.." && pwd)/SKILL.md"
 
 log() { printf '%s: %s\n' "$SCRIPT_NAME" "$*" >&2; }
 die() { log "$*"; exit 1; }
@@ -64,6 +66,21 @@ if [ -x "$VALIDATE_GATE" ]; then
   fi
 else
   log "validate-gate.sh not found at $VALIDATE_GATE — skipping gate (non-fatal)"
+fi
+
+# ---------- 2b. Quality gates: pre_start (E45-S2 / FR-347) ----------
+# Source the shared gate-predicates library and iterate the pre_start
+# list declared in this skill's SKILL.md frontmatter. Backward
+# compatible: if the block is absent or empty, this is a no-op.
+# HALT on first failure to match workflow.xml rule n="10".
+if [ -f "$GATE_PREDICATES" ]; then
+  # shellcheck disable=SC1090
+  . "$GATE_PREDICATES"
+  if ! _gate_run_pre_start "$SKILL_MD_PATH" "$SCRIPT_NAME: quality-gate"; then
+    exit 1
+  fi
+else
+  log "gate-predicates.sh not found at $GATE_PREDICATES — skipping quality gates (non-fatal)"
 fi
 
 # ---------- 3. Load checkpoint state ----------

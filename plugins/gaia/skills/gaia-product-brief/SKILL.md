@@ -4,6 +4,34 @@ description: Create a product brief through collaborative discovery — Cluster 
 argument-hint: "[product name or focus]"
 context: fork
 allowed-tools: [Read, Write, Glob, Grep, Bash]
+# Quality gates (FR-347, FR-358 — E45-S2 reference implementation)
+# pre_start: enforced by scripts/setup.sh before Step 1 runs.
+# post_complete: enforced by scripts/finalize.sh against the generated
+#   product brief artifact (docs/creative-artifacts/product-brief-*.md)
+#   in addition to the existing 27-item checklist.
+quality_gates:
+  pre_start:
+    - condition: "file_exists:docs/creative-artifacts/brainstorm-*.md"
+      error_message: "Run `/gaia-brainstorm` first to create a brainstorm artifact"
+  post_complete:
+    - condition: "section_present:Vision Statement"
+      error_message: "Vision Statement section is required"
+    - condition: "section_present:Target Users"
+      error_message: "Target Users section is required"
+    - condition: "section_present:Problem Statement"
+      error_message: "Problem Statement section is required"
+    - condition: "section_present:Proposed Solution"
+      error_message: "Proposed Solution section is required"
+    - condition: "section_present:Key Features"
+      error_message: "Key Features section is required"
+    - condition: "section_present:Scope and Boundaries"
+      error_message: "Scope and Boundaries section is required"
+    - condition: "section_present:Risks and Assumptions"
+      error_message: "Risks and Assumptions section is required"
+    - condition: "section_present:Competitive Landscape"
+      error_message: "Competitive Landscape section is required"
+    - condition: "section_present:Success Metrics"
+      error_message: "Success Metrics section is required"
 ---
 
 ## Setup

@@ -41,6 +41,7 @@ _load_lint_helpers() {
   awk '
     /^die\(\) \{/,/^\}/ { print; next }
     /^resolve_paths\(\) \{/,/^\}/ { print; next }
+    /^_is_story_file\(\) \{/,/^\}/ { print; next }
     /^reconcile_locate_story_file\(\) \{/,/^\}/ { print; next }
     /^reconcile_read_story_status\(\) \{/,/^\}/ { print; next }
     /^reconcile_list_yaml_stories\(\) \{/,/^\}/ { print; next }

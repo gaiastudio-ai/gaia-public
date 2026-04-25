@@ -20,6 +20,85 @@ You are **Val**, the GAIA Artifact Validator, validating an artifact against the
 
 This skill is the native Claude Code conversion of the legacy val-validate-artifact workflow (E28-S78, Cluster 10 Val Cluster). The validator runs in an isolated forked context (`context: fork`) with ground-truth loaded via `memory-loader.sh` (ADR-046 hybrid memory loading).
 
+## Upstream Integration Contract
+
+> Authoritative shape for upstream skills (E44-S3..S6) wiring `/gaia-val-validate` into their auto-fix loops. See ADR-058 (architecture.md §12) and FR-357 (prd.md §4.33) for the protocol context. E44-S2 implements the 3-iteration loop that consumes this contract.
+
+### Invocation Method
+
+`/gaia-val-validate` is invoked as a **direct skill call** by upstream skills immediately after they write an artifact to disk. There is no workflow-engine flag, no ambient configuration, and no dispatcher in the middle — the upstream skill calls this skill directly with the parameters below.
+
+> **Deprecated:** `val_validate_output: true` is superseded by this direct-invocation contract. The flag is silently ignored if it appears in any upstream SKILL.md frontmatter or metadata; skills MUST NOT error on its presence. Removal of the flag from downstream SKILL.md files is tracked under E44-S3..S6. Cross-reference: ADR-058 (Val Auto-Fix Loop Contract for V2 Skills) and FR-357 (`/gaia-val-validate` Auto-Fix Loop & Upstream Integration).
+
+### Required Parameters
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `artifact_path` | string | yes | Absolute or project-root-relative path to the artifact file just written by the upstream skill. Val re-reads this path from disk on every invocation. |
+| `artifact_type` | enum | yes | One of: `prd`, `architecture`, `ux`, `test-plan`, `threat-model`, `story`, `epic`, `brief`, `ci-plan`, `a11y`, `atdd`, `readiness`. Selects the document-specific ruleset (see `gaia-document-rulesets`). Unknown types skip structural validation but still run factual-claim verification — Val returns findings normally. |
+
+Example invocation (conceptual — actual call shape is the upstream skill invoking this skill):
+
+- `artifact_path = "docs/planning-artifacts/prd.md"`
+- `artifact_type = "prd"`
+
+### Response Schema
+
+Val returns a `findings` array. Each entry is an object with the fields below. The shape is stable across invocations and across artifact types — upstream auto-fix logic (E44-S2) pattern-matches on `severity` to drive the 3-iteration loop.
+
+| Field | Type | Description |
+|---|---|---|
+| `severity` | enum: `CRITICAL` \| `WARNING` \| `INFO` | Severity classification. CRITICAL and WARNING block the upstream loop until fixed; INFO is logged but does not block. |
+| `description` | string | Human-readable finding text describing what was expected versus what was found. |
+| `location` | string | File path with optional `:line` or `#section` anchor identifying where the finding applies. |
+
+Canonical JSON example (one entry per severity level):
+
+```json
+{
+  "findings": [
+    {
+      "severity": "CRITICAL",
+      "description": "Referenced file not found: plugins/gaia/skills/gaia-missing/SKILL.md",
+      "location": "docs/planning-artifacts/architecture.md:142"
+    },
+    {
+      "severity": "WARNING",
+      "description": "Stated component count (18 skills) does not match filesystem enumeration (17 skills).",
+      "location": "docs/planning-artifacts/prd.md#section-4.33"
+    },
+    {
+      "severity": "INFO",
+      "description": "Ground truth not available — cross-reference verification skipped.",
+      "location": "docs/planning-artifacts/prd.md"
+    }
+  ]
+}
+```
+
+An empty `findings` array (`{"findings": []}`) signals a clean validation — the upstream auto-fix loop terminates successfully.
+
+### Iterative Re-Invocation
+
+The 3-iteration auto-fix loop in ADR-058 §10.31.2 calls Val multiple times against the same `artifact_path` — once per iteration, after the upstream skill applies fixes. The contract for re-invocation:
+
+- Val MUST re-read the artifact from disk on every invocation. No in-memory caching of artifact content across calls.
+- Val MUST NOT cache findings from prior invocations for the same `artifact_path`. Each call is independent and returns findings reflecting the **current** on-disk artifact state.
+- Previously-reported findings that have been fixed MUST NOT reappear in the next invocation's `findings` array. Findings that remain unfixed MAY reappear (the upstream loop counts iterations, not findings).
+- Per Step 7 of this skill, prior `## Validation Findings` sections in the artifact are excluded from the current analysis to avoid double-counting — the upstream loop never sees stale findings.
+
+Cross-reference: ADR-058 §10.31.2 (loop protocol) for how the 3-iteration counter, escalation behavior, and INFO-level handling interact with this contract.
+
+### Test Notes
+
+The contract is exercised by three VCP test cases:
+
+- **VCP-VALV-02 (Script-verifiable):** Bats test at `plugins/gaia/tests/e44-s1-val-validate-upstream-contract.bats` — greps this SKILL.md for the section anchors above and the documented field names. Run with the standard bats suite.
+- **VCP-VALV-01 (LLM-checkable):** Invoke Val on a sample artifact, apply a fix, re-invoke Val. Assert: the previously-fixed finding does not appear in the second invocation's `findings`; no cached result from the first call leaks through.
+- **VCP-VAL-03 (LLM-checkable):** Present a SKILL.md that still declares `val_validate_output: true` in its frontmatter. Assert: the upstream skill does not error on the flag's presence; Val is invoked via the new direct-call contract; the flag is treated as a no-op.
+
+VCP-VALV-01 and VCP-VAL-03 execute inside the broader VCP test orchestrator, not as standalone bats tests.
+
 ## Critical Rules
 
 - Val is READ-ONLY on the target artifact -- never modify the artifact content itself, only append findings

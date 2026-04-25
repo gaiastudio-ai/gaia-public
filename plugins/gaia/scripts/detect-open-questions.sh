@@ -78,7 +78,7 @@ fi
 CONTEXT_MAX=120
 
 # Trim leading whitespace and clip context to CONTEXT_MAX chars.
-trim_context() {
+_trim_context() {
   # awk preserves portability across macOS BSD awk and GNU awk.
   awk -v max="$CONTEXT_MAX" '
     {
@@ -146,7 +146,7 @@ OQ_HITS="$(awk '
 ' "$ARTIFACT" 2>/dev/null || true)"
 
 # --- Count and emit ---
-count_lines() {
+_count_lines() {
   if [ -z "$1" ]; then
     printf '0'
   else
@@ -154,11 +154,11 @@ count_lines() {
   fi
 }
 
-TBD_N=$(count_lines "$TBD_HITS")
-TODO_N=$(count_lines "$TODO_HITS")
-ND_N=$(count_lines "$ND_HITS")
-CB_N=$(count_lines "$CB_HITS")
-OQ_N=$(count_lines "$OQ_HITS")
+TBD_N=$(_count_lines "$TBD_HITS")
+TODO_N=$(_count_lines "$TODO_HITS")
+ND_N=$(_count_lines "$ND_HITS")
+CB_N=$(_count_lines "$CB_HITS")
+OQ_N=$(_count_lines "$OQ_HITS")
 
 TOTAL=$((TBD_N + TODO_N + ND_N + CB_N + OQ_N))
 
@@ -169,7 +169,7 @@ fi
 
 # Helper: emit a group block. $1 = label, $2 = count, $3 = grep -n output
 # Note: input lines look like "{lineno}:{rest}" — split on the first colon.
-emit_group() {
+_emit_group() {
   local label="$1"
   local n="$2"
   local body="$3"
@@ -182,16 +182,16 @@ emit_group() {
     # Split first ":" — portable POSIX-shell idiom.
     lineno="${row%%:*}"
     rest="${row#*:}"
-    ctx=$(printf '%s' "$rest" | trim_context)
+    ctx=$(printf '%s' "$rest" | _trim_context)
     printf '    L%s: %s\n' "$lineno" "$ctx"
   done
 }
 
 printf 'Open Questions Detected:\n'
-emit_group 'TBD' "$TBD_N" "$TBD_HITS"
-emit_group 'TODO' "$TODO_N" "$TODO_HITS"
-emit_group 'needs-decision' "$ND_N" "$ND_HITS"
-emit_group 'Unchecked checkboxes' "$CB_N" "$CB_HITS"
-emit_group 'Open Questions sections' "$OQ_N" "$OQ_HITS"
+_emit_group 'TBD' "$TBD_N" "$TBD_HITS"
+_emit_group 'TODO' "$TODO_N" "$TODO_HITS"
+_emit_group 'needs-decision' "$ND_N" "$ND_HITS"
+_emit_group 'Unchecked checkboxes' "$CB_N" "$CB_HITS"
+_emit_group 'Open Questions sections' "$OQ_N" "$OQ_HITS"
 
 exit 0

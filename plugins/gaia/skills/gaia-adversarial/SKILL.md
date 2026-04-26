@@ -19,7 +19,7 @@ This skill is the native Claude Code conversion of the legacy `_gaia/core/tasks/
 - **Attack from multiple angles: technical, business, user, security, scale.** Do not confine the attack to one dimension.
 - **Produce a ranked findings report with severity and confidence levels.** Every finding row MUST have severity (critical / high / medium / low) AND confidence (high / medium / low) — confidence communicates how certain you are the issue is real.
 - **Do NOT suggest fixes — only identify problems.** Fixing is a separate step (handed off to a downstream workflow). Findings without remediation are the deliverable shape.
-- **Step 4 auto-incorporation is restricted to four callers — see the Step 4 Invocation Contract for the allowlist.** Critical Rules is a reminder surface only; the authoritative caller list lives in `### Step 4 — Invocation Contract` below. Edits to the allowlist happen in the Step 4 contract section, never here.
+- **Step 4 auto-incorporation is restricted to four callers — see the Step 4 Invocation Contract for the allowlist.** Critical Rules is a reminder surface only; the authoritative caller list lives in `### Step 4 Invocation Contract` below. Edits to the allowlist happen in the Step 4 contract section, never here.
 - This review is attitude-driven. It is explicitly orthogonal to `gaia-edge-cases` (method-driven boundary tracing) — do not collapse the two.
 
 ## Inputs
@@ -82,7 +82,7 @@ If the target is empty or resolves to no files (AC-EC6), exit with `No review ta
 
 > `!scripts/write-checkpoint.sh gaia-adversarial 3 target_artifact_path="$TARGET_ARTIFACT_PATH" adversarial_angle=report target_label="$TARGET_LABEL" --paths "$REPORT_PATH"`
 
-### Step 4 — Invocation Contract
+### Step 4 Invocation Contract
 
 Step 4 (Incorporate Findings) is **opt-in on a per-caller basis** — the closed allowlist below is the single source of truth. Any caller not on the list defaults to standalone behavior.
 

@@ -90,8 +90,12 @@ teardown() { common_teardown; }
 # AC1 — the contract section is anchored under Step 4, not Critical Rules.
 # -------------------------------------------------------------------------
 
-@test "VCP-ADV-02: SKILL.md declares the Step 4 — Invocation Contract subsection" {
-  run grep -E "^### Step 4 — Invocation Contract" "$SKILL_MD"
+@test "VCP-ADV-02: SKILL.md declares the Step 4 Invocation Contract subsection" {
+  # The contract heading deliberately omits the em-dash separator so the
+  # cross-skill VCP-CPT-09 step-count check (which counts `### Step N —`
+  # headings) stays at the canonical 4 steps. The contract section is a
+  # sub-heading anchored to Step 4, not a fifth step.
+  run grep -E "^### Step 4 Invocation Contract$" "$SKILL_MD"
   [ "$status" -eq 0 ]
 }
 

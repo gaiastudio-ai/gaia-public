@@ -124,7 +124,30 @@ Record all contradictions in a structured list with contradiction_id, type, sour
 - Verify security requirements are documented in PRD.
 - Verify authentication/authorization is defined in architecture.
 - Verify data privacy requirements are addressed.
-- Compliance timeline estimation.
+
+#### Compliance scan (FR-352 / E46-S4)
+
+Read `docs/planning-artifacts/epics-and-stories.md` once and harvest, for every story, its key, its priority (`P0..P3`), its compliance tags, and the phase classification of its owning epic. The same harvest feeds both the priority/schedule conflict detector and the compliance timeline estimator below — they share one pass.
+
+If `epics-and-stories.md` is missing or malformed, log the WARNING `epics-and-stories.md not found — priority/schedule and compliance checks skipped` and continue to Step 8 (AC-EC2). The gate is NOT blocked solely by a missing epics file.
+
+**Compliance keyword set (closed list).** Match case-insensitively against the story description: `GDPR`, `PCI-DSS`, `PCI DSS`, `HIPAA`. A story counts in every framework it mentions — a story citing both GDPR and HIPAA counts in both buckets. Do NOT extend the set to SOC-2, ISO-27001, CCPA, or any other framework without a matching PRD line — over-matching produces false positives and erodes trust in the gate.
+
+**Phase classification rule.** An epic is "late-phase" if its heading or description contains any of `Post-MVP`, `Phase 2`, `Phase 3`, `Phase 4+`, `Beta-2`, `Post-Launch`, `Future`, or if its frontmatter declares `phase: post-mvp` or `phase: late`. `MVP`, `Phase 1`, `Sprint 1..n`, and untagged epics classify as `current-phase` and are NOT flagged. Ambiguous labels (`MVP+1`, `Beta`, `Phase 1.5`) classify as `unknown` and are NOT flagged — fail-safe: absence of evidence is not evidence of a conflict (AC-EC7).
+
+##### Priority/Schedule Conflicts sub-section
+
+For every P0 or P1 compliance story whose owning epic classifies as `late-phase`, append a WARNING row to a `## Priority/Schedule Conflicts` sub-section of the readiness report. Row columns: story key, priority, compliance framework(s) (joined with `+` when multiple), current phase. No duplicate rows for the same story key.
+
+When zero P0/P1 compliance stories trigger the rule, OMIT the `## Priority/Schedule Conflicts` sub-section entirely — no empty header, no placeholder row (AC4).
+
+##### Compliance Timeline sub-section
+
+Count compliance stories per framework using exactly three buckets: `GDPR`, `PCI-DSS`, `HIPAA`. Compute weeks with the deterministic formula `weeks = ceil(story_count * 1.5)` with a minimum floor of 1 week when `story_count >= 1`. When `story_count == 0`, omit that framework's row entirely.
+
+Render a `## Compliance Timeline` sub-section as a three-column table (`Framework | Story Count | Estimated Weeks`) plus the single-line audit footnote `Estimates: weeks = ceil(story_count * 1.5), min 1 week when count >= 1.` so consumers of the report can audit the number without reading SKILL.md.
+
+When all three buckets are zero (no compliance stories anywhere), OMIT the `## Compliance Timeline` sub-section entirely — no empty table, no `0 stories` rows (AC4, AC-EC8).
 
 > `!scripts/write-checkpoint.sh gaia-readiness-check 7 project_name="$PROJECT_NAME" gate_status=pending artifacts_inspected_count="$ARTIFACTS_INSPECTED_COUNT" stage=security`
 
@@ -148,6 +171,37 @@ Delegate operational readiness assessment to the **devops** subagent (Soren) via
 ### Step 10 — Generate Gate Report
 
 Write the readiness report to `docs/planning-artifacts/readiness-report.md` with YAML frontmatter containing machine-readable PASS/FAIL status for each check area.
+
+#### Self-Contradiction Sweep (FR-352 / E46-S4)
+
+After all preceding sections (Completeness, Consistency, Cross-Artifact Contradictions, TEA, Test Infrastructure, Security with the Step 7 sub-sections, Operational, Brownfield) have been written into the in-memory report and BEFORE the file is flushed to disk, run an inline self-contradiction sweep over the assembled body. The sweep is an ACTIVE inline step — the Critical Rules bullet at the top of this skill remains as reinforcement, but the authoritative enforcement lives in this Step 10 action list. A reviewer who reads only the Critical Rules and skips the steps must still land on a passing gate only when this inline check has run.
+
+**Pattern set (case-insensitive, scoped to the same requirement ID `FR-*`, `NFR-*`, `ADR-*` within the same report pass):**
+
+- `{requirement} fully traced` paired with `{requirement} no test coverage`.
+- `{requirement} implemented` paired with `{requirement} not implemented`.
+- `{requirement} PASS` paired with `{requirement} FAIL`.
+- `{requirement} requires auth` paired with `{requirement} no auth` or `{requirement} no-auth` (AC-EC5).
+
+When the sweep finds contradictions, inject a `## Traceability Self-Contradictions` sub-section listing each conflict pair with: requirement ID, first claim text + its section anchor, second claim text + its section anchor, severity WARNING. Enumerate ALL conflict pairs found, not only the first (AC6). Use deterministic ordering — alphabetical by requirement ID, then ascending by first-appearance line number — so two consecutive runs against the same tree produce byte-identical reports.
+
+When the sweep finds zero contradictions, OMIT the `## Traceability Self-Contradictions` sub-section entirely — symmetric with the Step 7 timeline section: no empty placeholders.
+
+The sweep is pattern-based, not semantic. It does NOT invoke an LLM per requirement — that would be out of scope for this gate. Pattern detection is sufficient for the regression cases captured in VCP-RC-02 (Step 10).
+
+#### Frontmatter schema additions (Subtask 4.1)
+
+The readiness report frontmatter MUST include three new machine-readable fields produced by the Step 7 and Step 10 sub-sections above:
+
+- `priority_schedule_conflicts_count: <int>` — count of WARNING rows emitted by the Step 7 priority/schedule scan; defaults to 0 when the sub-section is omitted.
+- `compliance_timeline_present: <bool>` — `true` when a `## Compliance Timeline` sub-section was rendered; `false` when omitted.
+- `self_contradictions_count: <int>` — count of contradiction pairs emitted by the Step 10 sweep; defaults to 0 when the sub-section is omitted.
+
+Older reports that pre-date the FR-352 upgrade are read-compatible: consumers (`validate-gate.sh`, the Step 12 adversarial reviewer) MUST treat absent fields as the safe defaults above and MUST NOT FAIL on absence.
+
+#### Gate verdict downgrade rule (Subtask 4.2)
+
+If `self_contradictions_count > 0`, the overall gate status MUST NOT be PASS — it must be at least CONDITIONAL PASS, with each contradiction pair listed as a blocker in the report body. Priority/schedule conflicts and compliance timeline entries are informational (WARNING) and do NOT on their own downgrade PASS — this protects against an over-gating regression where a loud-but-not-broken report flips to FAIL purely because the new sections rendered.
 
 > `!scripts/write-checkpoint.sh gaia-readiness-check 10 project_name="$PROJECT_NAME" gate_status="$GATE_STATUS" artifacts_inspected_count="$ARTIFACTS_INSPECTED_COUNT" stage=report --paths docs/planning-artifacts/readiness-report.md`
 

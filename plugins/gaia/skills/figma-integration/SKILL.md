@@ -104,6 +104,41 @@ Cap any individual sleep at **30s** (the `8s` and `16s` entries above never exce
 
 The 429 wrapper attaches automatically to every Figma MCP call performed in Generate mode; Import-mode and read-only flows inherit the same wrapper because read calls also receive 429s.
 
+## Helper Contracts (Used by `/gaia-create-ux` Import Mode)
+
+> **Policy contracts — not premium implementation.** The signatures and parsing rules below are policy contracts: they describe what every consuming workflow MUST do at the boundary, regardless of whether the OSS stub or the enterprise plugin provides the actual code. The premium plugin implements these helpers; OSS readers see the contract surface only.
+
+### `validateFigmaFileKey(input)`
+
+Accepts a Figma URL or a bare file key string and returns the normalised key (or halts with an actionable error before any Figma API call). Reused by `/gaia-create-ux` Import mode (Step 9a / E46-S2 Subtask 3.1), `/gaia-edit-ux`, and the `/gaia-code-review` fidelity gate.
+
+| Input form | Example | Outcome |
+|---|---|---|
+| Figma URL | `https://www.figma.com/file/ABC123abc456def789012/...` | Extract key segment; pass to caller |
+| Bare key | `ABC123abc456def789012` | Validate length + charset; pass to caller |
+| Empty input | `""` | Halt with `"Invalid Figma file key: ''. Expected a Figma URL (https://www.figma.com/file/{key}/...) or the 22+ character key directly."` |
+| URL without file segment | `https://www.figma.com/` | Halt with the same error template, naming the offending input |
+| Key under 22 chars | `ABC123` | Halt — Figma file keys are documented as **22+ characters** of `[A-Za-z0-9]` |
+| Non-alphanumeric chars | `ABC!@#...` | Halt — the canonical pattern `[A-Za-z0-9]{22,}` rejects punctuation |
+
+The 22-character minimum is the canonical Figma file-key length per the URL convention documented in `architecture.md §10.17`. The halt MUST occur **before any Figma API call** — AC5 / AC-EC1 require zero API traffic on invalid input.
+
+### `classifyViewport(width_px)`
+
+Maps a frame width (integer pixels) to one of the canonical viewport categories used by `/gaia-create-ux` Generate (Step 8b) and Import (Step 9c). Used by E46-S2 Subtask 4.1.
+
+| `width_px` | Returned category | Notes |
+|---|---|---|
+| `280` | `"280"` | Compact mobile |
+| `375` | `"375"` | Standard mobile |
+| `600` | `"600"` | Phablet |
+| `768` | `"768"` | Tablet |
+| `1024` | `"1024"` | Small desktop |
+| `1280` | `"1280"` | Standard desktop |
+| any other value | `"custom"` | Returned with the actual width preserved in the result so the viewport distribution table can flag the deviation |
+
+**Exact match only** — no nearest-neighbour bucketing. A 400px frame returns `"custom"` with `actual_width: 400`, never `"375"`. This matches V1 behaviour and keeps the classification deterministic for reviewers (AC-EC8).
+
 ## Traceability
 
 - **FR-140** — Read-heavy/write-light Figma MCP operation policy. The classification table above is the canonical enforcement source.

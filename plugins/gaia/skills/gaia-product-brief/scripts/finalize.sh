@@ -279,7 +279,10 @@ metrics_measurable() {
       if (in_section && /^##[[:space:]]/) { in_section = 0 }
       if (in_section) {
         # Any of: NN%, $NN, NNms/s/bps, NN/NN, "p99", "p95", etc.
-        if ($0 ~ /[0-9]+(\.[0-9]+)?[[:space:]]*%|\$[0-9]|\<p[0-9]+\>|[0-9]+[[:space:]]*(ms|bps|hours?|days?|months?|minutes?|seconds?)|\<NPS\>/) {
+        # Portable word-boundary form for "pNN" and "NPS" — mawk and BSD
+        # awk do not support \<...\>, so we anchor with non-alphanumeric
+        # neighbours or BOL/EOL. See gaia-shell-idioms (E45-S7).
+        if ($0 ~ /[0-9]+(\.[0-9]+)?[[:space:]]*%|\$[0-9]|(^|[^A-Za-z0-9])p[0-9]+([^A-Za-z0-9]|$)|[0-9]+[[:space:]]*(ms|bps|hours?|days?|months?|minutes?|seconds?)|(^|[^A-Za-z0-9])NPS([^A-Za-z0-9]|$)/) {
           found = 1
         }
       }

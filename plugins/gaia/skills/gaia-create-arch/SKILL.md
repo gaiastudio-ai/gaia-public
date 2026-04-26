@@ -77,7 +77,86 @@ Delegate to the **architect** subagent (Theo) via `agents/architect` to select t
 
 > `!scripts/write-checkpoint.sh gaia-create-arch 3 project_name="$PROJECT_NAME" arch_version="$ARCH_VERSION" section_slug=technology-selection`
 
+### Step 3.5 — Tech-Stack Confirmation Pause
+
+> **Parity restoration — E46-S6 / FR-354 / AF-2026-04-24-1.** This sub-step
+> restores the V1 tech-stack confirmation gate that was dropped during the
+> Claude Code native migration (E28). It MUST fire after Step 3 returns and
+> BEFORE Step 4 begins. Step 4..N are NOT renumbered — Step 3.5 is a
+> deliberate non-integer slot so that downstream cross-references in
+> `epics-and-stories.md`, `test-plan.md §11.46.14`, and
+> `traceability-matrix.md` continue to resolve.
+
+> **Variable contract.** This sub-step writes a runtime variable named
+> `confirmed_tech_stack`. **Steps 4 and later MUST read the tech stack from
+> `confirmed_tech_stack` — never from the original Theo response object
+> (e.g., `theo_response.tech_stack`, `recommendation.primary`).** This
+> single contract is what makes the `[m]odify` branch actually take effect
+> downstream. If a future refactor short-circuits the variable, that is a
+> regression — flag it as a Finding.
+
+Render the recommendation Theo returned in Step 3 to the user as a fenced
+block in this exact shape:
+
+```text
+Recommended Tech Stack
+======================
+
+Primary: <stack label, e.g., "TypeScript / Next.js / Postgres">
+
+Key libraries / frameworks:
+  - <library>: <one-line rationale>
+  - <library>: <one-line rationale>
+  - ...
+
+Deferred / rejected alternatives:
+  - <alternative>: <why deferred or rejected>
+  - ...
+
+[a]ccept / [m]odify / [r]eject
+```
+
+Wait for the user's response before proceeding. Branch handlers:
+
+- **`[a]ccept`** — Set `confirmed_tech_stack` to Theo's recommendation
+  unchanged. Append the audit entry "Tech stack accepted as recommended"
+  to the in-session ADR-sidecar buffer (flushed in the finalize step;
+  see "Append Architecture Decisions to Sidecar" below). Proceed to Step 4.
+- **`[m]odify`** — Prompt the user for a free-form modification patch
+  (replacements, additions, removals). Apply the patch to Theo's
+  recommendation, write the result to `confirmed_tech_stack`, and append
+  the audit entry "Tech stack modified by user: {diff}" to the
+  in-session ADR-sidecar buffer. Proceed to Step 4.
+- **`[r]eject`** — HALT Step 4. Offer two sub-options:
+  1. **Re-invoke Theo with rejection notes** — gather a short rejection
+     rationale from the user, re-invoke the architect subagent with that
+     rationale appended, and re-render the pause when Theo returns. The
+     pause repeats until the user picks `[a]ccept` or `[m]odify`, or
+     escalates to abort.
+  2. **Abort workflow** — exit with status `aborted at tech-stack confirmation`.
+     Write NO `docs/planning-artifacts/architecture.md` file. Write NO
+     sidecar entry. The session ends cleanly with the abort status surfaced
+     to the caller.
+
+> **YOLO / non-interactive mode (deliberate concession).** When the skill
+> runs in YOLO or any other non-interactive mode where no human input can
+> be solicited, the pause MUST still fire and emit an audit entry. The
+> degraded behavior is: set `confirmed_tech_stack` to Theo's recommendation
+> unchanged, append the audit entry "YOLO auto-accepted tech stack (no user
+> pause)" to the in-session ADR-sidecar buffer, and proceed to Step 4. This
+> is a documented product decision (AF-2026-04-24-1) — a hard pause in
+> YOLO would break the non-interactive batch use case. Do NOT read the
+> YOLO short-circuit as a regression.
+
+> `!scripts/write-checkpoint.sh gaia-create-arch 3.5 project_name="$PROJECT_NAME" arch_version="$ARCH_VERSION" section_slug=tech-stack-confirmation`
+
 ### Step 4 — System Architecture
+
+> **Tech stack input contract.** Step 4 (and every subsequent step that
+> consumes the tech stack) MUST read from the `confirmed_tech_stack`
+> runtime variable set by Step 3.5 — never from Theo's raw Step 3
+> response. This is the load-bearing wire that makes the `[m]odify` and
+> `[r]eject → re-invoke` branches of Step 3.5 actually flow downstream.
 
 Delegate to the **architect** subagent (Theo) via `agents/architect` to design the system architecture.
 
@@ -202,6 +281,71 @@ YOLO INVARIANT: the iteration-3 prompt MUST NOT be auto-answered under YOLO. Thi
 > `!${CLAUDE_PLUGIN_ROOT}/scripts/detect-open-questions.sh docs/planning-artifacts/architecture.md`
 
 > `!scripts/write-checkpoint.sh gaia-create-arch 13 project_name="$PROJECT_NAME" arch_version="$ARCH_VERSION" --paths docs/planning-artifacts/architecture.md`
+
+#### Append Architecture Decisions to Sidecar (E46-S6 / FR-354)
+
+> **Run order — strict.** This action runs ONLY AFTER the architecture
+> document write succeeds in Step 13. If the architecture write failed,
+> skip the sidecar write entirely — the inline Decision Log in
+> `architecture.md` is the primary artifact, and a sidecar without a
+> matching architecture document is worse than no sidecar.
+
+> **Sidecar path — fixed.** Write to
+> `_memory/architect-sidecar/architecture-decisions.md`. This path is
+> not configurable via `global.yaml`; it is fixed by ADR-016 and
+> §10.10 of `architecture.md`. Do NOT relocate it under `custom/` or
+> under `_gaia/`.
+
+**Steps:**
+
+1. Build the in-session decisions list from (a) every row appended to
+   the architecture.md `§ Decision Log` table during Steps 3–13, and
+   (b) every audit entry buffered by Step 3.5 (accept / modify /
+   reject / YOLO auto-accept).
+2. If `_memory/architect-sidecar/architecture-decisions.md` does NOT
+   exist, create it with the canonical header:
+
+   ```markdown
+   # Architect — Architecture Decisions
+
+   > Sidecar log of architecture decisions per ADR-016 format. Mirrors the inline Decision Log in architecture.md.
+
+   ---
+   ```
+
+3. Build a session header for this run in the form
+   `### Session {YYYY-MM-DD} — {feature_or_scope_label}`, using the
+   project name + Step 1 scope label. This header groups all entries
+   from a single `/gaia-create-arch` invocation.
+4. **Append-only safety (AC5).** Read the existing sidecar before
+   writing. If a session header with the same date AND
+   `feature_or_scope_label` already exists, append ONLY the new ADR
+   entries under that header (dedup key = ADR ID — never write the
+   same ADR ID twice within one session header). If no matching
+   header exists, append a NEW session header block at the end of the
+   file. **Never overwrite, mutate, or reorder an existing entry.**
+5. Emit one ADR-016-formatted entry per decision under the session
+   header. Each entry MUST match the inline Decision Log row exactly
+   on the five fields **ADR ID, Decision, Rationale, Status, Source**
+   — no sixth column, no field rename. The session-header grouping is
+   the only sidecar-only addition.
+6. Append a trailing `---` separator after the session group so
+   subsequent sessions land in their own block.
+
+> **Non-blocking write error policy (Subtask 3.5).** If the sidecar
+> write fails (permission denied, disk full, path missing and
+> creation fails), log the WARNING `ADR sidecar write failed:
+> {reason}. Inline Decision Log in architecture.md is authoritative.`
+> to the workflow output and CONTINUE. Do NOT re-raise as a HALT —
+> `architecture.md` is already written and is the primary source.
+
+> **Append-only contract — absolute.** Re-runs MAY ONLY append new
+> entries; existing entries are byte-identical across sessions. This
+> makes the sidecar usable as a git-friendly audit trail — reviewers
+> can `git diff` it across sessions and see exactly which decisions
+> were added by each `/gaia-create-arch` invocation.
+
+> `!scripts/write-checkpoint.sh gaia-create-arch 13.5 project_name="$PROJECT_NAME" arch_version="$ARCH_VERSION" stage=adr-sidecar-write --paths _memory/architect-sidecar/architecture-decisions.md`
 
 ## Validation
 

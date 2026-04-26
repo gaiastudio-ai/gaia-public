@@ -59,8 +59,19 @@ jobs:
       # GitHub releases rather than apt.
       - name: Install jq
         run: sudo apt-get update && sudo apt-get install -y jq
-      - name: Run bats suite with coverage wrapper
-        run: bash plugins/gaia/tests/run-with-coverage.sh
+      - name: Run bats suite with coverage wrapper (budget-watched)
+        # E45-S6 / AC3 — bats-budget-watch.sh wraps the coverage wrapper and
+        # emits a structured warning to $GITHUB_STEP_SUMMARY when wall-clock
+        # exceeds the threshold. Threshold (240s) is the soft budget — the
+        # job's hard timeout above (5 min / 300s) remains the failing gate.
+        # See ADR-062 / E45-S6-adr-memo-bats-scaling.md for the rationale and
+        # plugins/gaia/docs/CI-NOTES.md for contributor guidance on adding
+        # fixtures without breaking the budget.
+        run: |
+          bash plugins/gaia/scripts/bats-budget-watch.sh \
+            --threshold-seconds 240 \
+            --label bats-tests \
+            -- bash plugins/gaia/tests/run-with-coverage.sh
       - name: Upload coverage report
         if: always()
         uses: actions/upload-artifact@v4

@@ -65,13 +65,28 @@ This skill is the native Claude Code conversion of the legacy `_gaia/lifecycle/w
 
 ### Step 1 — Discover Inputs
 
-> **Loading strategy: INDEX_GUIDED per ADR-062.** Brainstorm output and
-> research artifacts can be 10K+ tokens each. For each upstream artifact,
-> load the index/TOC first (heading scan with `grep -nE '^#{1,3} '` or read
-> `index.md` if present) — do NOT read the full body up front. Fetch named
-> sections on demand in later steps (`sed -n '/^## Section/,/^## /p`). If an
-> artifact has no parseable headings, fall back to FULL_LOAD for that file
-> only and log the fallback in the checkpoint.
+> **Loading strategy: INDEX_GUIDED per ADR-062.** This skill uses the
+> INDEX_GUIDED input-loading strategy for the **brainstorm artifact** —
+> the artifact's heading index is loaded first, and individual sections
+> are fetched only when a later step needs them. Brainstorm transcripts
+> commonly run 10K+ tokens, so full-loading them up front would burn the
+> context budget the collaborative discovery session needs for the
+> Vision / Target Users / Problem / Solution prompts.
+>
+> **Narrow scope (E46-S10 Subtask 2.3).** INDEX_GUIDED applies
+> specifically to the brainstorm artifact. Market research, domain
+> research, and technical research outputs are typically smaller
+> (often under 20 KB) and may still use FULL_LOAD without busting the
+> token budget — choose FULL_LOAD for those files when the index/TOC
+> overhead is not worth it.
+>
+> **Mechanics.** For an INDEX_GUIDED read, scan headings with
+> `grep -nE '^#{1,3} '` (or read `index.md` if present), summarise the
+> section list, and fetch named sections on demand later
+> (`sed -n '/^## Section/,/^## /p'`). If an artifact has no parseable
+> headings, fall back to FULL_LOAD for that file only and log the
+> fallback in the checkpoint — the runtime heuristic MUST NOT halt or
+> error on a small or unstructured file (AC3).
 
 - Scan prior brainstorm output if available (heading scan over `docs/creative-artifacts/brainstorm-*.md`).
 - Scan market research if available (heading scan over `docs/creative-artifacts/market-research*.md`).

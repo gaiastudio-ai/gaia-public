@@ -148,7 +148,12 @@ Wait for the user's response before proceeding. Branch handlers:
 > YOLO would break the non-interactive batch use case. Do NOT read the
 > YOLO short-circuit as a regression.
 
-> `!scripts/write-checkpoint.sh gaia-create-arch 3.5 project_name="$PROJECT_NAME" arch_version="$ARCH_VERSION" section_slug=tech-stack-confirmation`
+> Step 3.5 is a confirmation gate, not a standalone step — it does not
+> emit its own checkpoint. The `confirmed_tech_stack` value plus the
+> in-session ADR-sidecar audit buffer flow through to Step 4 (which
+> emits its own checkpoint) and Step 13 (which flushes the buffer to
+> the sidecar). Keeping the canonical Phase-3-solutioning step count
+> at 13 preserves cross-skill checkpoint-counting invariants.
 
 ### Step 4 — System Architecture
 
@@ -280,7 +285,7 @@ YOLO INVARIANT: the iteration-3 prompt MUST NOT be auto-answered under YOLO. Thi
 > After artifact write: run open-question detection snippet
 > `!${CLAUDE_PLUGIN_ROOT}/scripts/detect-open-questions.sh docs/planning-artifacts/architecture.md`
 
-> `!scripts/write-checkpoint.sh gaia-create-arch 13 project_name="$PROJECT_NAME" arch_version="$ARCH_VERSION" --paths docs/planning-artifacts/architecture.md`
+> `!scripts/write-checkpoint.sh gaia-create-arch 13 project_name="$PROJECT_NAME" arch_version="$ARCH_VERSION" --paths docs/planning-artifacts/architecture.md _memory/architect-sidecar/architecture-decisions.md`
 
 #### Append Architecture Decisions to Sidecar (E46-S6 / FR-354)
 
@@ -345,7 +350,14 @@ YOLO INVARIANT: the iteration-3 prompt MUST NOT be auto-answered under YOLO. Thi
 > can `git diff` it across sessions and see exactly which decisions
 > were added by each `/gaia-create-arch` invocation.
 
-> `!scripts/write-checkpoint.sh gaia-create-arch 13.5 project_name="$PROJECT_NAME" arch_version="$ARCH_VERSION" stage=adr-sidecar-write --paths _memory/architect-sidecar/architecture-decisions.md`
+> The sidecar write is a sub-action of Step 13 (terminal write of
+> the architecture document) — it does not emit its own checkpoint.
+> The Step 13 checkpoint is the canonical observability anchor for
+> the finalize phase; the sidecar path appears in that checkpoint's
+> `--paths` set when the write succeeds. Keeping the canonical
+> Phase-3-solutioning step count at 13 preserves cross-skill
+> checkpoint-counting invariants enforced by
+> `tests/vcp-cpt-09-phase3-solutioning.bats`.
 
 ## Validation
 

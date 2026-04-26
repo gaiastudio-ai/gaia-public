@@ -201,10 +201,72 @@ The audit logic is symmetric with E46-S2's Import-mode zero-write assertion — 
 
 ### Step 9 — Import Mode (if selected)
 
-- Validate Figma file key, discover pages and frames.
-- Extract design tokens in W3C DTCG format.
-- Build screen inventory and component specs.
-- Generate ux-design.md content from imported Figma data.
+Import mode is **read-only** by FR-140 contract — `expected_writes: 0`, `allowed_write_calls: []`. Every Figma MCP call MUST be a read; any write call is intercepted by the pre-dispatch guard (Step 9f) and the run halts with an FR-140 compliance violation. The end-of-step audit (Step 9f) is the canonical proof that no write occurred. Implementation reuses the FR-140 audit infrastructure delivered by E46-S1 (the audit logger, classifier, and report formatter) — Import mode extends it with the zero-write enforcement configuration only. Cross-reference: PRD §FR-350, architecture.md §10.17, and the canonical FR-140 read/write classification table hosted in `figma-integration/SKILL.md`.
+
+#### 9a — File Key Validation
+
+Accept either a Figma URL (`https://www.figma.com/file/{key}/...`) or a bare file key string. Delegate to the `validateFigmaFileKey(input)` helper exposed by `figma-integration` — this is the same helper used by `/gaia-edit-ux` and the `/gaia-code-review` fidelity gate so the parsing rule stays consistent across the framework. Halt **before any Figma API call** if the input is empty, malformed, too short (under 22 characters), or contains non-alphanumeric characters; return error `"Invalid Figma file key: '{input}'. Expected a Figma URL (https://www.figma.com/file/{key}/...) or the 22+ character key directly."` (AC5, AC-EC1). On parse success the normalised key is passed forward to Step 9b.
+
+#### 9b — Depth-1 Metadata Check
+
+Issue exactly one `figma_get_file` call with `depth=1`. The intent is to fetch only the file-level metadata (no frame tree, no node payload) — this is the cheapest possible read that still proves the file exists and the API token has access. Record `name`, `lastModified`, and `version` into the audit log and surface them in the `ux-design.md` Figma metadata section (Step 9g). If the call returns 404, halt with `"Figma file not found: {key}. Verify the file key and access permissions."` and emit zero tokens / zero partial outputs (AC-EC2). If the call returns 401/403, halt with guidance referencing the Figma MCP server config and the required scopes `files:read` + `file_content:read` (AC-EC3). 429 responses inherit the shared backoff schedule from `figma-integration` (AC-EC7).
+
+#### 9c — Frame Discovery and Viewport Classification
+
+List frames on the canvas (filtered to `FRAME` nodes at depth-2). For each frame, call the `classifyViewport(width_px)` helper from `figma-integration` to map the frame width to one of the canonical viewport categories: 280px, 375px, 600px, 768px, 1024px, 1280px, or `custom` if the width is outside the canonical set (AC7, AC-EC8). Use **exact-match** (not nearest-neighbour) so a 400px frame is flagged `custom` rather than silently bucketed as 375px — this matches V1 behaviour and keeps classification deterministic. Record the result in the `ux-design.md` viewport distribution table (`| Viewport | Frame count | Frame names |`, sorted in canonical order with `custom` last). Frames with `custom` width receive a caution flag `"Frame '{name}' uses width {width}px which is outside the canonical viewport set. Review whether this frame is intentional or a stale artifact."`
+
+#### 9d — W3C DTCG Token Extraction
+
+Call the `figma-integration` read API to extract Figma styles + variables, then transform each into a W3C DTCG token entry with the canonical key set: `$value`, `$type`, and optional `$description`. Map Figma style types per the DTCG draft — color → `color`, typography → `typography`, effect → `shadow`, float/number variable → `dimension` or `number`. Tokens whose source Figma type is outside the DTCG registered set (e.g., `BOOLEAN`) are mapped to the closest DTCG type (`boolean` or `other`) with the `$description` annotation preserving the source Figma type (AC-EC6). Emit the document to `docs/planning-artifacts/design-system/design-tokens.json` using the DTCG **nested-group convention** (e.g., `{"colors": {"primary": {"$value": "#0066CC", "$type": "color"}}}`) — flat dot-notation token names are discouraged by the DTCG draft. Include a top-level `$schema` reference to the DTCG draft schema URL so downstream tooling can validate. Apply delta-sync semantics per FR-168: do NOT overwrite tokens that already exist and are unchanged; only add new tokens and update changed token values (Subtask 5.3).
+
+#### 9e — Component Specs Generation
+
+Walk imported Figma components filtered to `COMPONENT` and `COMPONENT_SET` nodes. Emit one entry per component under a top-level `components:` map in `docs/planning-artifacts/design-system/component-specs.yaml`. Each entry carries `name`, `figma_node_id`, `variants` (from component-set child names), `states` (inferred from variant property names — `default`, `hover`, `active`, `disabled`, `error`, `loading`), `props` (extracted from component description + variant properties), and `platform_tokens: {}` as an empty placeholder (populated later by platform resolvers per FR-172). Add `schema_version: "1.0"` at the root per the test-plan.md:891 contract. If a component is missing a name or node id, skip its emission and log the skipped component in the FR-140 audit section. When the imported file has zero components (AC-EC5), still emit `component-specs.yaml` with `schema_version: "1.0"` and an empty `components: {}` map; `ux-design.md` notes "No components found".
+
+#### 9f — FR-140 Compliance Audit (Read-Only)
+
+At end-of-step — after all read operations have returned — run the FR-140 compliance audit. Reuse the audit infrastructure delivered by E46-S1 (do NOT re-implement); Import mode configures it with `expected_writes: 0` and `allowed_write_calls: []`.
+
+Audit logic:
+
+1. Walk the `mcp_calls` log accumulated during Steps 9a–9e.
+2. Categorize every call as `read` or `write` against the shared classification table in `figma-integration/SKILL.md` §FR-140 Read/Write Classification Table.
+3. Set `mode: "Import"`.
+4. Compute `fr_140_compliance` outcome — **pass | fail | incomplete**:
+   - `pass` — every call is `read`; zero `write` calls observed.
+   - `fail` — any `write` call appears in the log (even classified as `write / blocked`); enumerate every violating write call with its method name and index in the `violations[]` array (AC-EC4).
+   - `incomplete` — the run was interrupted (MCP unreachable, 429 exhaustion, file not found mid-run); record the partial state and surface remediation guidance.
+
+**Pre-dispatch write guard.** Any `figma_create_*` or `figma_update_*` MCP method invoked during Import mode is intercepted by the dispatcher pre-dispatch — the call is short-circuited before reaching the MCP server, recorded in the audit log as `write / blocked`, and the workflow halts with `"FR-140 violation: Import mode is read-only; write call {method} is not permitted. Switch to Generate mode to create or modify Figma frames."` This guard makes AC-EC4 a hard halt rather than a post-hoc detection.
+
+Emit the audit report in two places:
+
+- **Human-readable** — append a `## FR-140 Compliance Audit` block to `ux-design.md` with a PASS/FAIL banner and the call log table `| Call # | MCP method | Direction | Outcome |` (Subtask 2.3).
+- **Machine-parseable** — write `{project-path}/.figma-cache/audit.json` (gitignored) for bats consumption and downstream tools.
+
+Audit data shape (canonical — same shape as Generate mode, only `mode` and the expected counts differ):
+
+```yaml
+fr_140_audit:
+  mode: "Import"
+  expected_writes: 0
+  allowed_write_calls: []
+  fr_140_compliance: "pass"  # pass | fail | incomplete
+  mcp_calls:
+    - call: "figma_get_file"
+      type: "read"
+    - call: "get_components"
+      type: "read"
+    - call: "get_styles"
+      type: "read"
+  violations: []  # populated when fr_140_compliance == "fail" — each entry is {call, method, reason}
+```
+
+The Import-mode audit assertion is symmetric with E46-S1's Generate-mode audit: shared classification table, shared data shape, shared report formatter — only the expected outcome differs (Generate expects ≥1 write; Import expects exactly 0).
+
+#### 9g — Write Figma Source Section into `ux-design.md`
+
+Append an H2 section "Figma Source (Import)" to `ux-design.md` with the file key, file name, `lastModified`, version, frame count, viewport distribution table (Step 9c), and the runtime paths to the emitted `design-tokens.json` + `component-specs.yaml`. The FR-140 Compliance Audit block (Step 9f) sits directly under this section so reviewers can verify the read-only outcome alongside the source metadata.
 
 > `!scripts/write-checkpoint.sh gaia-create-ux 9 project_name="$PROJECT_NAME" ux_slug="$UX_SLUG" prd_path="$PRD_PATH"`
 

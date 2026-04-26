@@ -345,3 +345,63 @@ YAML
   [[ "$output" == *"planning_artifacts"* ]]
   [[ "$output" == *"implementation_artifacts"* ]]
 }
+
+# ---------------------------------------------------------------------------
+# E46-S9 — creative_artifacts key (FR-358 / FR-347, /gaia-product-brief
+# pre_start gate). Mirrors the E28-S200 pattern: default relative to
+# project_root, project-config.yaml override, GAIA_CREATIVE_ARTIFACTS env
+# override, and --format json surfacing.
+# ---------------------------------------------------------------------------
+
+mk_cfg_with_creative() {
+  # Writes a config WITH a custom creative_artifacts override.
+  local dir="$1"
+  mkdir -p "$dir/config"
+  cat > "$dir/config/project-config.yaml" <<'YAML'
+project_root: /tmp/gaia-art
+project_path: /tmp/gaia-art/app
+memory_path: /tmp/gaia-art/_memory
+checkpoint_path: /tmp/gaia-art/_memory/checkpoints
+installed_path: /tmp/gaia-art/_gaia
+framework_version: 1.127.2-rc.1
+date: 2026-04-25
+creative_artifacts: /custom/docs/creative
+YAML
+}
+
+@test "E46-S9: default creative_artifacts emitted relative to project_root" {
+  mk_cfg_no_artifacts "$TEST_TMP/skill"
+  CLAUDE_SKILL_DIR="$TEST_TMP/skill" run "$SCRIPT"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"creative_artifacts='/tmp/gaia-art/docs/creative-artifacts'"* ]]
+}
+
+@test "E46-S9: project-config.yaml creative_artifacts overrides the default" {
+  mk_cfg_with_creative "$TEST_TMP/skill"
+  CLAUDE_SKILL_DIR="$TEST_TMP/skill" run "$SCRIPT"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"creative_artifacts='/custom/docs/creative'"* ]]
+}
+
+@test "E46-S9: GAIA_CREATIVE_ARTIFACTS env var wins over project-config.yaml" {
+  mk_cfg_with_creative "$TEST_TMP/skill"
+  CLAUDE_SKILL_DIR="$TEST_TMP/skill" \
+    GAIA_CREATIVE_ARTIFACTS=/env/creative \
+    run "$SCRIPT"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"creative_artifacts='/env/creative'"* ]]
+}
+
+@test "E46-S9: --format json includes the creative_artifacts key" {
+  mk_cfg_no_artifacts "$TEST_TMP/skill"
+  CLAUDE_SKILL_DIR="$TEST_TMP/skill" run "$SCRIPT" --format json
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'"creative_artifacts"'* ]]
+  [[ "$output" == *'/tmp/gaia-art/docs/creative-artifacts'* ]]
+}
+
+@test "E46-S9: --help documents the GAIA_CREATIVE_ARTIFACTS env var" {
+  run "$SCRIPT" --help
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"GAIA_CREATIVE_ARTIFACTS"* ]] || [[ "$output" == *"creative_artifacts"* ]]
+}

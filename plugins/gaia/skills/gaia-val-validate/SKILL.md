@@ -35,7 +35,7 @@ This skill is the native Claude Code conversion of the legacy val-validate-artif
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `artifact_path` | string | yes | Absolute or project-root-relative path to the artifact file just written by the upstream skill. Val re-reads this path from disk on every invocation. |
-| `artifact_type` | enum | yes | One of: `prd`, `architecture`, `ux`, `test-plan`, `threat-model`, `story`, `epic`, `brief`, `ci-plan`, `a11y`, `atdd`, `readiness`. Selects the document-specific ruleset (see `gaia-document-rulesets`). Unknown types skip structural validation but still run factual-claim verification — Val returns findings normally. |
+| `artifact_type` | enum | yes | One of: `prd`, `architecture`, `ux`, `test-plan`, `threat-model`, `story`, `epic`, `brief`, `ci-plan`, `a11y`, `atdd`, `readiness`, `technical-research`. Selects the document-specific ruleset (see `gaia-document-rulesets`). Slug values are aligned with the on-disk artifact filename (e.g., `technical-research` ↔ `technical-research.md`) per E44-S11. Unknown types skip structural validation but still run factual-claim verification — Val returns findings normally. |
 
 Example invocation (conceptual — actual call shape is the upstream skill invoking this skill):
 

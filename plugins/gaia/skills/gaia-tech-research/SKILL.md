@@ -91,7 +91,7 @@ Write a structured technical research report to `docs/planning-artifacts/technic
 **Loop:**
 
 1. iteration = 1.
-2. Invoke `/gaia-val-validate` with `artifact_path = docs/planning-artifacts/technical-research.md`, `artifact_type = tech-research`.
+2. Invoke `/gaia-val-validate` with `artifact_path = docs/planning-artifacts/technical-research.md`, `artifact_type = technical-research`.
 3. If findings is empty: proceed past the loop.
 4. If findings contains only INFO: log informational notes, proceed past the loop.
 5. If findings contains CRITICAL or WARNING:
@@ -103,7 +103,7 @@ Write a structured technical research report to `docs/planning-artifacts/technic
 
 YOLO INVARIANT: the iteration-3 prompt MUST NOT be auto-answered under YOLO. This wire-in does not introduce a YOLO bypass branch. See ADR-057 FR-YOLO-2(e) and ADR-058 for the hard-gate contract.
 
-> Val auto-review per E44-S2 pattern (ADR-058, architecture.md §10.31.2). The `tech-research` artifact_type may not have a canonical document-ruleset; per E44-S1 AC-EC1 Val skips structural validation for unknown types and still runs factual-claim validation.
+> Val auto-review per E44-S2 pattern (ADR-058, architecture.md §10.31.2). The `technical-research` artifact_type matches the on-disk filename `technical-research.md` (slug-filename symmetry per E44-S11). It may not have a canonical document-ruleset; per E44-S1 AC-EC1 Val skips structural validation for unknown types and still runs factual-claim validation.
 
 > `!scripts/write-checkpoint.sh gaia-tech-research 6 technology="$TECHNOLOGY" evaluation_criteria="$EVALUATION_CRITERIA" stage=val-auto-review --paths docs/planning-artifacts/technical-research.md`
 

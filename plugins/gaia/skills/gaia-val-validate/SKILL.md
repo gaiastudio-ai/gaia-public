@@ -35,7 +35,7 @@ This skill is the native Claude Code conversion of the legacy val-validate-artif
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `artifact_path` | string | yes | Absolute or project-root-relative path to the artifact file just written by the upstream skill. Val re-reads this path from disk on every invocation. |
-| `artifact_type` | enum | yes | One of: `prd`, `architecture`, `ux`, `test-plan`, `threat-model`, `story`, `epic`, `brief`, `ci-plan`, `a11y`, `atdd`, `readiness`, `technical-research`. Selects the document-specific ruleset (see `gaia-document-rulesets`). Slug values are aligned with the on-disk artifact filename (e.g., `technical-research` ↔ `technical-research.md`) per E44-S11. Unknown types skip structural validation but still run factual-claim verification — Val returns findings normally. |
+| `artifact_type` | enum | yes | One of: `prd`, `architecture`, `ux`, `test-plan`, `threat-model`, `story`, `epic`, `brief`, `ci-plan`, `a11y`, `atdd`, `readiness`, `brainstorm`, `market-research`, `domain-research`, `technical-research`. Selects the document-specific ruleset (see `gaia-document-rulesets`). Slug values are aligned with the on-disk artifact filename (e.g., `technical-research` ↔ `technical-research.md`) per E44-S11. The four Phase 1 slugs (`brainstorm`, `market-research`, `domain-research`, `technical-research`) acquired canonical rulesets in E44-S12. Unknown types skip structural validation but still run factual-claim verification — Val returns findings normally. |
 
 Example invocation (conceptual — actual call shape is the upstream skill invoking this skill):
 
@@ -366,15 +366,22 @@ Bypass attempts log a yolo_hard_gate_violation record and HALT.
 
 ### Step 2 -- Detect Artifact Type and Run Document-Specific Rules
 
-- Extract the basename from the artifact path and determine the artifact type:
-  - `prd*.md` -> PRD rules
-  - `architecture*.md` -> Architecture rules
-  - `ux-design*.md` -> UX rules
-  - `test-plan*.md` -> Test plan rules
-  - `epics*.md` or `stories*.md` -> Epics/stories rules
-  - Otherwise -> unknown type
-- If artifact type is unknown: skip structural rules entirely. Log: "No document-specific ruleset for this artifact type -- factual verification only." Proceed to Step 3.
-- If artifact type is recognized: execute Pass 1 structural rules against the artifact content. Record structural findings with source tag [STRUCTURAL].
+- Determine the artifact type using this precedence (highest priority first):
+  1. **Upstream `artifact_type` slug**: if the caller passed an `artifact_type` parameter (per the Upstream Integration Contract above), use it as the authoritative type. The slug-to-ruleset map lives in `gaia-document-rulesets§type-detection` under "Artifact-Type Slug Mapping" — Phase 1 slugs are `brainstorm`, `market-research`, `domain-research`, `technical-research` (E44-S12).
+  2. **Frontmatter `template:` field**: if no slug is provided, parse the artifact's YAML frontmatter and match the `template:` value against the frontmatter mapping table.
+  3. **Path basename**: if no slug or frontmatter match, fall back to the file basename:
+     - `prd*.md` -> PRD rules
+     - `architecture*.md` -> Architecture rules
+     - `ux-design*.md` -> UX rules
+     - `test-plan*.md` -> Test plan rules
+     - `epics*.md` or `stories*.md` -> Epics/stories rules
+     - `brainstorm-*.md` -> Brainstorm rules (E44-S12)
+     - `market-research.md` -> Market research rules (E44-S12)
+     - `domain-research.md` -> Domain research rules (E44-S12)
+     - `technical-research.md` -> Technical research rules (E44-S12)
+  4. **Otherwise** -> unknown type.
+- If artifact type is unknown: skip structural rules entirely. Log: "No document-specific ruleset for this artifact type -- factual verification only." Proceed to Step 3. (Per the Upstream Integration Contract, Val still returns findings normally — graceful degradation per E44-S1 AC-EC1.)
+- If artifact type is recognized: load the matching ruleset section from `gaia-document-rulesets` JIT, execute Pass 1 structural rules against the artifact content, and record structural findings with source tag [STRUCTURAL].
 
 > `!scripts/write-checkpoint.sh gaia-val-validate 2 artifact_path="$ARTIFACT_PATH" iteration_number="$ITERATION_NUMBER" artifact_type="$ARTIFACT_TYPE" stage=type-detected`
 

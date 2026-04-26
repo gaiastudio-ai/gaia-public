@@ -73,6 +73,7 @@ The shared default (`framework_version`, `date`) passes through unchanged; the o
 | 21 | `val_integration` | moved-to-project-config | Per-project Val agent knobs (ADR-042). |
 | 22 | `ci_cd` | moved-to-project-config | Per-project CI/CD promotion chain (ADR-048). |
 | 23 | `test_execution_bridge` | moved-to-project-config | Team-wide test bridge enablement (FR-194/FR-197/NFR-034/ADR-028). Same enablement across all teammates so CI and local runs behave identically. |
+| 24 | `adr_registry` | stays-in-global | Pointer to the canonical ADR registry (table in `docs/planning-artifacts/architecture.md`) and the standalone-memo glob. Per-project but encoded as repo-relative paths; the field exists so tooling can locate the registry without hardcoding the path. Added by ADR-068. |
 
 ## Fields new to `project-config.yaml` (no predecessor in `global.yaml`)
 
@@ -88,7 +89,7 @@ The shared default (`framework_version`, `date`) passes through unchanged; the o
 ## Disposition summary
 
 - **moved-to-project-config:** 11 fields
-- **stays-in-global:** 8 fields
+- **stays-in-global:** 9 fields
 - **deprecated:** 7 fields
 - **new (no predecessor):** 6 fields
 

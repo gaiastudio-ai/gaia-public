@@ -16,19 +16,20 @@ This skill is the native Claude Code conversion of the legacy `_gaia/core/tasks/
 - **Extract the three canonical categories:** key decisions, action items, open questions. Every summary MUST surface each category if the source contains material for it. If a category is empty in the source, state "None" rather than silently omitting it.
 - **Keep the summary to 1-2 pages maximum** (roughly 400-900 words rendered). A summary longer than two pages has failed its purpose and must be compressed.
 - **Preserve critical nuances — don't oversimplify.** If a decision is contingent on an assumption, carry the assumption forward. If an action item has a deadline or dependency, carry that forward. Do not flatten qualifications into absolutes.
-- **Accept the target doc path as an argument.** If the argument is missing, fail fast with `usage: /gaia-summarize <target-doc-path>` rather than asking the user to guess what the skill is expecting (AC-EC4).
+- **Accept the target doc path as an argument.** If `$ARGUMENTS` is empty, ask "Which document should I summarize?" and use the user's response as the target path (per ADR-066 inline-ask contract). The inline-ask is an open-question indicator: in YOLO mode it MUST pause for user input (per ADR-067) — there is no safe default target document.
 - **Include section references** (e.g., `see §4.2`) so readers who want more detail can jump straight to the relevant part of the source.
 - Do NOT write speculative content. If a decision is not made in the source, do not invent one; list it as an open question instead.
 
 ## Inputs
 
-- `$ARGUMENTS`: required target document path. If empty, fail with `usage: /gaia-summarize <target-doc-path>` (AC-EC4).
+- `$ARGUMENTS`: target document path. If empty, ask "Which document should I summarize?" and use the user's response as the target (per ADR-066). YOLO mode MUST pause for the answer (per ADR-067) — no safe default exists.
 
 ## Instructions
 
 ### Step 1 — Load Document
 
-- If `$ARGUMENTS` is empty, fail fast with `usage: /gaia-summarize <target-doc-path>` and exit. Do NOT produce partial output.
+- If `$ARGUMENTS` is empty, ask the user: "Which document should I summarize?" and use the response as the target document path. Do NOT exit, do NOT print a usage message — the inline-ask is the contract (ADR-066). In YOLO mode, this is an open-question indicator: pause and wait for explicit user input rather than auto-proceeding (ADR-067) — there is no safe default target.
+- If `$ARGUMENTS` is provided, use it directly as the target path with no prompt (preserve the explicit-argument happy path).
 - Read the entire document with the Read tool.
 - Identify the document type (PRD, architecture, brief, retro, ADR, meeting notes, research report, etc.) and note its apparent purpose.
 
@@ -40,6 +41,7 @@ Walk the document and extract:
 - **Key decisions** — decisions that have been made, with the reasoning or trade-off that drove them. Record the section reference.
 - **Action items** — tasks that follow from the document. Capture the owner (person, team, role) if named, the deadline if given, and any blocking dependencies.
 - **Open questions** — unresolved items, contradictions, decisions deferred, topics flagged for follow-up.
+- **Next steps (source-implied only)** — recommended next actions that are explicitly stated or directly implied by the source document. Do NOT invent novel recommendations from the summarizer's own perspective. If the source contains no actionable next step, say so rather than fabricating one.
 
 ### Step 3 — Generate Summary
 
@@ -72,7 +74,7 @@ Produce the summary with this structure (markdown):
 (or "None" if all items are resolved)
 
 ## Next Steps
-{1-2 sentences on the recommended next action — if the source contains one}
+{1-2 sentences capturing actions implied by the source document — NOT new recommendations from the summarizer. Extract from the source's own language; if the source contains no implied next action, write "None — source contains no implied next action."}
 ```
 
 Length budget: aim for 400-900 words total. If the summary exceeds two pages, cut lower-priority items.
@@ -85,5 +87,8 @@ By default the summary is displayed to the user (matches the legacy task's behav
 - ADR-041: Native Execution Model via Claude Code Skills + Subagents + Plugins + Hooks.
 - ADR-042: Scripts-over-LLM for Deterministic Operations.
 - ADR-048: Engine Deletion as Program-Closing Action — legacy task coexists with this skill until program close.
+- ADR-066: Inline-Ask vs Fail-Fast Contract — empty `$ARGUMENTS` triggers an inline ask, not a usage message.
+- ADR-067: YOLO Mode Contract — inline-ask is an open-question indicator and MUST pause in YOLO mode.
 - FR-323: Skill Conversion — slash-command identity preserved.
+- FR-371: Restore Inline-Ask on Empty Arguments for Cluster 5 document-processing skills.
 - NFR-053: Full v1.127.2-rc.1 Feature Parity.

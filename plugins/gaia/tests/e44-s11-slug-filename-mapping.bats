@@ -51,7 +51,7 @@ teardown() { common_teardown; }
 # ---------------------------------------------------------------------------
 
 @test "AC1: gaia-val-validate enum lists technical-research" {
-  grep -q '\`technical-research\`' \
+  grep -qF '`technical-research`' \
     "$SKILLS_DIR/gaia-val-validate/SKILL.md"
 }
 

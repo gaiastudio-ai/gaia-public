@@ -212,6 +212,17 @@ is_allowlisted() {
   [[ "$path" == */plugins/gaia/skills/gaia-brainstorm/SKILL.md ]] && return 0
   # The ADR-048 guard workflow itself names the patterns it is supposed to catch.
   [[ "$path" == */.github/workflows/adr-048-guard.yml ]] && return 0
+  # E29-S7 V1 checkpoint deletion plan fixture — the deletion plan IS the document
+  # describing how to clean up legacy V1 (workflow.xml-engine-era) checkpoints, so
+  # its prose intentionally names workflow.xml as the historical engine the
+  # checkpoints belong to. The fixture is a CI-stable copy of the canonical plan
+  # at docs/planning-artifacts/v1-checkpoint-deletion-plan.md (allowlisted by the
+  # docs/ rule above). The fixture's bats test (e29-s7-v1-checkpoint-deletion-plan.bats)
+  # asserts these exact tokens are present, so scrubbing them would break the gate.
+  [[ "$path" == */plugins/gaia/tests/fixtures/e29-s7-deletion-plan/* ]] && return 0
+  # E29-S7 bats test names workflow.xml in its docstring describing what the
+  # plan covers — passive prose, not an active load.
+  [[ "$path" == */plugins/gaia/tests/e29-s7-v1-checkpoint-deletion-plan.bats ]] && return 0
   # gaia-validate-framework prose now documents what was retired by ADR-044/ADR-048
   # (the new text explicitly calls out the removed mechanisms so future readers
   # understand the native model — these are retirement notices, not active loads).

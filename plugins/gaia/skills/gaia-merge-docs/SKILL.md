@@ -31,7 +31,7 @@ The skill runs four steps in strict order, mirroring the legacy `merge-docs.xml`
 1. **Identify Source Files** — resolve inputs, determine correct ordering
 2. **Validate Structure** — check heading consistency, identify cross-references
 3. **Merge** — reassemble in order, fix cross-refs, add TOC
-4. **Output** — write the merged document
+4. **Output** — confirm target path (normal mode), then write the merged document
 
 ## Step 1 — Identify Source Files
 
@@ -56,8 +56,43 @@ The skill runs four steps in strict order, mirroring the legacy `merge-docs.xml`
 
 ## Step 4 — Output
 
+- **Pre-write confirmation (normal mode).** Before calling `Write`, display the resolved output path and ask:
+  ```
+  Output path: {output-path}
+  Proceed with merge to {output-path}? (y/n)
+  ```
+  Wait for the user's response.
+  - If the user answers `y` (or `yes`): proceed to `Write`.
+  - If the user answers `n` (or `no`): emit `Merge cancelled by user.` and halt without writing any file.
+- **YOLO-mode bypass.** In YOLO mode, skip the confirmation prompt and auto-proceed to `Write`. This aligns with ADR-067 (YOLO Mode Contract) — auto-confirm at template-output and auto-skip optional confirmations.
 - Write the merged document to the user-specified output path.
 - Report the merge summary: number of files merged, total line count, any headings that were renumbered, any cross-references that could not be resolved.
+
+## Slug Algorithm for Anchor IDs
+
+Step 3 rewrites file-based cross-references (`[see intro](./01-intro.md)`) to in-document anchor links (`[see intro](#intro)`). Anchor IDs are derived from heading text using the standard GitHub/Markdown convention:
+
+1. Lowercase the heading text.
+2. Replace every run of non-alphanumeric characters (whitespace, punctuation, symbols) with a single hyphen `-`.
+3. Collapse consecutive hyphens into a single hyphen.
+4. Trim leading and trailing hyphens.
+
+Equivalent JavaScript:
+
+```javascript
+heading_text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+```
+
+**Examples:**
+
+| Heading | Anchor ID |
+|---------|-----------|
+| `## 1. Introduction` | `#1-introduction` |
+| `## 3. API Design Patterns` | `#3-api-design-patterns` |
+| `## API Design Patterns` | `#api-design-patterns` |
+| `## C++ / Rust Interop` | `#c-rust-interop` |
+
+This is the same algorithm used across GAIA for anchor generation; it matches GitHub's Markdown rendering of headings, ensuring merged documents render with working in-page links on GitHub, GitLab, and most static-site generators.
 
 ## Edge Cases
 
@@ -72,6 +107,8 @@ The skill runs four steps in strict order, mirroring the legacy `merge-docs.xml`
 - ADR-041 — Native Execution Model via Claude Code Skills + Subagents + Plugins + Hooks.
 - ADR-042 — Scripts-over-LLM for Deterministic Operations.
 - ADR-048 — Program-close deletion policy for legacy engine/workflows/tasks.
+- ADR-066 — Inline-Ask vs Fail-Fast Contract (pre-write confirmation extends the inline-ask convention to the output step).
+- ADR-067 — YOLO Mode Contract (auto-skip optional confirmations at template-output).
 - FR-323 — Native Skill Format Compliance.
 - NFR-053 — Functional parity with the legacy task.
 - Reference implementation: `plugins/gaia/skills/gaia-fix-story/SKILL.md`.

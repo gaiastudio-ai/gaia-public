@@ -58,13 +58,64 @@ Workflows that previously JIT-loaded `_gaia/dev/skills/figma-integration.md` now
 1. If the enterprise plugin is installed and the `figma-premium` flag is enabled, the enterprise `figma-integration` SKILL.md is loaded — the full premium capability set becomes available.
 2. Otherwise, this OSS stub is loaded. Consuming workflows MUST detect the stub (presence of `license: enterprise` in the loaded frontmatter or an explicit capability probe) and degrade to markdown-only behavior. No MCP calls are attempted, no design-system artifacts are produced, no fidelity gate is enforced.
 
+## FR-140 Read/Write Classification Table
+
+> **Policy contract — not premium implementation.** This table is the canonical FR-140 read-heavy/write-light enforcement source for every Figma MCP call any consuming workflow may attempt. The premium enterprise plugin implements the actual MCP wrappers; the classification rules (which call is read vs write, and which mode is permitted to issue it) live here so OSS and enterprise both agree on the policy. Cross-referenced from `docs/planning-artifacts/architecture.md §10.17` (ADR-024) — the architecture document points back to this table.
+
+The table classifies every Figma MCP call the consuming workflows (`/gaia-create-ux`, `/gaia-edit-ux`, `/gaia-code-review` fidelity gate, `/gaia-dev-story` Figma hook) may issue. Two columns govern enforcement:
+
+- **`type`** — `read` or `write`. Read calls fetch state without mutating the Figma file. Write calls create or modify Figma resources.
+- **`fr_140_scope`** — `always_allowed` (any mode may issue this call) or `generate_only` (this call is permitted only when the consuming workflow is in Generate mode). Read calls are universally `always_allowed`; write calls are universally `generate_only`.
+
+| `mcp_call` | `type` | `fr_140_scope` |
+|---|---|---|
+| `get_file` | read | always_allowed |
+| `get_components` | read | always_allowed |
+| `get_styles` | read | always_allowed |
+| `get_frame` | read | always_allowed |
+| `get_node` | read | always_allowed |
+| `get_design_tokens` | read | always_allowed |
+| `get_component_specs` | read | always_allowed |
+| `get_frame_layouts` | read | always_allowed |
+| `export_asset_read` | read | always_allowed |
+| `create_frame` | write | generate_only |
+| `create_component` | write | generate_only |
+| `create_style` | write | generate_only |
+| `update_style` | write | generate_only |
+| `update_node` | write | generate_only |
+| `export_asset` | write | generate_only |
+| `create_prototype_flow` | write | generate_only |
+
+Consumer rule: any call NOT listed above is treated as **unclassified → fail-closed**. The audit MUST flag the call as `fr_140_compliance: fail` with a `violations[]` entry of shape `{call, reason: "unclassified MCP call"}`. Add new calls to this table before issuing them — never silently extend the surface.
+
+## 429 Rate-Limit Handling — Backoff Contract
+
+> **Policy contract — not premium implementation.** Every consuming workflow that issues a Figma MCP call MUST honor this backoff schedule when the MCP server returns HTTP 429. The enterprise plugin implements the actual retry wrapper; this section documents the schedule so downstream tests and OSS readers can reason about the behavior.
+
+Backoff schedule (jittered exponential, ±10% jitter to avoid synchronized retries in CI) — canonical sequence `1s, 2s, 4s, 8s, 16s`:
+
+- Retry 1 — wait **1s**.
+- Retry 2 — wait **2s**.
+- Retry 3 — wait **4s**.
+- Retry 4 — wait **8s**.
+- Retry 5 — wait **16s**.
+
+Cap any individual sleep at **30s** (the `8s` and `16s` entries above never exceed the cap; the cap is the safety ceiling for any future schedule extension). Maximum total retries: **max 5 retries**. After the 5th retry exhausts, the wrapper MUST emit `rate_limit_exhausted: {endpoint, retries_attempted, suggested_action}` and surface a clear error rather than crashing — partial outputs already written remain on disk and are reported as `incomplete` in the FR-140 audit.
+
+The 429 wrapper attaches automatically to every Figma MCP call performed in Generate mode; Import-mode and read-only flows inherit the same wrapper because read calls also receive 429s.
+
 ## Traceability
 
+- **FR-140** — Read-heavy/write-light Figma MCP operation policy. The classification table above is the canonical enforcement source.
 - **FR-323** — Skill Conversion (native plugin layout for skills).
 - **FR-332** — Enterprise license gate declared via frontmatter.
-- **NFR-048** — OSS plugin MUST NOT ship premium logic.
+- **FR-350** — `/gaia-create-ux` Figma Mode Restoration. The audit and backoff contracts above are reused by `/gaia-create-ux` Generate mode (E46-S1) and `/gaia-create-ux` Import mode (E46-S2).
+- **NFR-048** — OSS plugin MUST NOT ship premium logic. The classification table and backoff schedule are *policy contracts*, not premium implementation; the actual MCP wrappers live in the enterprise plugin.
 - **NFR-053** — Feature parity preserved across OSS + enterprise split.
+- **ADR-024** — Figma MCP integration via shared skill with design-tool abstraction layer. See `architecture.md §10.17` for the canonical architectural reference.
 - **ADR-041** — Native execution model under Claude Code Skills + Subagents + Plugins + Hooks.
 - **ADR-043** — OSS / enterprise split mechanism and feature-flag gating.
 - **E28-S122** — Enterprise `figma-integration` delivery story (Cluster 17).
+- **E46-S1** — Generate-mode parity restoration + FR-140 audit infrastructure (this file's classification table + backoff contract).
+- **E46-S2** — Import-mode parity restoration; reuses the classification table and the audit data shape from E46-S1 unchanged.
 - Legacy source: `_gaia/dev/skills/figma-integration.md` — retained in the running framework tree per CLAUDE.md (framework vs product separation).

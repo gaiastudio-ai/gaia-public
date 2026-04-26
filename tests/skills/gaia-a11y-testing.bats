@@ -123,3 +123,46 @@ setup() {
 @test "NFR-048: knowledge directory contains axe-core-patterns.md" {
   [ -f "$SKILL_DIR/knowledge/axe-core-patterns.md" ]
 }
+
+# ---------- E49-S1: WCAG-level explicit prompt + criterion mapping ----------
+
+@test "E49-S1 AC1: SKILL.md prompts the user inline for WCAG level (no silent default)" {
+  grep -q "Select WCAG level: A, AA, or AAA" "$SKILL_FILE"
+}
+
+@test "E49-S1 AC1: SKILL.md Critical Rules forbid silent WCAG default" {
+  grep -q "WCAG level MUST be explicitly declared by the user" "$SKILL_FILE"
+  ! grep -q "Default to WCAG 2.1 Level AA if not specified" "$SKILL_FILE"
+  ! grep -q "Default to AA if unspecified" "$SKILL_FILE"
+}
+
+@test "E49-S1 AC1: SKILL.md documents YOLO auto-AA behaviour with audit log" {
+  grep -q "YOLO: auto-selected WCAG 2.1 Level AA" "$SKILL_FILE"
+}
+
+@test "E49-S1 AC2: SKILL.md propagates WCAG level to wcag2a/wcag2aa/wcag2aaa rule sets" {
+  grep -q "wcag2a" "$SKILL_FILE"
+  grep -q "wcag2aa" "$SKILL_FILE"
+  grep -q "wcag2aaa" "$SKILL_FILE"
+}
+
+@test "E49-S1 AC3: SKILL.md mandates >=1 remediation per Critical finding (hard rule)" {
+  grep -q "every finding classified as Critical MUST include at least one specific remediation recommendation" "$SKILL_FILE"
+}
+
+@test "E49-S1 AC4: SKILL.md mandates X.Y.Z Criterion Name format on every finding" {
+  grep -q "X.Y.Z Criterion Name" "$SKILL_FILE"
+  grep -q "1.4.3 Contrast Minimum" "$SKILL_FILE"
+}
+
+@test "E49-S1 AC4: SKILL.md findings table schema includes WCAG Criterion column" {
+  grep -q "WCAG Criterion" "$SKILL_FILE"
+}
+
+@test "E49-S1 AC5: SKILL.md requires automated checks to cover every Step 1 target" {
+  grep -q "Automated test scenarios MUST cover every page and component identified in Step 1" "$SKILL_FILE"
+}
+
+@test "E49-S1: Step 6 enforces pre-write validation gate for criterion + critical remediation" {
+  grep -q "Pre-write validation gate" "$SKILL_FILE"
+}

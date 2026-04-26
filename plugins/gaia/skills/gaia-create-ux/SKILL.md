@@ -96,10 +96,106 @@ Delegate to the **ux-designer** subagent (Christy) via `agents/ux-designer` to d
 
 ### Step 8 — Generate Mode (if selected)
 
-- Create UI Kit page in Figma, extract design tokens, create styles and components.
-- Generate per-screen frames at 6 viewports: 280px, 375px, 600px, 768px, 1024px, 1280px.
-- Set up prototype flows and asset export configuration.
-- Record Figma node IDs and enhance ux-design.md with Figma metadata.
+Generate mode is the only mode permitted to issue Figma MCP **write** calls (per FR-140 read-heavy/write-light policy and ADR-024). All write operations performed during this step MUST be captured in the FR-140 audit log so the Step 8e compliance audit can verify them.
+
+#### 8a — UI Kit & Design Tokens
+
+- Create the UI Kit page in Figma, extract design tokens, and create styles and components.
+- Tokens land in the published-styles section of the file; component variants are authored as Figma component sets so the variant matrix below can be enumerated programmatically.
+
+#### 8b — Per-Screen Viewport Frames (6 canonical viewports)
+
+Generate per-screen frames at the canonical 6-viewport set — every viewport in this list MUST be generated (no exemptions; partial-viewport failures are recorded in the FR-140 audit per AC-EC5):
+
+- **280px** — narrow handset / split-view minimum.
+- **375px** — standard handset (iPhone-class).
+- **600px** — small tablet portrait / large handset landscape.
+- **768px** — tablet portrait (iPad-class).
+- **1024px** — tablet landscape / small laptop.
+- **1280px** — desktop minimum.
+
+Persist the canonical list in `ux-design.md` frontmatter as `viewports: [280, 375, 600, 768, 1024, 1280]`. Per ADR-060 this list is static — do NOT introduce templating or runtime resolution.
+
+#### 8c — Component State Variants (6 canonical states)
+
+For every component authored in the UI Kit, generate all 6 state variants — `default, hover, active, disabled, error, loading` — as distinct design artifacts under the component's Figma node:
+
+- `default` — resting state.
+- `hover` — pointer over the component (web/desktop).
+- `active` — pressed / engaged state.
+- `disabled` — non-interactive state.
+- `error` — invalid / failed state with error styling.
+- `loading` — pending / async-busy state.
+
+Record every component's variant matrix in the generated `component-specs.yaml` under each component's `variants:` key. Components missing a variant MUST carry a documented exemption in the spec — the audit treats undocumented gaps as a failure (AC-EC7 disambiguation rule applies on naming collisions).
+
+#### 8d — Prototype Flow Connections
+
+After per-screen frames are created, establish prototype flow edges between screens in the Figma file. Each flow edge connects a source frame to a destination frame and is labeled with the triggering interaction.
+
+Record the resulting graph in `ux-design.md` under a `## Prototype Flows` section and a structured `prototype_flows:` block, e.g.:
+
+```yaml
+prototype_flows:
+  - from: "Login"
+    to: "Dashboard"
+    trigger: "submit"
+  - from: "Dashboard"
+    to: "Settings"
+    trigger: "tap settings icon"
+```
+
+Skip this sub-step only if the user defined a single screen — single-screen designs have no edges to generate.
+
+#### 8e — Asset Export Catalogs (per platform, 1x/2x/3x)
+
+Export raster assets for each platform target. The shared `figma-integration` skill provides the `export_asset` MCP wrapper; this sub-step wires the platform-specific output paths and density buckets:
+
+- **iOS** — write to `{project-path}/design/ios/Assets.xcassets/<AssetName>.imageset/`. Each `.imageset` directory contains a `Contents.json` index and the three raster sizes: `<asset>.png` (1x), `<asset>@2x.png` (2x), and `<asset>@3x.png` (3x).
+- **Android** — write to `{project-path}/design/android/res/drawable-mdpi/`, `drawable-hdpi/`, `drawable-xhdpi/`, `drawable-xxhdpi/`, and `drawable-xxxhdpi/`. The density mapping is `mdpi=1x`, `hdpi=1.5x`, `xhdpi=2x`, `xxhdpi=3x`, `xxxhdpi=4x`. The 1x/2x/3x asset trio MUST be present at the corresponding density buckets (`mdpi`/`xhdpi`/`xxhdpi`); `hdpi` and `xxxhdpi` are optional but recommended.
+
+When the source asset is only available at 1x (AC-EC8), upscale from the largest available source and stamp `upscaled_from: {source_res}` into the asset metadata; emit a `warning` in the FR-140 audit instead of failing the export.
+
+#### 8f — Record Figma Metadata & MCP Call Log
+
+- Record Figma node IDs for every generated frame, component, and asset.
+- Append every MCP call performed during Step 8 to the in-memory call log keyed `mcp_calls`. The Step 8g compliance audit consumes this log directly.
+- Persist the Figma metadata block (file key, page IDs, screen→node mapping) into `ux-design.md`.
+
+#### 8g — FR-140 Compliance Audit
+
+At the end of Step 8 — after every write operation has been issued — emit the FR-140 compliance audit. The audit is the canonical enforcement point for the read-heavy/write-light policy per FR-140 and architecture.md §10.17.
+
+Audit logic (reuses the read/write classification table hosted in `figma-integration/SKILL.md` §FR-140 Read/Write Classification Table — do NOT duplicate the table here):
+
+1. Walk the `mcp_calls` log accumulated during Steps 8a–8f.
+2. Categorize every call as `read` or `write` against the shared classification table.
+3. Set `mode: "Generate"`.
+4. Compute `fr_140_compliance` outcome — **pass | fail | incomplete**:
+   - `pass` — at least one write call occurred AND every write call's `fr_140_scope` is `always_allowed` or `generate_only` AND mode is `Generate`.
+   - `fail` — any write call occurred outside Generate mode OR any call's classification disallows it under the current mode. Populate `violations[]` with `{call, reason}` entries and abort downstream consumers (AC-EC4 defensive check).
+   - `incomplete` — the run was interrupted (MCP unreachable, partial-viewport failure, etc.). Record the partial state and surface remediation guidance (AC-EC2, AC-EC5).
+
+Emit the audit report in two places:
+
+- **Human-readable** — append a `## FR-140 Audit` block to `ux-design.md` with the full call log and outcome.
+- **Machine-parseable** — write `{project-path}/.figma-cache/audit.json` (gitignored) for bats consumption and downstream tools.
+
+Audit data shape (canonical):
+
+```yaml
+fr_140_audit:
+  mode: "Generate"
+  fr_140_compliance: "pass"  # pass | fail | incomplete
+  mcp_calls:
+    - call: "get_file"
+      type: "read"
+    - call: "create_frame"
+      type: "write"
+  violations: []  # populated when fr_140_compliance == "fail"
+```
+
+The audit logic is symmetric with E46-S2's Import-mode zero-write assertion — the shared classification table and the audit data shape are reused there unchanged.
 
 > `!scripts/write-checkpoint.sh gaia-create-ux 8 project_name="$PROJECT_NAME" ux_slug="$UX_SLUG" prd_path="$PRD_PATH"`
 

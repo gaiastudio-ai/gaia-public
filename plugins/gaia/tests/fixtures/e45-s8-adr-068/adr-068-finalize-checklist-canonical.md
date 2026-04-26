@@ -193,13 +193,13 @@ becomes the CI default once the migration is complete.
 
 ### Integration with `quality_gates.post_complete`
 
-Per the workflow.xml engine contract (ADR-019, §10.7), every workflow
-runs `quality_gates.post_complete` checks before transitioning to
-`review`. This ADR pins how `finalize-checklist.sh` plugs into that
-gate:
+Per the V2 SKILL.md engine contract (ADR-019, §10.7 — quality-gate
+evaluation), every skill runs `quality_gates.post_complete` checks
+before transitioning the story to `review`. This ADR pins how
+`finalize-checklist.sh` plugs into that gate:
 
-1. The skill's `workflow.yaml` declares a `post_complete` check of the
-   form:
+1. The skill's SKILL.md frontmatter declares a `post_complete` check of
+   the form:
 
    ```yaml
    quality_gates:

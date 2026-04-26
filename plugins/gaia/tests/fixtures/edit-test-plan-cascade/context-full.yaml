@@ -1,0 +1,45 @@
+# Fixture: VCP-ETP-01 — full inheritance from /gaia-add-feature
+# Drives the all-three-fields-present case for /gaia-edit-test-plan Step 2.
+# Story: E46-S5 (FR-353)
+#
+# When the orchestrator (/gaia-add-feature) cascades into /gaia-edit-test-plan
+# with this context, Step 2 MUST inherit all three fields verbatim and skip
+# both interactive prompts ("What new test cases are needed?" and
+# "Which FR/NFR IDs need test coverage?").
+#
+# Expected inheritance log line (Subtask 1.3 of E46-S5):
+#   Step 2: inherited feature_description, prd_diff, arch_diff from upstream;
+#           prompted for none.
+#
+# Expected internal-variable mapping (legacy names preserved per Dev Notes):
+#   feature_description -> new_requirements
+#   prd_diff            -> change_description
+#   arch_diff           -> affected_test_areas
+
+upstream: gaia-add-feature
+case: full
+
+context:
+  feature_description: |
+    Add multi-region failover for the payments API: when the primary region
+    health check fails for 30s, traffic shifts to the secondary region within
+    60s. Customer-visible behavior: zero failed transactions during failover.
+  prd_diff: |
+    PRD §4.10 — added FR-401 (multi-region failover) and NFR-088 (RPO < 60s,
+    RTO < 90s). No existing FR/NFR was modified; both IDs are net-new.
+  arch_diff: |
+    Architecture §6.3 — added ADR-073 (active-active topology with health-
+    based DNS routing). New components: region-health-probe, dns-failover-
+    controller. No existing component contracts changed.
+
+expected:
+  step2_prompts_asked: []
+  step2_inherited_fields:
+    - feature_description
+    - prd_diff
+    - arch_diff
+  step2_log_line_substring: "inherited feature_description, prd_diff, arch_diff"
+  internal_vars_set:
+    - new_requirements
+    - change_description
+    - affected_test_areas

@@ -53,14 +53,84 @@ This skill is the native Claude Code conversion of the legacy `_gaia/testing/wor
 > user has identified the affected requirement IDs in the questions below.
 > This is the diff-only / named sections only loading pattern.
 
-Ask the user:
+#### Step 2a — Orchestrator-Context Detection (FR-353 / E46-S5)
 
-1. What new test cases are needed? Describe the feature or change requiring test coverage.
-2. Which FR/NFR IDs need test coverage?
+> **Inheritance contract.** When this skill is invoked from an upstream
+> orchestrator (typically `/gaia-add-feature`), three named context fields
+> may be supplied as invocation parameters: `feature_description`,
+> `prd_diff`, and `arch_diff`. These three names are the orchestrator-to-
+> skill cascade contract per FR-353 — do NOT rename them per-skill, since
+> peer skills (`/gaia-edit-prd`, `/gaia-edit-arch`) inherit the same set.
 
-- After the user answers, load ONLY the named diff sections of `docs/planning-artifacts/prd.md` corresponding to the supplied FR/NFR IDs (do NOT read the full PRD).
-- Load ONLY the named diff sections of `docs/planning-artifacts/architecture.md` that correspond to the affected components (do NOT read the full architecture document).
-- Record: new_requirements, change_description, affected_test_areas.
+> **Backward-compat variable mapping.** The legacy Step 2 internal
+> variables (`new_requirements`, `change_description`, `affected_test_areas`)
+> are NOT renamed. The inheritance layer translates the orchestrator
+> contract names into the legacy names so Steps 3–5 see exactly the
+> variable names they see today:
+>
+> | Orchestrator field    | Legacy internal variable |
+> |-----------------------|--------------------------|
+> | `feature_description` | `new_requirements`       |
+> | `prd_diff`            | `change_description`     |
+> | `arch_diff`           | `affected_test_areas`    |
+
+Run the **three-case branch** before asking any questions:
+
+- **(a) ALL three present** → inherit all three fields verbatim. Skip
+  both interactive prompts in Step 2b. Map each inherited field into its
+  legacy internal variable per the table above.
+- **(b) NONE present** → standalone path. Ask both interactive prompts in
+  Step 2b verbatim — existing standalone behavior is preserved bit-for-bit
+  (AC2). The inheritance layer is a silent no-op in this case; do NOT
+  error, warn, or pause when no orchestrator context is detected.
+- **(c) PARTIAL (one or two present)** → inherit whichever fields are
+  present, then prompt for ONLY the missing fields using the existing
+  Step 2b prompt text. Do NOT re-ask for inherited fields.
+
+After the three-case branch, write a **single inheritance log line** to
+the skill's working notes (not to stdout):
+
+```
+Step 2: inherited {comma-separated inherited fields, or "none"} from upstream; prompted for {comma-separated prompted fields, or "none"}.
+```
+
+This line is the auditable anchor for adversarial review of the cascade
+(Subtask 1.3 of E46-S5; AC5). If the working-log write fails for any
+reason (disk, permission), proceed without the log — the inheritance
+itself is the load-bearing behavior; the log is an audit convenience.
+
+#### Step 2b — Ask Missing Fields (standalone or partial path)
+
+Ask the user the questions corresponding to fields NOT inherited in
+Step 2a. In the standalone case both questions are asked; in the partial
+case only the questions for missing fields are asked; in the full-
+inheritance case this sub-step is skipped entirely.
+
+1. (asked when `feature_description` / `new_requirements` not inherited)
+   What new test cases are needed? Describe the feature or change
+   requiring test coverage.
+2. (asked when `prd_diff` / `change_description` not inherited)
+   Which FR/NFR IDs need test coverage?
+3. (asked when `arch_diff` / `affected_test_areas` not inherited)
+   Which architecture components or decisions are affected?
+
+#### Step 2c — Load Named Diff Sections
+
+- Load ONLY the named diff sections of `docs/planning-artifacts/prd.md`
+  corresponding to the supplied FR/NFR IDs (do NOT read the full PRD).
+- Load ONLY the named diff sections of
+  `docs/planning-artifacts/architecture.md` that correspond to the
+  affected components (do NOT read the full architecture document).
+- Record: `new_requirements`, `change_description`, `affected_test_areas`.
+
+#### Step 2d — Post-Branch Non-Null Assertion (AC4)
+
+Before Step 3 begins, verify each of the three legacy internal variables
+(`new_requirements`, `change_description`, `affected_test_areas`) is
+non-null and non-empty. If any is still null (for example, the upstream
+passed an empty string masquerading as a value), fall back to the
+matching Step 2b prompt for that specific field. Step 3 MUST NOT execute
+with a missing scope variable.
 
 > `!scripts/write-checkpoint.sh gaia-edit-test-plan 2 test_plan_path="docs/test-artifacts/test-plan.md" edit_mode=scope stage=change-scope-captured`
 

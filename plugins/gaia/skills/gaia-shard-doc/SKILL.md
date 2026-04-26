@@ -21,8 +21,10 @@ This skill is the native Claude Code conversion of the legacy shard-doc task at 
 
 ## Inputs
 
-1. **Source file** — from `$ARGUMENTS`. Fail fast if missing: `usage: /gaia-shard-doc <source-file> [--level=H1|H2|H3]`.
-2. **Split level** — optional, via `--level=H1|H2|H3`. Default: `H2`.
+1. **Source file** — from `$ARGUMENTS`. If `$ARGUMENTS` is empty, ask the user inline: "Which file should I shard?" and use the response as the source file path. Otherwise, use `$ARGUMENTS` as the target. This follows the inline-ask contract per ADR-066.
+2. **Split level** — optional, via `--level=H1|H2|H3`. Default: `H2`. The level flag is parsed independently of the source-file argument; if the user supplies `--level=H3` with no source file, still ask "Which file should I shard?" inline.
+
+**YOLO-mode interaction.** Per ADR-067, inline-ask on empty `$ARGUMENTS` is an open-question indicator — YOLO mode HALTS here for user input. There is no safe default target file, so the user must provide one. This differs from the Step 3 (Preview Plan) confirmation prompt, which IS auto-proceeded in YOLO mode.
 
 ## Pipeline Overview
 
@@ -36,7 +38,7 @@ The skill runs five steps in strict order, mirroring the legacy `shard-doc.xml`:
 
 ## Step 1 — Load Source
 
-- Resolve the source file path from `$ARGUMENTS`. Fail fast if missing.
+- Resolve the source file path from `$ARGUMENTS`. If `$ARGUMENTS` is empty, ask the user inline: "Which file should I shard?" and use the response as the source file path (per ADR-066). In YOLO mode, this inline-ask still halts for input — there is no safe default file (per ADR-067).
 - Read the entire source file; count total lines and sections at each heading level.
 
 ## Step 2 — Parse Sections

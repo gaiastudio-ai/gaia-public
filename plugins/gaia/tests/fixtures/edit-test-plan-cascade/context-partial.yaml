@@ -1,0 +1,42 @@
+# Fixture: VCP-ETP-03 — partial inheritance from /gaia-add-feature
+# Drives the two-of-three case for /gaia-edit-test-plan Step 2.
+# Story: E46-S5 (FR-353)
+#
+# Upstream supplies feature_description and prd_diff but NOT arch_diff.
+# Step 2 MUST inherit the two present fields silently, prompt ONLY for
+# arch_diff using the existing prompt text, and emit the mixed-path log line.
+#
+# Expected inheritance log line (Subtask 1.3 of E46-S5):
+#   Step 2: inherited feature_description, prd_diff from upstream;
+#           prompted for arch_diff.
+#
+# This case validates the Task 1 three-case branch's PARTIAL leg — the most
+# error-prone of the three cases because a naive implementation would either
+# (a) fall back to standalone (re-asking for all three) or (b) error on the
+# missing field. Neither is acceptable; the contract is per-field inheritance.
+
+upstream: gaia-add-feature
+case: partial
+
+context:
+  feature_description: |
+    Add per-tenant rate limiting to the public REST API: 1000 req/min per
+    API key, with 429 response and Retry-After header on overflow.
+  prd_diff: |
+    PRD §4.11 — added FR-402 (per-tenant rate limiting) and NFR-089
+    (rate-limit headers comply with RFC 6585). No existing FR/NFR
+    modified; both IDs are net-new.
+  arch_diff: null   # NOT supplied — Step 2 MUST prompt for this one only
+
+expected:
+  step2_prompts_asked:
+    - arch_diff
+  step2_inherited_fields:
+    - feature_description
+    - prd_diff
+  step2_log_line_substring: "inherited feature_description, prd_diff"
+  step2_log_line_must_also_contain: "prompted for arch_diff"
+  internal_vars_set:
+    - new_requirements
+    - change_description
+    - affected_test_areas   # populated by the user-supplied arch_diff answer

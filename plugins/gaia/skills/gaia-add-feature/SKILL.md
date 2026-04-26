@@ -98,6 +98,20 @@ The cascade matrix defines which artifacts are updated for each classification:
 - If classification is `enhancement` or `feature`:
   - Check if `docs/test-artifacts/test-plan.md` exists. If not, recommend running /gaia-test-design.
   - If test plan exists: delegate to the edit-test-plan sub-workflow via subagent.
+  - **Orchestrator trigger inheritance (FR-353 / E46-S5).** When delegating
+    to `/gaia-edit-test-plan`, pass the three inheritance contract fields
+    as named invocation parameters:
+    - `feature_description` — the feature scope captured in Step 1
+    - `prd_diff` — the PRD diff captured in Step 3 (empty for `enhancement`
+      classification, since Step 3 is skipped — pass only when populated)
+    - `arch_diff` — the architecture diff captured in Step 4 (empty for
+      `enhancement` classification, since Step 4 is skipped — pass only
+      when populated)
+    Pass only the subset that is populated for the current classification.
+    `/gaia-edit-test-plan` Step 2 handles the partial-inheritance case
+    by prompting for missing fields. Do NOT pass empty strings for
+    skipped fields — omit them so the downstream three-case branch
+    routes to PARTIAL rather than FULL with empty values.
   - Capture test plan additions (new test case IDs).
   - Store: test_diff.
 - If classification is `patch`: skip this step.

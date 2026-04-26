@@ -26,8 +26,13 @@ This skill is the native Claude Code conversion of the legacy `_gaia/testing/wor
 - Action proposal rules MUST be applied from `scripts/lib/gap-triage-rules.js` -- the single source of truth for the ADR-039 section 10.22.8.2 rule table.
 - Logs-and-continues error handling: a single sub-workflow failure MUST NOT halt the parent skill (FR-314).
 - Retry-only-failed semantics: consult the most recent prior remediation report (within 24 hours) and skip rows that previously succeeded (AC6/AC7 from legacy workflow).
-- Gap rows referencing story keys that no longer have story files are marked `skip` with reason `story_not_found` (AC-EC4).
-- Sprint-status.yaml is NEVER written by this skill (Sprint-Status Write Safety rule).
+- Gap rows referencing story keys that no longer have story files trigger a sprint-status.yaml fallback for status resolution; if that also yields no status, the row is marked `skip` with reason `story_not_found` (AC-EC4).
+- Sprint-status.yaml is NEVER written by this skill (Sprint-Status Write Safety rule). Reads are read-only — sprint-status.yaml is consulted only as a secondary fallback source.
+- YOLO mode follows the ADR-067 contract: default severity filter (critical+high) is auto-applied without prompting; explicit `--severity` arguments still take precedence.
+
+## Constants
+
+- **PERF_BUDGET_THRESHOLD** — default 20 actionable remediation rows. Above this threshold, Step 6 emits a perf-budget note before execution (FR-391). Override by editing this constant.
 
 ## Steps
 
@@ -43,9 +48,15 @@ This skill is the native Claude Code conversion of the legacy `_gaia/testing/wor
 
 ### Step 2 -- Severity Filter
 
-- Default severity filter: `critical + high`.
-- If `--severity` argument provided, apply the requested filter.
-- Apply the filter to the gap list.
+- Default severity filter: `critical+high`.
+- **Argument precedence:** if the user invoked the skill with an explicit `--severity` argument (`critical`, `high`, `medium`, or `all`), use it directly and SKIP the prompt below.
+- **Normal mode prompt (inline-ask, ADR-066):** when no `--severity` argument is provided and the runtime is NOT in YOLO mode, prompt the user:
+
+  > Which severity filter should I apply? Default: critical+high. Options: critical | high | medium | all.
+
+  Accept the user's response. Empty input or "default" selects critical+high. Validate against the four allowed options; reject anything else with a brief retry prompt.
+- **YOLO mode auto-apply (ADR-067):** when no `--severity` argument is provided and the runtime IS in YOLO mode, auto-apply the default (critical+high) without prompting and emit a single-line audit log: "YOLO: severity filter auto-applied = critical+high (ADR-067)". This satisfies ADR-067 rule (2) — auto-accept default severity filters.
+- Apply the resolved filter to the gap list.
 - If 0 gaps remain after filtering: continue with an empty list -- the triage table renders with "No gaps match the selected severity filter".
 - If filtered gap count exceeds 50: record INFO note "Report size {N} exceeds 50-gap perf budget -- expect >30s runtime".
 
@@ -58,15 +69,25 @@ This skill is the native Claude Code conversion of the legacy `_gaia/testing/wor
 
 ### Step 4 -- Action Proposal
 
-- For each triage row, resolve the story's current status from the story file frontmatter (source of truth). If story file not found, mark row as `skip` with reason `story_not_found` (AC-EC4).
-- Import and invoke `proposeAction` from `scripts/lib/gap-triage-rules.js` for each gap.
-- The rule table (ADR-039 section 10.22.8.2):
-  - `uncovered-ac` + `backlog/ready-for-dev` -> action: `append_ac`, sub_workflow: `/gaia-add-stories`
-  - `missing-test` + `done` -> action: `new_story`, sub_workflow: `/gaia-triage-findings`
-  - `missing-edge-case` + `backlog/ready-for-dev` -> action: `append_edge_case`, sub_workflow: `/gaia-add-stories`
-  - `unexecuted` + any status -> action: `expand_automation`, sub_workflow: `/gaia-test-automate`
-  - any gap + `in-progress/review/blocked` -> action: `skip`, skip_reason: "story is {status} -- defer remediation"
-  - unknown `gap_type` -> action: `skip`, skip_reason: `unknown_gap_type`
+- For each triage row, resolve the story's current status from the story file frontmatter (source of truth).
+- **Sprint-status.yaml fallback (read-only):** if the story file is not found at `docs/implementation-artifacts/{story_key}-*.md`, before marking the row as `skip`, attempt a fallback lookup against `docs/sprint-status.yaml`:
+  1. Emit the warning verbatim: `WARNING: Story file not found for {story_key} -- falling back to sprint-status.yaml for status resolution.`
+  2. Read sprint-status.yaml (read-only — never write) and resolve the status field for `{story_key}`.
+  3. If sprint-status.yaml yields a status, continue with the rule table below.
+  4. If sprint-status.yaml has no entry for `{story_key}` either, mark the row as `skip` with reason `story_not_found` (AC-EC4).
+- Import and invoke `proposeAction` from `scripts/lib/gap-triage-rules.js` for each gap — this remains the runtime source of truth for the rule table.
+- **Inline rule table (ADR-039 §10.22.8.2)** — exactly the six-row decision matrix encoded in `gap-triage-rules.js`, inlined here for auditability per E49-S2:
+
+  | gap_type           | story_status                  | action_type        | sub_workflow            | skip_reason                                |
+  |--------------------|-------------------------------|--------------------|-------------------------|--------------------------------------------|
+  | uncovered-ac       | backlog / ready-for-dev       | append_ac          | /gaia-add-stories       | —                                          |
+  | missing-test       | done                          | new_story          | /gaia-triage-findings   | —                                          |
+  | missing-edge-case  | backlog / ready-for-dev       | append_edge_case   | /gaia-add-stories       | —                                          |
+  | unexecuted         | any non-skip status           | expand_automation  | /gaia-test-automate     | —                                          |
+  | any gap_type       | in-progress / review / blocked | skip               | —                       | story is {status} — defer remediation       |
+  | unknown gap_type   | any                           | skip               | —                       | unknown_gap_type                            |
+
+  The inline table is documentation; runtime decisions are made by `proposeAction` so the table and code never drift. If you change one, change the other in the same PR.
 
 ### Step 5 -- Triage Table Output
 
@@ -76,6 +97,11 @@ This skill is the native Claude Code conversion of the legacy `_gaia/testing/wor
 
 ### Step 6 -- Execute Approved Actions
 
+- **Perf-budget pre-check (FR-391):** before invoking sub-workflows, count actionable (non-skip, non-skip_prior_success) remediation rows. If the count exceeds `PERF_BUDGET_THRESHOLD` (default: 20 — see Constants), emit the perf-budget note verbatim:
+
+  > Perf-budget note: {N} remediation rows exceed the 20-row threshold -- execution may take significant time.
+
+  The threshold is the constant `PERF_BUDGET_THRESHOLD` declared in the Constants section above; substitute the resolved threshold value into the message. Continue execution after emitting — the note is informational only.
 - Import `normalizeReturn` from `scripts/lib/adr037-return-adapter.js`.
 - For each approved triage row:
   - If `skip` or `skip_prior_success`: record as skipped and continue.

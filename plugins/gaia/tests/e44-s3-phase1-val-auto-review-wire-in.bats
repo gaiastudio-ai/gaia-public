@@ -88,8 +88,9 @@ teardown() { common_teardown; }
   grep -q 'artifact_type[[:space:]]*=[[:space:]]*domain-research' "$SKILLS_DIR/gaia-domain-research/SKILL.md"
 }
 
-@test "AC1: gaia-tech-research uses artifact_type=tech-research" {
-  grep -q 'artifact_type[[:space:]]*=[[:space:]]*tech-research' "$SKILLS_DIR/gaia-tech-research/SKILL.md"
+@test "AC1: gaia-tech-research uses artifact_type=technical-research" {
+  # E44-S11: slug aligned with on-disk filename technical-research.md
+  grep -q 'artifact_type[[:space:]]*=[[:space:]]*technical-research' "$SKILLS_DIR/gaia-tech-research/SKILL.md"
 }
 
 @test "AC1: gaia-brainstorm references brainstorm-{slug}.md artifact_path" {

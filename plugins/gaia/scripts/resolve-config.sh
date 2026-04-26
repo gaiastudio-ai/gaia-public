@@ -56,17 +56,21 @@ export LC_ALL
 # Required fields (checked on the merged, post-env map):
 #   project_root, project_path, memory_path, checkpoint_path,
 #   installed_path, framework_version, date,
-#   test_artifacts, planning_artifacts, implementation_artifacts
+#   test_artifacts, planning_artifacts, implementation_artifacts,
+#   creative_artifacts
 #
-# Artifact-dir keys (E28-S200 — unblocks E28-S195):
-#   test_artifacts, planning_artifacts, implementation_artifacts are the
-#   canonical docs/ subdirectory paths the audit harness + skill setup.sh
-#   scripts expect. Defaults resolve relative to project_root:
+# Artifact-dir keys (E28-S200 + E46-S9 — unblocks audit harnesses and
+# the /gaia-product-brief pre_start gate):
+#   test_artifacts, planning_artifacts, implementation_artifacts, and
+#   creative_artifacts are the canonical docs/ subdirectory paths the
+#   audit harness + skill setup.sh scripts expect. Defaults resolve
+#   relative to project_root:
 #     test_artifacts           = {project_root}/docs/test-artifacts
 #     planning_artifacts       = {project_root}/docs/planning-artifacts
 #     implementation_artifacts = {project_root}/docs/implementation-artifacts
+#     creative_artifacts       = {project_root}/docs/creative-artifacts
 #   project-config.yaml may override each; GAIA_* env vars win over both.
-#   See E28-S197 triage §2a for the systemic-defect context.
+#   See E28-S197 triage §2a + E46-S9 for context.
 #
 # Environment overrides (env wins over file values):
 #   GAIA_PROJECT_ROOT              → project_root
@@ -76,6 +80,7 @@ export LC_ALL
 #   GAIA_TEST_ARTIFACTS            → test_artifacts
 #   GAIA_PLANNING_ARTIFACTS        → planning_artifacts
 #   GAIA_IMPLEMENTATION_ARTIFACTS  → implementation_artifacts
+#   GAIA_CREATIVE_ARTIFACTS        → creative_artifacts
 #
 # Exit codes:
 #   0 — success, all required fields resolved
@@ -404,6 +409,7 @@ v_project_root=$(merge_key project_root)
 v_test_artifacts=$(merge_key test_artifacts)
 v_planning_artifacts=$(merge_key planning_artifacts)
 v_implementation_artifacts=$(merge_key implementation_artifacts)
+v_creative_artifacts=$(merge_key creative_artifacts)
 
 # Flattened nested keys — emitted as dotted keys so shell eval-friendly.
 # Only val_integration.template_output_review is surfaced today; adding
@@ -423,6 +429,7 @@ v_val_integration_template_output_review=$(merge_nested_key val_integration temp
 [ -n "${GAIA_TEST_ARTIFACTS:-}" ]            && v_test_artifacts="$GAIA_TEST_ARTIFACTS"
 [ -n "${GAIA_PLANNING_ARTIFACTS:-}" ]        && v_planning_artifacts="$GAIA_PLANNING_ARTIFACTS"
 [ -n "${GAIA_IMPLEMENTATION_ARTIFACTS:-}" ]  && v_implementation_artifacts="$GAIA_IMPLEMENTATION_ARTIFACTS"
+[ -n "${GAIA_CREATIVE_ARTIFACTS:-}" ]        && v_creative_artifacts="$GAIA_CREATIVE_ARTIFACTS"
 
 # E28-S200 — default each artifact-dir key to {project_root}/docs/<dir>
 # when neither a config file value nor a GAIA_* env override supplied one.
@@ -431,6 +438,7 @@ v_val_integration_template_output_review=$(merge_nested_key val_integration temp
 [ -z "$v_test_artifacts" ]           && v_test_artifacts="${v_project_root}/docs/test-artifacts"
 [ -z "$v_planning_artifacts" ]       && v_planning_artifacts="${v_project_root}/docs/planning-artifacts"
 [ -z "$v_implementation_artifacts" ] && v_implementation_artifacts="${v_project_root}/docs/implementation-artifacts"
+[ -z "$v_creative_artifacts" ]       && v_creative_artifacts="${v_project_root}/docs/creative-artifacts"
 
 # ---------- Required-field check (post-merge, post-env) ----------
 
@@ -449,6 +457,7 @@ v_val_integration_template_output_review=$(merge_nested_key val_integration temp
 [ -z "$v_test_artifacts" ]           && die "missing required field: test_artifacts"
 [ -z "$v_planning_artifacts" ]       && die "missing required field: planning_artifacts"
 [ -z "$v_implementation_artifacts" ] && die "missing required field: implementation_artifacts"
+[ -z "$v_creative_artifacts" ]       && die "missing required field: creative_artifacts"
 
 # ---------- Path-traversal guard on project_path ----------
 
@@ -467,6 +476,7 @@ if [ "$FORMAT" = "shell" ]; then
   # are emitted only when they have a value so absent nested blocks do not
   # pollute the output surface.
   emit_pair_shell checkpoint_path          "$v_checkpoint_path"
+  emit_pair_shell creative_artifacts       "$v_creative_artifacts"
   emit_pair_shell date                     "$v_date"
   emit_pair_shell framework_version        "$v_framework_version"
   emit_pair_shell implementation_artifacts "$v_implementation_artifacts"
@@ -485,6 +495,7 @@ else
     if [ -n "$v_val_integration_template_output_review" ]; then
       jq -n \
         --arg checkpoint_path          "$v_checkpoint_path" \
+        --arg creative_artifacts       "$v_creative_artifacts" \
         --arg date                     "$v_date" \
         --arg framework_version        "$v_framework_version" \
         --arg implementation_artifacts "$v_implementation_artifacts" \
@@ -495,10 +506,11 @@ else
         --arg project_root             "$v_project_root" \
         --arg test_artifacts           "$v_test_artifacts" \
         --arg val_template_output_review "$v_val_integration_template_output_review" \
-        '{checkpoint_path: $checkpoint_path, date: $date, framework_version: $framework_version, implementation_artifacts: $implementation_artifacts, installed_path: $installed_path, memory_path: $memory_path, planning_artifacts: $planning_artifacts, project_path: $project_path, project_root: $project_root, test_artifacts: $test_artifacts, "val_integration.template_output_review": $val_template_output_review}'
+        '{checkpoint_path: $checkpoint_path, creative_artifacts: $creative_artifacts, date: $date, framework_version: $framework_version, implementation_artifacts: $implementation_artifacts, installed_path: $installed_path, memory_path: $memory_path, planning_artifacts: $planning_artifacts, project_path: $project_path, project_root: $project_root, test_artifacts: $test_artifacts, "val_integration.template_output_review": $val_template_output_review}'
     else
       jq -n \
         --arg checkpoint_path          "$v_checkpoint_path" \
+        --arg creative_artifacts       "$v_creative_artifacts" \
         --arg date                     "$v_date" \
         --arg framework_version        "$v_framework_version" \
         --arg implementation_artifacts "$v_implementation_artifacts" \
@@ -508,11 +520,12 @@ else
         --arg project_path             "$v_project_path" \
         --arg project_root             "$v_project_root" \
         --arg test_artifacts           "$v_test_artifacts" \
-        '{checkpoint_path: $checkpoint_path, date: $date, framework_version: $framework_version, implementation_artifacts: $implementation_artifacts, installed_path: $installed_path, memory_path: $memory_path, planning_artifacts: $planning_artifacts, project_path: $project_path, project_root: $project_root, test_artifacts: $test_artifacts}'
+        '{checkpoint_path: $checkpoint_path, creative_artifacts: $creative_artifacts, date: $date, framework_version: $framework_version, implementation_artifacts: $implementation_artifacts, installed_path: $installed_path, memory_path: $memory_path, planning_artifacts: $planning_artifacts, project_path: $project_path, project_root: $project_root, test_artifacts: $test_artifacts}'
     fi
   else
-    printf '{"checkpoint_path": "%s", "date": "%s", "framework_version": "%s", "implementation_artifacts": "%s", "installed_path": "%s", "memory_path": "%s", "planning_artifacts": "%s", "project_path": "%s", "project_root": "%s", "test_artifacts": "%s"}\n' \
+    printf '{"checkpoint_path": "%s", "creative_artifacts": "%s", "date": "%s", "framework_version": "%s", "implementation_artifacts": "%s", "installed_path": "%s", "memory_path": "%s", "planning_artifacts": "%s", "project_path": "%s", "project_root": "%s", "test_artifacts": "%s"}\n' \
       "$(json_escape "$v_checkpoint_path")" \
+      "$(json_escape "$v_creative_artifacts")" \
       "$(json_escape "$v_date")" \
       "$(json_escape "$v_framework_version")" \
       "$(json_escape "$v_implementation_artifacts")" \

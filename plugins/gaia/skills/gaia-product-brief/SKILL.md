@@ -48,6 +48,10 @@ quality_gates:
 
 You are facilitating a collaborative discovery session to produce a product brief. Guide the user through vision, target users, problem statement, proposed solution, scope, risks, competitive landscape, and success metrics, then emit a structured product brief artifact at `docs/creative-artifacts/product-brief-*.md` for downstream consumers (e.g., `/gaia-create-prd`).
 
+**Agent:** `analyst` (Elena) — the analyst subagent facilitates discovery and drafts the brief sections. Persona definition lives at `${CLAUDE_PLUGIN_ROOT}/agents/analyst.md`; do not duplicate the persona content here.
+
+**Template:** `${CLAUDE_PLUGIN_ROOT}/templates/product-brief-template.md` — structural source for the 9 required sections. The template's H2 headings are the post_complete gate targets and must not be renamed.
+
 This skill is the native Claude Code conversion of the legacy `_gaia/lifecycle/workflows/1-analysis/create-product-brief` workflow (brief §Cluster 4, story P4-S2). The step ordering, prompts, and output location follow the legacy `instructions.xml` mechanically — do not restructure, re-prompt, or reorder sections.
 
 ## Critical Rules
@@ -82,7 +86,7 @@ This skill is the native Claude Code conversion of the legacy `_gaia/lifecycle/w
 
 - Collaboratively craft the vision statement with the user.
 - Incorporate insights from prior analysis if available.
-- Ask the user: **"What is the core vision for this product?"** — wait for a response before moving on.
+- Elena (analyst) asks the user: **"What is the core vision for this product?"** — wait for a response before moving on.
 
 > `!scripts/write-checkpoint.sh gaia-product-brief 2 product_name="$PRODUCT_NAME" target_user="$TARGET_USER"`
 
@@ -124,6 +128,8 @@ This skill is the native Claude Code conversion of the legacy `_gaia/lifecycle/w
 > `!scripts/write-checkpoint.sh gaia-product-brief 7 product_name="$PRODUCT_NAME" target_user="$TARGET_USER"`
 
 ### Step 8 — Generate Output
+
+Use the template at `${CLAUDE_PLUGIN_ROOT}/templates/product-brief-template.md` as the structural source for the 9 required sections. Do not invent alternate section headings — they are the exact post_complete gate targets enforced by `scripts/finalize.sh` against `docs/creative-artifacts/product-brief-*.md`.
 
 Write a structured product brief to `docs/creative-artifacts/product-brief-{slug}.md` containing the exact sections below, in order:
 

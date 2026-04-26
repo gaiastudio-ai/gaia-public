@@ -93,9 +93,52 @@ This skill is the native Claude Code conversion of the legacy `_gaia/testing/wor
 ### Step 8 -- Generate Pipeline Config
 
 - Generate the CI config file (e.g., `.github/workflows/ci.yml`) for the selected platform.
-- Validate the generated config syntax.
+- Validate the generated config syntax. The validation step is wrapped in the retry loop documented below under [Schema Validation Retry Loop](#schema-validation-retry-loop) -- see that subsection for entry, body, exit, and abort semantics. The loop wraps `validate-gate.sh` (do not duplicate its logic inline).
 
 > `!scripts/write-checkpoint.sh gaia-ci-setup 8 ci_provider="$CI_PROVIDER" ci_config_path="$CI_CONFIG_PATH" schema_retry_count="$SCHEMA_RETRY_COUNT" stage=pipeline-config-generated --paths "$CI_CONFIG_PATH"`
+
+### Schema Validation Retry Loop
+
+> Implements **FR-355** (`/gaia-ci-setup` Schema Validation Retry Loop). Verified by **VCP-CI-01** (valid first-pass), **VCP-CI-02** (single retry), and **VCP-CI-03** (multi-retry) — see `docs/test-artifacts/test-plan.md §11.46.15`.
+
+The Step 8 schema validation invocation is wrapped in a retry loop so the user can iteratively correct CI configuration violations within a single `/gaia-ci-setup` invocation instead of restarting the workflow.
+
+**Entry conditions.** The loop is entered exactly once per `/gaia-ci-setup` invocation, immediately after the pipeline config file has been generated and is ready for schema validation. The first iteration runs the existing `validate-gate.sh` invocation unchanged.
+
+**Loop body.**
+
+1. Invoke `validate-gate.sh` against the current CI configuration.
+2. On pass: the loop exits immediately on the first attempt with no violations output emitted, and the skill proceeds to Step 9 (Generate Output). This is the valid-first-pass path — no retry loop is invoked when the configuration is valid on the first attempt.
+3. On failure: render the violations list using the format documented under [Violation Output Format](#violation-output-format) below, then prompt the user: `Correct the violations above and press [c] to re-validate, or [x] to abort.`
+4. On `[c]`: re-read the CI configuration file from disk (so the user's edits are picked up) and re-invoke `validate-gate.sh`. Repeat from step 1.
+5. On `[x]`: enter the abort path documented below.
+
+**Exit conditions.** The loop exits in exactly two ways:
+
+- **Pass exit.** `validate-gate.sh` returns success. The skill proceeds to Step 9. The pass exit is taken on the very first attempt for a valid configuration (no violations, no prompt) and on every subsequent attempt where the user has corrected all outstanding violations.
+- **Abort exit (`[x]`).** The skill aborts cleanly with a summary of the remaining violations (`N violations remaining — run /gaia-ci-setup again after correction`) and exits non-zero. The abort exit is distinct from the pass exit and is the only forced exit path other than pass.
+
+**No hard retry cap.** The loop has no hard cap on iterations. The user controls convergence — there is no arbitrary retry limit that forces an abort before the user has finished correcting the configuration. This guarantee is required by AC3 of E46-S7 and is verified by VCP-CI-03 (3 consecutive failures before pass — the loop must not abort prematurely).
+
+**Prompt mode interactions.** In YOLO mode the retry loop still prompts `[c]`/`[x]`. Violations require human input and cannot be auto-answered — this matches the engine's `open-question` indicator handling.
+
+**Atomic write semantics.** The skill does NOT write a partial `docs/test-artifacts/ci-setup.md` on the abort path. If `ci-setup.md` generation already occurred before validation in a future revision, that ordering must be documented here so users understand what the abort path leaves behind. Today the artifact is written by Step 9 (after validation passes), so the abort path leaves no `ci-setup.md` behind.
+
+#### Violation Output Format
+
+Each schema violation is rendered as a `{field, expected, actual}` triplet. The triplet is the canonical machine-parseable record so downstream tooling (lint-SKILL-md.js, future VCP regression tests, automation hooks) can consume it without re-parsing free-form prose.
+
+```
+Violations:
+  - field:    promotion_chain[0].branch
+    expected: a non-empty string identifying the git branch
+    actual:   <missing>
+  - field:    promotion_chain[1].ci_provider
+    expected: one of: github_actions | gitlab_ci | jenkins | circleci
+    actual:   travis
+```
+
+Multiple violations are emitted as an ordered list. Field names use dotted-path notation matching the canonical `global.yaml` schema. The `expected` value describes the schema constraint in human-readable form; the `actual` value is the literal value found in the configuration (or `<missing>` when the field is absent). The triplet contract MUST remain stable so lint and regression tooling can verify the format mechanically.
 
 ### Step 9 -- Generate Output
 

@@ -131,6 +131,31 @@ Identify unused modules, orphaned routes, dead migrations, unused feature flags.
 
 **Partial-failure semantics (AC-EC8):** If a scanner crashes mid-run, the other scanners continue. The failed scan writes a gap row tagged `scan failed: {reason}`. The overall skill exits non-zero with a partial-result summary listing which scanners succeeded, which failed, and what recoverable evidence is available. The remaining scanners continue — one failure does not block the cohort.
 
+### Per-Subagent Scan Diagnostic Table (E48-S4)
+
+After all seven Phase 3 scan subagents return (doc-code, hardcoded, integration-seam, runtime-behavior, security, config-contradiction, dead-code), collect exit status and timing metadata for each subagent and surface a structured diagnostic table to the user before the Phase 3 user-review pause point. The table is lightweight metadata (subagent name + status + duration + reason); it is not gated by the NFR-048 / NFR-024 token budget that applies to scanner output.
+
+**Table format:**
+
+| Scan Subagent | Status | Duration | Reason |
+|---------------|--------|----------|--------|
+| doc-code | success | 12s | — |
+| hardcoded | success | 9s | — |
+| integration-seam | timeout | 300s | exceeded 5-minute scanner budget |
+| runtime-behavior | success | 14s | — |
+| security | resource-capped | 60s | scan output truncated per NFR-024 — review manually |
+| config-contradiction | errored | 4s | parser crash on unrecognized YAML anchor |
+| dead-code | success | 11s | — |
+
+**Canonical scan statuses (four values):**
+
+- `success` — the scan completed and wrote its expected output file under `docs/planning-artifacts/`.
+- `timeout` — the scan exceeded its time / token budget. The reason string MUST capture the budget threshold and the scanner identity (e.g., `exceeded 5-minute scanner budget`).
+- `resource-capped` — the scan output was truncated per NFR-024 / AC-EC6. The reason string MUST surface the truncation advisory (`scan truncated — review manually`) so the user knows the gap list is partial.
+- `errored` — the scan crashed mid-run per AC-EC8 partial-failure semantics. The reason string MUST contain the underlying error (parser crash, file read failure, subagent unreachable) — do not silently omit failed scans from the diagnostic log.
+
+The table is rendered to the conversation after Phase 3 scans complete, before the Phase 3 user-review pause point. Timed-out and errored scans MUST appear with their canonical status and reason string — they are never silently omitted from the log even though their gap rows are also tagged `scan failed: {reason}` per AC-EC8.
+
 ## Phase 4 — Test Execution During Discovery
 
 After Phases 2 / 3 scans complete, execute the existing test suite at the project path to capture test failures as gap entries. **This step is non-blocking** — test execution failures must not halt the overall brownfield onboarding workflow.
@@ -162,7 +187,8 @@ This phase aggregates the four brownfield test-infrastructure detectors (E19-S12
    - File exists AND execution mode is not `yolo` → prompt the user `test-environment.yaml already exists — [m]erge detected values (safe, default) / [s]kip (leave file unchanged) / [o]verwrite (REPLACE entire file — destructive)`. Wait for the user to choose one of the three options.
 6. **If the write fails (AC-EC4)** — e.g., test-infrastructure detected but the emitter cannot write to disk — halt with the actionable remediation `Re-run step 2.8 or run /gaia-brownfield again` preserving legacy gate semantics.
 7. After writing, validate the file against the E17-S7 schema via `validateTestEnvironment(readFileSync(targetPath, 'utf8'))`. Log any schema warnings as WARN-level messages listing the specific failing field; continue — the file is written but the user is notified. Never halt the overall workflow on schema warnings.
-8. Record the detection results and chosen conflict-resolution action in the brownfield onboarding report for traceability.
+8. **Normal-mode review pause (E48-S4):** in normal mode, present a summary of the generated `docs/test-artifacts/test-environment.yaml` and pause for user review before continuing to Phase 6 (NFR Assessment). The summary surfaces the file path and the four detected-infrastructure fields the user is most likely to correct: `test_runner`, `ci_provider`, `docker_test_config` (docker), and `browser_matrix`. Wait for the user to acknowledge before continuing to Phase 6. In yolo mode, skip the pause entirely and auto-continue to Phase 6 — this preserves the existing YOLO behavior where merging detected values into an existing file uses the safe default (merge) without further prompting. When `hasDetectedInfrastructure(detections)` returned `false` in step 2, no test-environment.yaml was generated — both the file write and the review pause are skipped (existing behavior).
+9. Record the detection results and chosen conflict-resolution action in the brownfield onboarding report for traceability.
 
 ## Phase 6 — NFR Assessment & Performance Test Plan
 
@@ -366,6 +392,26 @@ Three gates enforced via `!${CLAUDE_PLUGIN_ROOT}/scripts/validate-gate.sh` after
 
 `validate-gate.sh` serves the role of the spec-level `file-gate.sh` in the deployed script set (see Reconciliation Note).
 
+## Subagent Dispatch Contract
+
+Every subagent dispatched by this skill — Phase 2 documenters, Phase 3 scan subagents, Phase 4 test-execution scanner, Phase 6 test-architect (Sable), Phase 7 gap consolidation, Phase 8b adversarial review, Phase 8c code-verified review, Phase 9a architecture pipeline — returns a structured payload conforming to the **ADR-037** schema: `{status, summary, artifacts, findings, next}`. Per **ADR-063** (Mandatory Verdict Surfacing), this skill MUST surface every subagent's verdict (`PASS` / `WARNING` / `CRITICAL`) to the user — no silent gates. Specifically:
+
+- `status: PASS` — log the subagent name, the artifacts it produced, and continue to the next phase.
+- `status: WARNING` — display the `findings` block to the user before continuing. The user remains in control: in normal mode they may approve or revise; in YOLO mode the workflow auto-continues after displaying the warning (per ADR-067).
+- `status: CRITICAL` — HALT. The skill MUST NOT advance to the next phase until the user resolves the critical finding. This rule applies in both normal and YOLO mode (CRITICAL still halts under YOLO — see YOLO Behavior below).
+
+The Phase 3 per-subagent scan diagnostic table (above) is the surfacing channel for the seven scan subagents — its `Status` and `Reason` columns are the user-visible projection of each scan subagent's structured return. A subagent that crashes mid-run is treated as `CRITICAL` for the orchestrator (skill exits non-zero with a partial-result summary per AC-EC8), but the cohort's surviving scanners still appear in the diagnostic table with their own statuses. This is the canonical pattern for the six-command remediation cohort identified in **ADR-063** (add-feature, security-review, brownfield, test-gap-analysis, fill-test-gaps, problem-solving).
+
+## YOLO Behavior
+
+Per **ADR-067** (YOLO Mode Contract — Consistent Non-Interactive Behavior):
+
+- Auto-continue at every template-output / review prompt EXCEPT where an explicit gate halts (CRITICAL findings, post-complete file-existence gates, conflict resolution when `test-environment.yaml` already exists with a non-`yolo` execution mode).
+- The Phase 5 normal-mode review pause (E48-S4) is skipped under YOLO — the skill auto-continues to Phase 6 after writing the test-environment.yaml.
+- Conflict resolution under YOLO uses the safe default `merge` for `test-environment.yaml` (Phase 5 step 5) — detected values fill only null fields and every non-null user-supplied field is preserved.
+- Subagent verdicts are still displayed: `PASS` and `WARNING` auto-continue in YOLO, but `CRITICAL` still halts. CRITICAL-halt is a hard rule under YOLO — the workflow refuses to proceed past a critical finding without explicit user input.
+- Open-question indicators (unchecked checkboxes, TBD markers, "Decisions Needed" sections in any artifact this skill produces) are NEVER auto-skipped under YOLO. Memory writes are NEVER auto-approved.
+
 ## Failure Semantics
 
 - **Scanner crash mid-run (AC-EC8):** Remaining scanners continue. The failed scan writes a gap row tagged `scan failed: {reason}`. Skill exits non-zero with a partial-result summary.
@@ -392,8 +438,13 @@ Legacy file paths are intentionally not re-referenced in this body per the E28-S
 
 ## References
 
+- ADR-021 — Deep brownfield code analysis with seven parallel scan subagents and gap consolidation (the cohort surfaced by the Phase 3 per-subagent scan diagnostic table).
+- ADR-037 — Structured subagent return schema (`status`, `summary`, `artifacts`, `findings`, `next`) consumed by the Subagent Dispatch Contract section.
 - ADR-041 — Native Execution Model via Claude Code Skills + Subagents + Plugins + Hooks (replaces the legacy workflow engine).
 - ADR-042 — Scripts-over-LLM for Deterministic Operations (foundation script set invoked inline via `!scripts/*.sh`).
+- ADR-045 — Review Gate via Sequential `context: fork` Subagents (fork-context dispatch pattern reused by the cohort surfaced in Phase 3).
+- ADR-063 — Subagent Dispatch Contract — Mandatory Verdict Surfacing (the framework-wide rule the Subagent Dispatch Contract section codifies for this skill).
+- ADR-067 — YOLO Mode Contract — Consistent Non-Interactive Behavior (the rules the YOLO Behavior section codifies for this skill).
 - FR-323 — Native Skill Format Compliance (frontmatter schema per E28-S74).
 - FR-325 — Foundation scripts wired inline.
 - NFR-048 — Conversion token-reduction target / activation-budget ceiling.

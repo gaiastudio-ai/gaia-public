@@ -123,3 +123,56 @@ setup() {
 @test "NFR-048: knowledge directory contains responsive-testing.md" {
   [ -f "$SKILL_DIR/knowledge/responsive-testing.md" ]
 }
+
+# ---------- E52-S9: Device matrix constraint + cloud config (FR-386) ----------
+
+# TC-GR37-40 — SKILL.md Step 1 mandates "top 90% of target user base" as a hard
+# constraint on the device matrix. Verifiable via grep for "90%" + "device" or
+# "user base" in the device-matrix context.
+@test "TC-GR37-40 — SKILL.md states top 90% user-base coverage as hard constraint" {
+  run grep -nE "(top 90%|90% of (the )?target user base|90% of (the )?user base)" "$SKILL_FILE"
+  [ "$status" -eq 0 ]
+  [ -n "$output" ]
+}
+
+@test "TC-GR37-40 — 90% constraint is expressed as a MUST hard rule" {
+  # The constraint must be phrased as a MUST so script-verifiable rules pass.
+  run grep -nE "MUST.*(90%|user base)|(90%|user base).*MUST" "$SKILL_FILE"
+  [ "$status" -eq 0 ]
+  [ -n "$output" ]
+}
+
+# TC-GR37-41 — SKILL.md Step 2 includes concrete BrowserStack and SauceLabs
+# configuration examples. Verifiable via grep for both provider names with
+# adjacent configuration snippets.
+@test "TC-GR37-41 — SKILL.md Step 2 references BrowserStack with config example" {
+  run grep -niE "browserstack" "$SKILL_FILE"
+  [ "$status" -eq 0 ]
+  [ -n "$output" ]
+}
+
+@test "TC-GR37-41 — SKILL.md Step 2 references SauceLabs with config example" {
+  run grep -niE "sauce ?labs" "$SKILL_FILE"
+  [ "$status" -eq 0 ]
+  [ -n "$output" ]
+}
+
+@test "TC-GR37-41 — SKILL.md contains a BrowserStack capabilities snippet" {
+  # Look for bstack:options or browserstack capabilities keys in a fenced block.
+  run grep -nE "bstack:options|browserstack\.yml|BROWSERSTACK_USERNAME" "$SKILL_FILE"
+  [ "$status" -eq 0 ]
+  [ -n "$output" ]
+}
+
+@test "TC-GR37-41 — SKILL.md contains a SauceLabs capabilities snippet" {
+  run grep -nE "sauce:options|SAUCE_USERNAME|sauceLabs" "$SKILL_FILE"
+  [ "$status" -eq 0 ]
+  [ -n "$output" ]
+}
+
+@test "AC4 — no inline credentials in BrowserStack/SauceLabs snippets" {
+  # Permit env-var placeholders only — fail if any 8+ char alphanumeric secret
+  # appears next to userName/accessKey assignment.
+  run grep -nE "(accessKey|userName)[[:space:]]*[:=][[:space:]]*[\"']?[A-Za-z0-9]{8,}[\"']?" "$SKILL_FILE"
+  [ "$status" -ne 0 ]
+}

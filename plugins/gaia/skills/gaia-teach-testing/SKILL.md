@@ -17,9 +17,9 @@ This skill is the native Claude Code conversion of the legacy `_gaia/testing/wor
 
 ## Critical Rules
 
-- Knowledge fragments are bundled in this skill's `knowledge/` directory -- load them JIT when referenced by a step.
+- Knowledge fragments are bundled in this skill's `knowledge/` directory -- load them JIT when referenced by a step. JIT (just-in-time) load discipline: knowledge fragments MUST NOT be pre-loaded at skill activation; they MUST be loaded only when Step 2 selects the corresponding topic or Step 3 references the fragment. Future fragments added under `knowledge/` inherit this discipline — never introduce a global pre-load list at the top of this SKILL.md.
 - Assess the user's experience level BEFORE teaching — never assume a level.
-- Load knowledge progressively — do not overwhelm with advanced topics for beginners.
+- Load knowledge progressively — do not overwhelm with advanced topics for beginners. Progressive lessons are gated by the Step 1 skill assessment: advanced topics (property-based testing, mutation testing, contract testing) MUST NOT be presented to beginner-level users; the Step 2 topic ladder offers only the block(s) matching the assessed skill level (beginner → Beginner only; intermediate → Beginner + Intermediate; expert → all three blocks).
 - Use the user's project stack for code examples when possible (detect from project files).
 - Lessons must follow a consistent structure: objective, concepts, examples, exercises, summary.
 - This is a single-prompt interactive session — no subagent invocation needed.
@@ -38,7 +38,7 @@ Determine the skill level based on their response. If the user does not specify,
 
 ### Step 2 — Select Topic
 
-Present a learning path based on the assessed skill level:
+Present a learning path based on the assessed skill level. **Skill-level gating (gated by the Step 1 assessment):** Present ONLY the topic block(s) matching the assessed skill level from Step 1. For beginner sessions: present ONLY the Beginner topics block — do NOT present the Intermediate or Expert/advanced blocks as selectable options. For intermediate sessions: present the Beginner and Intermediate blocks. For expert sessions: present all three blocks. This rule operationalises the progressive Critical Rule above and ensures advanced topics (property-based testing, mutation testing, contract testing) are never surfaced to beginners.
 
 **Beginner topics:**
 - Test pyramid — unit, integration, E2E layers and when to use each (load knowledge fragment: `knowledge/test-pyramid.md`)

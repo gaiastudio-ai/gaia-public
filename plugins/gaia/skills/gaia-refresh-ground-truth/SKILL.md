@@ -159,7 +159,7 @@ Inputs (read from `_memory/config.yaml`):
 
 - `tiers.tier_1.session_budget` -- canonical session-token budget for the agent's tier (Tier 1 agents only carry an enforceable budget here; Tier 2 / Tier 3 budgets, when enforced, come from the matching `tiers.<tier>.session_budget`).
 - `archival.budget_warn_at` -- decimal warning threshold (default `0.8` -- 80% of budget). Read this value -- never hard-code it.
-- `archival.token_approximation` -- chars-per-token ratio (default `4`). Reuse the same formula as `core/engine/workflow.xml` Step 3 memory-load budget warning (`chars / token_approximation`).
+- `archival.token_approximation` -- chars-per-token ratio (default `4`). Apply the standard formula `tokens = chars / token_approximation` -- the same approximation used elsewhere in GAIA memory-budget reporting.
 - `agents.<agent-id>.sidecar` -- resolved sidecar path. Use the resolved path (matches Step 1 of this skill); never guess from the agent id.
 
 Per-agent procedure (run for every agent refreshed in Steps 2-9):

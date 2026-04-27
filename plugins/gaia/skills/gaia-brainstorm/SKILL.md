@@ -98,7 +98,16 @@ Where `{slug}` is a short kebab-case slug derived from the project vision (e.g.,
 4. If findings contains only INFO: log informational notes, proceed past the loop.
 5. If findings contains CRITICAL or WARNING:
      a. Apply a fix to `docs/creative-artifacts/brainstorm-{slug}.md` addressing the findings.
-     b. Append an iteration log record to checkpoint `custom.val_loop_iterations`.
+     b. Append an iteration log record to checkpoint `custom.val_loop_iterations` by invoking the producer (E44-S15):
+        ```
+        !${CLAUDE_PLUGIN_ROOT}/scripts/append-val-iteration.sh \
+            --skill gaia-brainstorm --step 6 --iteration "$ITER" \
+            --token-estimate "$TOKEN_ESTIMATE" \
+            --revalidation-outcome findings_present \
+            --findings-json "$FINDINGS_JSON" \
+            --fix-summary "$FIX_SUMMARY"
+        ```
+        Where `$TOKEN_ESTIMATE` is the SDK-reported response usage token count for the iteration's Val invocation + fix payload (preferred), or the literal `null` when the runtime token-counting primitive is unavailable (AC-EC8 fallback). The producer writes a fresh ADR-059 schema-v1 checkpoint with the merged `val_loop_iterations` array — `scripts/measure-val-auto-fix-token-budget.sh` reads `token_estimate` directly from this stream for the NFR-VCP-2 verdict.
      c. iteration += 1.
      d. If iteration <= 3: go to step 2.
      e. Else: present the iteration-3 prompt verbatim (centralized in `gaia-val-validate` SKILL.md § "Auto-Fix Loop Pattern") and dispatch.

@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.128.0] — 2026-04-23
+
+### Added
+
+- (release) pivot release.yml to PR model + ADR-056 (E40-S1)
+
 ## [1.127.2] — 2026-04-23
 
 ### Added

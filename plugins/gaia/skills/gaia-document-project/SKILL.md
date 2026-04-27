@@ -41,6 +41,8 @@ Scans to perform (cap each Glob pattern at 500 results to protect the token budg
 
 If every scan returns zero files, this is an empty project — continue to Step 2 anyway and emit the "No source files detected" note at Step 4.
 
+The 500-file Glob cap is parity-protected per **FR-395** — never relax or remove this cap without surfacing the parity regression in a follow-up story. Any language-distribution counts derived from the cap-bounded scan are reported as observed within the cap, not extrapolated.
+
 ### Step 2 — Technology Detection
 
 Detect the tech stack by reading the canonical manifest files only (never infer from file extensions alone):
@@ -59,7 +61,27 @@ Detect test frameworks (jest, vitest, bats, pytest, junit, gotest, flutter test,
 
 Produce a directory structure overview focused on the **top-level layout** (depth ≤ 2) plus any obviously significant subtrees (`src/`, `lib/`, `app/`, `plugins/`, `scripts/`, `tests/`, `docs/`).
 
-- Identify **entry points**: `main` field in `package.json`; `main.dart`; `main.py`; `main.go`; `src/index.ts`; etc.
+#### Entry Points — Manifest-Field Lookup Contract (FR-379)
+
+Read entry points from the actual manifest fields — NEVER from file-extension inference. Per **ADR-042** (Scripts-over-LLM for Deterministic Operations) manifest parsing is a structured key lookup, not an LLM judgment call: `package.json` is JSON, `pyproject.toml` is TOML, `pubspec.yaml` is YAML, `go.mod` is line-keyed text. Read the file, navigate to the key, render the value, cite the manifest path.
+
+Per-ecosystem lookup table:
+
+- **Node.js** — read `package.json`. Prefer `scripts.start`, fall back to `bin`, fall back to `main`. Cite `package.json:scripts.start` (or whichever field was found).
+- **Go** — read `go.mod`. Extract the `module` path. Locate the `main` package by Globbing `**/main.go` (excluding the standard exclusion list above). Cite `go.mod:module` plus the discovered `main.go` path.
+- **Python** — read `pyproject.toml`. Prefer `[project.scripts]`, fall back to `[tool.poetry.scripts]`. If absent, look for `__main__.py` or a `main()` function in a top-level module. Cite `pyproject.toml:[project.scripts]` (or the fallback path).
+- **Rust** — read `Cargo.toml`. Read the `[[bin]]` table or fall back to `src/main.rs`. Cite `Cargo.toml:[[bin]]`.
+- **Flutter / Dart** — read `pubspec.yaml` for the package name. Entry point is `lib/main.dart` by convention. Cite `pubspec.yaml:name` plus `lib/main.dart`.
+- **Java / Kotlin** — read `pom.xml` (`<mainClass>` in shade/jar plugin) or `build.gradle` / `build.gradle.kts` (`application { mainClass = ... }`). Cite the manifest path plus the key.
+
+**Manifest field missing** — when the manifest file is present but the relevant entry-point field is absent (for example, a `package.json` with no `scripts.start`, no `bin`, and no `main`), render the Entry Points line explicitly as:
+
+> `Entry point: not declared (no scripts.start / main field in package.json)`
+
+Do NOT silently fall back to file-extension inference in this case — the absence is the answer.
+
+**File-extension inference is a last resort** — only when no manifest file exists at all (no `package.json`, no `go.mod`, no `pyproject.toml`, etc.). In that case, the inferred entry point is labelled as such (e.g., `Entry point (inferred from file name): src/index.ts`).
+
 - Identify **key modules** from the top 2 directory levels.
 - Note any **architecturally significant** directories (e.g., `hooks/`, `plugins/`, `skills/`, `agents/`).
 
@@ -72,8 +94,16 @@ Compose the `project-documentation.md` artifact under `docs/planning-artifacts/`
 3. **Directory Structure** — tree-style overview (depth ≤ 2) with one-line notes on each key directory.
 4. **Conventions** — naming, file layout, testing conventions inferred from existing source + docs (cite evidence).
 5. **Key Files** — manifest files, entry points, significant config files (e.g., `tsconfig.json`, `vite.config.*`, `Dockerfile`, CI config).
-6. **Entry Points** — how to run / build / test the project, with exact commands extracted from `package.json` scripts or equivalent.
-7. **Source Inventory** — counts by language / directory. If the scan found zero source files, render: "No source files detected — this appears to be an empty or new project filesystem."
+6. **Entry Points** — how to run / build / test the project, with exact commands extracted from manifest fields per the Step 3 lookup contract (`package.json:scripts.start`, `go.mod:module`, `pyproject.toml:[project.scripts]`, etc.). Cite the manifest path and key for every claim. When the manifest field is missing, render the explicit "not declared" line described in Step 3.
+7. **Source Inventory** — counts by language / directory plus a **language-distribution** list (FR-379).
+   - After the Step 1 source-file Glob runs, accumulate a per-extension count keyed to a friendly language name. Suggested mapping: `.ts` + `.tsx` → TypeScript; `.js` + `.jsx` → JavaScript; `.py` → Python; `.go` → Go; `.java` → Java; `.kt` → Kotlin; `.dart` → Dart; `.rs` → Rust; `.swift` → Swift; `.rb` → Ruby; `.php` → PHP; `.sh` → Shell; `.md` → Markdown; `.yaml` + `.yml` → YAML; `.json` → JSON; `.toml` → TOML; `.xml` → XML.
+   - Render the counts under this section as a simple list, sorted descending by count, one line per language. Example:
+     - `- TypeScript: 312`
+     - `- Markdown: 87`
+     - `- Shell: 24`
+   - Languages with zero files are omitted from the list.
+   - **Cap-aware sample note** — if any Glob in Step 1 hit the 500-file cap (FR-395), append a single trailing note under the list: `(Glob cap reached at 500 files; counts are a sample.)`. Counts are reported as observed within the cap, never extrapolated.
+   - **Empty project** — if the scan found zero source files, render exactly: "No source files detected — this appears to be an empty or new project filesystem." and SKIP the language-distribution list entirely (do NOT emit an empty list).
 
 ### Step 5 — Generate Output
 
@@ -86,3 +116,10 @@ Report the resolved artifact path to the user after the write completes.
 ## Finalize
 
 !${CLAUDE_PLUGIN_ROOT}/skills/gaia-document-project/scripts/finalize.sh
+
+## References
+
+- **FR-379** — Manifest-field entry points and language-distribution counts in the Source Inventory section. Restores V1's `document-project` workflow contract: read `package.json:scripts.start`, `go.mod:module`, `pyproject.toml:[project.scripts]`, etc., directly from the manifest rather than inferring entry points from file names.
+- **FR-395** — 500-file Glob cap parity protection. The cap declared in Step 1 is locked behavior — language-distribution counts are derived from the cap-bounded scan and labelled with a sample note when the cap fires.
+- **ADR-041** — Native Execution Model. This skill is a Claude Code native skill; all behavior is defined in this SKILL.md prose.
+- **ADR-042** — Scripts-over-LLM for Deterministic Operations. Manifest parsing is structured key lookup (JSON / TOML / YAML / line-keyed text), not an LLM judgment call. The "manifest field missing" path is a deterministic present/absent check, not an inference.

@@ -48,7 +48,13 @@ Read all found dependency files. If none are found (AC-EC6), exit with `No revie
 
 - Flag dependencies that are significantly outdated (one or more major versions behind the latest release).
 - Identify dependencies with no recent releases or maintenance signal — a stale repository, an archived package, or a maintainer-abandoned advisory.
-- Produce an outdated list sorted by severity (critical-path runtime dependencies first).
+- Produce an outdated list ordered by dependency tier — **prioritise runtime dependencies first, then dev dependencies, then transitive dependencies** (FR-389). Within each tier, sort by severity (critical → high → medium → low) and then by package name. The tiered ordering surfaces the highest-blast-radius upgrades at the top so triage proceeds from runtime downward without manual re-sorting.
+- Detect the tier of every dependency from its manifest. Use these canonical inputs:
+  - **runtime** — top-level `dependencies` in `package.json`; `[project.dependencies]` in `pyproject.toml`; `<dependency>` entries without `<scope>test</scope>` in `pom.xml`.
+  - **dev** — `devDependencies` in `package.json`; `[project.optional-dependencies.dev]` (or equivalent dev extras) in `pyproject.toml`; test-scoped Maven dependencies (`<scope>test</scope>`) in `pom.xml`.
+  - **transitive** — anything resolved by the package manager but not declared at the top level of the manifest.
+  For other manifests (`Cargo.toml`, `go.mod`, `pubspec.yaml`, `Gemfile`, `composer.json`, etc.) defer to the package manager's native categorisation of runtime versus development dependencies.
+- If a tier has no outdated entries, **omit** the corresponding sub-section from the report — do not print empty `Runtime`, `Dev`, or `Transitive` headers. Empty-tier collapse prevents the misleading-placement risk where transitive results appear under a stale `Runtime` heading when no runtime upgrades are pending.
 
 ### Step 4 — License Check
 
@@ -77,7 +83,7 @@ If the file already exists for the same day (AC-EC3), write to a suffix-incremen
 The report includes:
 
 - **Risk-ranked vulnerability findings** with CVE IDs, affected versions, fixed versions, CVSS severity (critical / high / medium / low), and remediation guidance.
-- **Outdated package list** sorted by severity and criticality.
+- **Outdated package list** sorted by severity and criticality. The list is rendered tier-by-tier per Step 3 (runtime → dev → transitive); empty tiers are omitted.
 - **License conflict summary** — flagged conflicts, rationale, and suggested action.
 - **Remediation recommendations** — concrete upgrade paths, replacements for abandoned packages.
 

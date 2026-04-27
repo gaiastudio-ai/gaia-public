@@ -39,7 +39,7 @@ Evaluate the document across these dimensions:
 - **Section ordering / sequence** — does the order of sections support the reader's path of understanding? Are prerequisites introduced before dependents?
 - **Section balance** — are some sections disproportionately long (>400 lines) or disproportionately short (<10 lines) compared to peers at the same level? Imbalance often signals a missing split or a redundant stub.
 - **Redundancy / duplication** — are the same topics covered in multiple sections? If yes, recommend a merge or a single canonical location.
-- **Missing sections** — are sections expected for this document type absent (e.g., "Risks" in a PRD, "Decision Log" in an architecture doc)?
+- **Missing sections** — are sections expected for this document type absent (e.g., "Risks" in a PRD, "Decision Log" in an architecture doc)? This evaluation **assumes knowledge of doc-type conventions** — see Doc-Type Conventions below for the canonical section list per document type. If the doc-type cannot be inferred from the file path or frontmatter, the report MUST note "doc-type unknown — missing-sections evaluation skipped" rather than emit false positives from ad-hoc heuristics.
 - **Depth / nesting** — are there more than three nesting levels (H1 → H2 → H3 → H4)? Deep nesting signals an opportunity to promote or split.
 - **Navigation** — can a reader find a specific topic quickly? Does the document have a TOC where warranted? Are forward references clearly marked?
 
@@ -53,6 +53,17 @@ Produce a markdown structural report with this structure:
 4. **Priority ranking** — which moves would produce the most reader-comprehension uplift, in order.
 
 The report is the only output artifact. It is displayed to the user. If the user asks the skill to save the report, write it with the Write tool — but the default is display-only to mirror the legacy task's behavior.
+
+## Doc-Type Conventions
+
+The "missing sections" evaluation in Step 2 is doc-type aware. The canonical sections expected for each document type are listed below — sourced from `_gaia/lifecycle/templates/` (templates are the source of truth; if a template diverges from this list, prefer the template). Use this reference when judging whether a document's structural shape is complete for its intended type. If you cannot infer the doc-type from the file path or YAML frontmatter, do not guess — emit "doc-type unknown — missing-sections evaluation skipped" in the report.
+
+- **PRD** — Overview, Goals and Non-Goals, User Stories, Functional Requirements, Non-Functional Requirements, Out of Scope, UX Requirements, Technical Constraints, Dependencies, Milestones, Open Questions. (Template: `_gaia/lifecycle/templates/prd-template.md`.)
+- **Architecture** — System Overview, Architecture Decisions (ADRs / Decision Log), System Components, Data Architecture, Integration Points, Infrastructure, Security Architecture, Cross-Cutting Concerns, Risks and Mitigations. (Template: `_gaia/lifecycle/templates/architecture-template.md`.)
+- **Story** — User Story, Acceptance Criteria, Tasks / Subtasks, Dev Notes, Test Scenarios, Dev Agent Record, Findings, Review Gate, Estimate, Definition of Done. (Template: `_gaia/lifecycle/templates/story-template.md`.)
+- **Brief** — Vision, Problem Statement, Target Users, Proposed Solution, Key Features, Success Metrics, Constraints and Assumptions, Open Questions. (Template: `_gaia/lifecycle/templates/product-brief-template.md`.)
+
+These lists are intentionally non-exhaustive — a document is not penalised for omitting a section that does not apply, and may legitimately add sections not on the canonical list. Flag a section as **missing** only when it is conventionally expected for the doc-type AND its absence materially harms the reader's ability to evaluate the document.
 
 ## References
 

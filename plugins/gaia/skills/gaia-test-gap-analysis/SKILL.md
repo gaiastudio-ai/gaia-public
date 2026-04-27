@@ -63,6 +63,18 @@ This skill is the native Claude Code conversion of the legacy `_gaia/testing/wor
 - Calculate coverage rate per story: `covered_ACs / total_ACs`.
 - Calculate overall coverage percentage across all stories using the shared helper `scripts/lib/coverage-calc.js` when available (E19-S25). If the helper is unavailable, compute inline with banker's rounding to one decimal place.
 
+### Step 4a -- Inline AC Linkage Validation (Coverage Mode, E48-S5, ADR-063)
+
+This skill MUST cross-reference each story AC against the test-plan.md test case map built in Step 2 inline -- the linkage check is performed by the skill itself and the verdict is surfaced directly to the user, not solely delegated to a downstream helper. ADR-063 (subagent dispatch contract -- mandatory verdict surfacing) governs this rule: validation results must be visible, not swallowed by helper internals.
+
+For each AC, build a row in an "AC Linkage" table with: `story_key`, `ac_id`, `linkage_status` (`covered` or `unmapped`), `test_case_id` (when covered).
+
+The skill output MUST include an `## AC Linkage` section directly, in addition to the FR-223 Gap Table. The section lists every story-AC pair scanned, with covered ACs showing the matched `test_case_id` and unmapped ACs flagged with their story key + AC identifier.
+
+**Unmapped AC flagging format** (mandatory): every AC without a matching test case is flagged inline as `{story_key} {AC_id}: unmapped` -- for example, `E48-S5 AC3: unmapped`. The format uses the pinned story-key format `E{n}-S{n}` and the pinned AC identifier format `AC{n}` documented in the Pinned Schemas section below.
+
+This linkage validation is performed inline by the skill (the skill itself reads the test-plan map and the story ACs and surfaces the table). It is NOT delegated solely to a shared helper -- the skill remains the visible owner of the verdict so users see the result without reading helper logs.
+
 ### Step 4b -- Frontend Dimensions Analysis (Coverage Mode, Conditional)
 
 - Detect project type via `scripts/lib/project-type-detection.js` if available. If `result.type` is `frontend`, `fullstack`, or `mobile`, set `is_frontend=true`. Otherwise skip this step entirely.
@@ -83,6 +95,7 @@ This skill is the native Claude Code conversion of the legacy `_gaia/testing/wor
   - **Executive Summary** -- total stories analyzed, ACs scanned, gaps found, overall coverage percentage
   - **Per-Module Coverage** -- table with columns: module, total_acs, tested_acs, coverage_pct, gap_count
   - **Per-Story Detail** -- each story with its ACs and coverage status
+  - **AC Linkage** (E48-S5) -- inline table with `story_key`, `ac_id`, `linkage_status` (covered or unmapped), `test_case_id` (when covered). Unmapped ACs MUST be listed with the format `{story_key} {AC_id}: unmapped` (e.g., `E48-S5 AC3: unmapped`). The skill itself surfaces this section directly per ADR-063.
   - **Gap Table** -- listing each uncovered AC with story_key, gap_type, severity, description
 - If zero gaps detected: "No coverage gaps detected" in summary with gap count 0 and coverage 100%.
 - Print the report to the conversation.
@@ -130,6 +143,47 @@ This skill is the native Claude Code conversion of the legacy `_gaia/testing/wor
 - Verify skill completed within the NFR-040 constraint of under 60 seconds.
 - Log total execution time in the report footer.
 - If gaps were found, emit completion nudge: "Run `/gaia-fill-test-gaps` to remediate these gaps now."
+
+## Pinned Schemas (E48-S5)
+
+The skill reads `docs/test-artifacts/test-plan.md` and story frontmatter as plain markdown -- there is no runtime schema validator. The schemas below are pinned in this SKILL.md so the LLM knows what column names, story-key format, and frontmatter fields to expect. Deviations are handled with the documented fallbacks; they do not abort the run.
+
+### test-plan.md test-case table schema
+
+The test-plan.md test case map built in Step 2 expects the following column layout:
+
+`| # | Test Case ID | Story Key | AC | Scenario | Type | Severity |`
+
+- **Test Case ID** -- unique test identifier (e.g., `TC-001`, `TC-GR37-10`).
+- **Story Key** -- traceability key in the pinned format `E{n}-S{n}` (e.g., `E48-S5`).
+- **AC** -- AC identifier in the pinned format `AC{n}` (e.g., `AC1`, `AC2`, `AC3`). Multiple ACs may be comma-separated (`AC1, AC3`).
+- **Scenario** -- test scenario description.
+- **Type** / **Severity** -- optional metadata columns; tolerated if absent.
+
+If the table uses non-standard column names (e.g., `Test ID` instead of `Test Case ID`), the skill logs a warning `test-plan.md schema mismatch: expected '{column}', found '{actual}' -- attempting tolerant match` and proceeds with case-insensitive substring matching. If matching cannot recover the columns, the impacted rows are treated as unmapped and surfaced in the AC Linkage section.
+
+### Story-key and AC-id formats
+
+- **Story key format**: `E{n}-S{n}` where `{n}` is a positive integer (e.g., `E48-S5`, `E1-S12`). Cross-referencing in Step 4 uses exact-match on this format.
+- **AC identifier format**: `AC{n}` (e.g., `AC1`, `AC2`). The identifier appears in story acceptance-criteria lines and in the test-plan AC column.
+
+### Story frontmatter -- required `epic:` field
+
+Step 4c (Per-Module Coverage Calculation) groups stories by epic. The grouping requires a `epic:` field in the YAML frontmatter of every story file:
+
+```yaml
+---
+key: "E48-S5"
+epic: "E48"      # required for per-epic grouping (format: E{n})
+status: ready-for-dev
+---
+```
+
+- **Format**: `E{n}` (e.g., `E48`, `E1`, `E20`).
+- **Required**: yes -- per-module table grouping in Step 4c depends on this field.
+- **Fallback for missing `epic:` field**: skip story with warning. Step 4c emits `WARN: story {story_key} missing epic: frontmatter -- skipping per-epic grouping for this story` and excludes the story from the per-module table. The story still contributes to overall coverage and to the gap table; only the per-epic row is omitted.
+
+This pinning prevents silent failures when stories lack the `epic:` frontmatter field and makes the fallback behavior explicit.
 
 ## Finalize
 

@@ -115,6 +115,29 @@ in_fm == 1 { print }
 
 This is the `_frontmatter` helper used by `tests/cluster-15-parity/E28-S112-core-dev-skills-parity.bats` and by the newer skill-parity bats tests.
 
+<!-- SECTION: awk-word-boundaries -->
+## awk Word-Boundary Anchors — `\<...\>` Is Not Portable
+
+### The Broken Idiom
+
+GNU awk supports the word-boundary anchors `\<` (start of word) and `\>` (end of word). **mawk** and **BSD awk** (the awk shipped with macOS) do not — under those implementations the regex is silently treated as something else, producing false negatives. The match never fires, the script reports "not found", and the failure is invisible until someone runs the same code on macOS or in a mawk-based CI image.
+
+### The Portable Fix
+
+Anchor on a non-alphanumeric neighbour or beginning/end-of-line instead. The replacement form `(^|[^A-Za-z0-9])TOKEN([^A-Za-z0-9]|$)` is accepted by GNU awk, mawk, and BSD awk identically:
+
+```awk
+# BROKEN — passes on Linux CI (gawk), silently fails on macOS (BSD awk / mawk).
+$0 ~ /\<NPS\>/ { found = 1 }
+
+# FIXED — identical behaviour across gawk, mawk, and BSD awk.
+$0 ~ /(^|[^A-Za-z0-9])NPS([^A-Za-z0-9]|$)/ { found = 1 }
+```
+
+### Review Checklist
+
+When reviewing a script or bats test, flag any `\<` or `\>` inside an awk regex. The fix is mechanical — substitute the character-class form. The regression guard `tests/no-bsd-awk-incompatible-anchors.bats` enforces this across `scripts/`, `tests/`, and `skills/*/scripts/` (E45-S7).
+
 <!-- SECTION: review-notes -->
 ## Review Notes
 

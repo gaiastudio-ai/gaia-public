@@ -85,14 +85,36 @@ This skill is the native Claude Code conversion of the legacy `_gaia/testing/wor
 - If reorder changes position 0: warn that this changes the PR target for all feature branches and require explicit confirmation.
 - Proceed to validation step.
 
-### Step 7 -- Validate, Write, and Cascade
+### Step 7 -- Validate, List Cascade Targets, Confirm, Write, and Cascade
 
 - Validate the modified chain: minimum 1 entry, unique ids, unique branches, required fields, valid enums, id slug pattern.
 - If validation fails: display violations and return to the operation menu without writing.
+- **List cascade targets BEFORE the confirmation prompt (AC1, TC-GR37-32):** enumerate every file that will be affected by this edit so the user understands the blast radius before committing. The listing MUST include the literal phrase "cascade targets" or "affected" so the listing is discoverable in the rendered output. The targets are:
+  1. **Affected workflow files** — CI workflow files under `.github/workflows/*.yml` whose triggers reference any branch in `ci_cd.promotion_chain`. Resolve by globbing `.github/workflows/` and grepping for `branches:` entries that match a chain branch. Print each path and the matched branch.
+  2. **Affected `test-environment.yaml` tiers** — read `docs/test-artifacts/test-environment.yaml` (or the project-configured path) and list every tier whose `chain_id` matches the id of the chain entry being added, removed, edited, or reordered. Per architecture §10.24.3, `chain_id` is the optional cross-reference from a tier to a `ci_cd.promotion_chain[].id`. Print each tier name, the matching `chain_id`, and the action (will be reassigned, orphaned, or unchanged).
+  3. **`docs/test-artifacts/ci-setup.md`** — flagged for regeneration after the write completes.
+- Render the cascade-target listing as a structured block immediately above the confirmation prompt:
+
+  ```
+  Cascade targets — these files will be affected:
+    Workflows: <path>:<branch>, ...
+    test-environment.yaml tiers: <tier>:<chain_id>, ...
+    ci-setup.md (will be regenerated)
+  ```
+
+- Display the confirmation prompt: "Apply this edit and cascade to the listed targets? [y/n]". HALT without writing on `n`.
 - Write the updated chain back to `global.yaml`. Only `ci_cd.promotion_chain` may be modified.
 - Preserve the canonical field order on write-back (AC4): id, name, branch, ci_provider, merge_strategy, ci_checks.
 - Cascade updates: update CI workflow triggers if branch names changed, update test-environment.yaml tier mappings, regenerate ci-setup.md.
-- On cascade failure: report the specific error, do NOT rollback `global.yaml` silently.
+- **On cascade failure (AC2, TC-GR37-33):** report the specific cascade failure with BOTH (a) the failing file path and (b) the reason for failure. Do NOT rollback `global.yaml` silently. Use this exact format so the error is unambiguous and grep-discoverable:
+
+  ```
+  Cascade failure:
+    path: <absolute or repo-relative file path that failed>
+    reason: <one-line description of why — e.g., "permission denied", "yaml parse error: <detail>", "schema mismatch in tier <name>", "workflow file referenced branch <x> but no rule applied">
+  ```
+
+  Every cascade failure message MUST include both the `path:` line and the `reason:` line. Silent failures, generic "cascade error" messages, or rollback-without-diagnosis are NOT permitted. The user must always be able to identify the failing file and the cause without re-running the skill.
 
 ### Step 8 -- Summary
 

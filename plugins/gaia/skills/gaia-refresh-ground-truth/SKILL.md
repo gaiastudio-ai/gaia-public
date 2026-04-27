@@ -69,6 +69,21 @@ This skill is the native Claude Code conversion of the legacy val-refresh-ground
 - If the existing file has no prior entries or is a first scan (last-refresh: never): note that diff report will show "initial scan -- no prior baseline".
 - If incremental mode: filter scan targets to only files modified after last-refresh timestamp.
 
+### Step 3a -- Load entry structure (canonical schema)
+
+Before any scanning runs, load the canonical ground-truth entry schema. Every entry produced by Step 4 (Scan Inventory Targets) and every entry preserved or rewritten by Step 6 (Write Ground Truth) MUST conform to this schema. Centralising the schema here prevents drift between agents and between full / incremental refresh modes.
+
+Canonical entry shape (memory-loader.sh compatible):
+
+- `id` -- stable identifier for the entry within its category (e.g., file path, ADR id, story key). Required.
+- `category` -- bracketed category tag rendered in ground-truth.md as `**[<category>]**` (e.g., `[file-inventory]`, `[planning-baseline]`, `[adr-baseline]`). Required.
+- `source` -- path or reference where the entry was discovered (rendered as `Source: <path>` in ground-truth.md). Required.
+- `verified` -- ISO-8601 date the entry was verified during this refresh (rendered as `Verified: <date>`). Required.
+- `status` -- one of ACTIVE | UPDATED | REMOVED. Required. REMOVED entries also carry a `detected: <date>` line per Step 5.
+- `metadata` -- optional category-specific fields (file size, language, dependency version, ADR id, etc.). Optional, free-form, must be deterministic so diffs are reproducible.
+
+Hold this schema in working memory for the remainder of the refresh. Subsequent steps reference it as the single source of truth -- Step 4 emits entries shaped by this schema, Step 5 classifies them by `status`, Step 6 serialises them with the documented field labels, and Step 8 diffs entries by `id` within `category`.
+
 ### Step 4 -- Scan Inventory Targets
 
 Use Glob to discover project structure and Read to extract metadata from key files.
@@ -135,6 +150,39 @@ Use Glob to discover project structure and Read to extract metadata from key fil
 - If no changes detected (AC-EC4): report "No changes detected since last scan."
 - If first scan (AC-EC1): report "initial scan -- no prior baseline. Total entries: N."
 - Present the full diff report to the user.
+
+### Step 8a -- Post-refresh token-budget check (archival guidance)
+
+After Step 6 has written the updated ground-truth.md, perform an explicit post-refresh token-budget check. This step MUST run for every refreshed agent so each refresh emits one budget line per agent and surfaces archival guidance when a Tier 1 agent approaches the configured threshold.
+
+Inputs (read from `_memory/config.yaml`):
+
+- `tiers.tier_1.session_budget` -- canonical session-token budget for the agent's tier (Tier 1 agents only carry an enforceable budget here; Tier 2 / Tier 3 budgets, when enforced, come from the matching `tiers.<tier>.session_budget`).
+- `archival.budget_warn_at` -- decimal warning threshold (default `0.8` -- 80% of budget). Read this value -- never hard-code it.
+- `archival.token_approximation` -- chars-per-token ratio (default `4`). Apply the standard formula `tokens = chars / token_approximation` -- the same approximation used elsewhere in GAIA memory-budget reporting.
+- `agents.<agent-id>.sidecar` -- resolved sidecar path. Use the resolved path (matches Step 1 of this skill); never guess from the agent id.
+
+Per-agent procedure (run for every agent refreshed in Steps 2-9):
+
+1. Stat the just-written `ground-truth.md` for the resolved sidecar and capture its size in characters.
+2. Estimate token usage: `used = ground_truth_chars / archival.token_approximation`.
+3. Resolve the budget: for Tier 1 agents use `tiers.tier_1.session_budget` (or `agents.<agent-id>.ground_truth_budget` when present). For Tier 2 use `tiers.tier_2.session_budget`. For Tier 3 / untiered (`session_budget: null`), report the actual usage with `(no budget enforced)` and skip threshold logic.
+4. Compute percentage: `pct = round((used / budget) * 100)`.
+5. Emit a per-agent budget line in the format `<agent>: <used>/<budget> tokens (<pct>%)`.
+6. Threshold check (Tier 1 only -- Tier 2 reports the line but does not fire archival guidance unless its tier opts in): if `(used / budget) >= archival.budget_warn_at`, emit archival guidance immediately after the budget line. The guidance MUST:
+   - Name the affected agent and current usage.
+   - Reference the `budget_warn_at` threshold (e.g., `>= 80% of session_budget (budget_warn_at=0.8)`).
+   - Point to archival next steps -- the `_memory/<agent>-sidecar/archive/` directory and the `/gaia-memory-hygiene` workflow for archival recommendations and confirmed archival actions.
+   - Use a fixed phrasing template so the audit grep TC-GR37-23 matches both `budget_warn_at` and the archival guidance text in the same proximity.
+7. Log every per-agent line to the diff report appended to `decision-log.md` in Step 9.
+
+Reference template for the archival guidance line (sample text emitted to the user when threshold tripped):
+
+```
+WARN: <agent> ground-truth at <pct>% of session_budget (>= budget_warn_at=<threshold>). Archival guidance: review oldest entries via /gaia-memory-hygiene; archive candidates land in _memory/<agent>-sidecar/archive/ (gitignored). Re-run /gaia-refresh-ground-truth after archival to confirm the budget recovers.
+```
+
+Wording must remain stable across releases so the audit grep stays green; coordinate edits with `gaia-memory-hygiene/SKILL.md` to keep archival-pointer phrasing aligned (E52-S7).
 
 ### Step 9 -- Log to Decision Log
 

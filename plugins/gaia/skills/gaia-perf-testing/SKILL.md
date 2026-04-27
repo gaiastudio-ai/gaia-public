@@ -34,7 +34,9 @@ This skill is the native Claude Code conversion of the legacy `_gaia/testing/wor
 - Define response time targets: P50, P95, P99 latency thresholds.
 - Define throughput targets: requests per second (RPS) under normal and peak load.
 - Define error rate thresholds (target less than 0.1% under normal load).
-- Establish baseline metrics from current production or staging if available.
+- Establish baseline metrics — two branches conditioned on environment availability:
+  - When a production or staging environment IS available: MUST capture baseline metrics (P50/P95/P99 latency, throughput, error rate) from the available production or staging environment and record them in the performance test plan.
+  - When no production or staging environment is available: MUST document the absence explicitly as a gap in the performance test plan — for example, `Baseline metrics: GAP — no production or staging environment available; targets are forward-looking only.` Do NOT silently omit the baseline section.
 - If architecture.md is available, extract API endpoints and traffic patterns.
 
 ### Step 2 -- Load Test Design
@@ -51,7 +53,7 @@ This skill is the native Claude Code conversion of the legacy `_gaia/testing/wor
 - Load knowledge fragment: `knowledge/lighthouse-ci.md`
 - Define Core Web Vitals targets: LCP under 2.5s, INP under 200ms, CLS under 0.1.
 - Set bundle size budgets per route (JS, CSS, images).
-- Identify critical rendering path optimizations.
+- Apply concrete critical-rendering-path techniques: **lazy loading** (defer below-the-fold images and components), **code-splitting** (route-level and component-level dynamic imports), and **image optimisation** (modern formats such as WebP/AVIF, responsive `srcset` sizing, compression). Add font subsetting, preconnect hints, and render-blocking script removal where applicable.
 - Configure Lighthouse CI assertions for performance score thresholds (target > 90).
 
 ### Step 4 -- Backend Profiling
@@ -80,6 +82,9 @@ This skill is the native Claude Code conversion of the legacy `_gaia/testing/wor
   - CI gate configuration and pass/fail criteria
   - Bundle size budgets and enforcement
 - Write output to `docs/test-artifacts/performance-test-plan-{date}.md`.
+
+> After artifact write: run open-question detection snippet
+> `!${CLAUDE_PLUGIN_ROOT}/scripts/detect-open-questions.sh docs/test-artifacts/performance-test-plan-${DATE}.md`
 
 ## Finalize
 

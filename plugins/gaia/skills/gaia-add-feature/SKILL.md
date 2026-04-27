@@ -1,6 +1,6 @@
 ---
 name: gaia-add-feature
-description: Triage and route a fix, enhancement, or feature through only the affected artifacts. Classifies as patch/enhancement/feature and cascades accordingly -- updating PRD, architecture, epics, test plan, threat model, and traceability as needed (FR-323).
+description: Triage and route a fix, enhancement, or feature through only the affected artifacts. Classifies as patch/enhancement/feature and cascades accordingly -- updating PRD, architecture, epics, test plan, threat model, and traceability as needed (FR-323, FR-362). Surfaces Val verdicts (PASS/WARNING/CRITICAL) per ADR-063 and emits an assessment-doc audit trail.
 context: fork
 allowed-tools: [Read, Write, Edit, Grep, Glob, Bash, Agent]
 ---
@@ -15,17 +15,82 @@ allowed-tools: [Read, Write, Edit, Grep, Glob, Bash, Agent]
 
 ## Mission
 
-You are the orchestrator for adding a new feature, enhancement, or patch to the project. You classify the change scope and cascade updates through exactly the set of affected artifacts. This skill delegates to sub-workflows via subagents -- it does not perform direct edits to downstream artifacts.
+You are the orchestrator for adding a new feature, enhancement, or patch to
+the project. You classify the change scope and cascade updates through
+exactly the set of affected artifacts. This skill delegates to sub-workflows
+via subagents -- it does not perform direct edits to downstream artifacts.
 
-This skill is the native Claude Code conversion of the legacy add-feature workflow (E28-S57, FR-323). The classification vocabulary (patch / enhancement / feature), cascade matrix, and delegation model are preserved verbatim from the legacy workflow.
+This skill is the native Claude Code conversion of the legacy add-feature
+workflow (E28-S57, FR-323) and is hardened by E48-S1 (FR-362) so that
+validation gates are no longer swallowed inside subagents. The
+classification vocabulary (patch / enhancement / feature), cascade matrix,
+and delegation model are preserved verbatim from the legacy workflow.
 
 ## Critical Rules
 
-- This is an orchestrator -- delegate to sub-workflows via subagents, do not perform edits directly.
-- Context flows forward: PRD diff feeds architecture edit, which feeds test plan edit, which feeds story creation.
-- Intelligently skip steps when not needed -- do not force all sub-workflows on every change.
-- The classification vocabulary is EXACTLY: `patch`, `enhancement`, `feature`. Do NOT rename, alias, or refactor these terms -- downstream triage tooling and historical change requests depend on those exact strings.
-- The cascade matrix (which artifacts are updated per classification) MUST match the definitions below exactly.
+- This is an orchestrator -- delegate to sub-workflows via subagents, do
+  not perform edits directly.
+- Context flows forward: PRD diff feeds architecture edit, which feeds test
+  plan edit, which feeds story creation.
+- Intelligently skip steps when not needed -- do not force all
+  sub-workflows on every change.
+- The classification vocabulary is EXACTLY: `patch`, `enhancement`,
+  `feature`. Do NOT rename, alias, or refactor these terms -- downstream
+  triage tooling and historical change requests depend on those exact
+  strings.
+- The cascade matrix (which artifacts are updated per classification) MUST
+  match the definitions below exactly.
+- Validation gates are MANDATORY surfacing points -- never silently consume
+  Val verdicts inside a subagent. Always parse the ADR-037 return schema
+  and apply the ADR-063 verdict-surfacing contract before continuing the
+  cascade.
+- A CRITICAL verdict from Val HALTS the skill before cascade execution.
+  This applies in all execution modes (normal and YOLO) per ADR-067.
+
+## Subagent Dispatch Contract
+
+This skill follows the framework-wide Subagent Dispatch Contract (ADR-063).
+Every Val invocation is dispatched via `context: fork` per ADR-045 with a
+read-only tool allowlist `[Read, Grep, Glob, Bash]`. After Val returns:
+
+1. **Parse the subagent return** using the ADR-037 structured schema:
+   `{ status, summary, artifacts, findings, next }`. The `status` field is
+   one of `PASS`, `WARNING`, `CRITICAL`. Each entry in `findings` carries a
+   `severity` of `CRITICAL`, `WARNING`, or `INFO`.
+2. **Surface the verdict** to the user inline: display `status` and
+   `summary`, then list every finding with its severity, scope, and
+   recommended action.
+3. **Halt on CRITICAL** -- if `status == "CRITICAL"` or any finding has
+   `severity == "CRITICAL"`, the skill HALTS before cascade execution with
+   an actionable error message. The user must resolve the finding before
+   the skill can resume (or abort). No assessment-doc is emitted on a
+   CRITICAL halt.
+4. **Display WARNING** -- findings with `severity == "WARNING"` are
+   displayed inline before proceeding. The skill does NOT halt; warnings
+   are recorded in the assessment-doc Val Findings Summary section.
+5. **Log INFO** -- findings with `severity == "INFO"` are written to the
+   workflow checkpoint and the assessment-doc Val Findings Summary but are
+   not surfaced inline unless the user requests verbose output.
+
+This contract is enforced uniformly per ADR-063. CRITICAL findings cannot
+be auto-dismissed in any execution mode.
+
+## YOLO Behavior
+
+This skill conforms to the framework-wide YOLO Mode Contract (ADR-067).
+
+| Behavior | YOLO Action |
+|----------|-------------|
+| Template-output prompts (`[c]/[y]/[e]`) | Auto-continue (skip prompt). |
+| Severity / filter selection | Auto-accept defaults. |
+| Optional confirmation ("Proceed with cascade?") | Auto-confirm. |
+| Subagent verdict display (Val review gate) | Auto-display, but a CRITICAL verdict still HALTS per ADR-063. |
+| Open-question indicators (urgency, driver, CR linkage) | HALT -- never auto-skip; require human input. |
+| Memory save prompt at end | HALT -- require human input (Phase 4 per ADR-061). |
+
+In YOLO mode the Val verdict is auto-displayed but a CRITICAL verdict still
+halts the skill -- this is the canonical YOLO/CRITICAL interaction
+established by ADR-067.
 
 ## Classification Vocabulary
 
@@ -39,7 +104,8 @@ Changes are classified into exactly one of three categories:
 
 ## Cascade Matrix
 
-The cascade matrix defines which artifacts are updated for each classification:
+The cascade matrix defines which artifacts are updated for each
+classification:
 
 | Artifact | patch | enhancement | feature |
 |----------|-------|-------------|---------|
@@ -50,101 +116,237 @@ The cascade matrix defines which artifacts are updated for each classification:
 | Threat Model (`docs/planning-artifacts/threat-model.md`) | -- | -- | YES |
 | Traceability (`docs/test-artifacts/traceability-matrix.md`) | -- | YES | YES |
 
-"--" means the artifact is NOT touched for that classification. "YES" means the artifact IS updated via the appropriate sub-workflow.
+"--" means the artifact is NOT touched for that classification. "YES"
+means the artifact IS updated via the appropriate sub-workflow.
 
 ## Steps
 
 ### Step 1 -- Capture Feature Scope
 
 - Ask: Describe the new feature, enhancement, or fix you want to add.
-- Ask: What is the business driver? (customer request / market opportunity / technical improvement / regulatory)
+- Ask: What is the **urgency**? Vocabulary: critical / high / medium / low.
+  - critical -- blocking production or active customer impact.
+  - high -- important and time-bound, fits next sprint.
+  - medium -- normal backlog priority.
+  - low -- nice-to-have, no time pressure.
+- Ask: What is the **driver**? Vocabulary: user-request / bug-report /
+  tech-debt / opportunity.
+  - user-request -- explicit ask from a user, customer, or stakeholder.
+  - bug-report -- defect, regression, or incorrect behaviour.
+  - tech-debt -- internal quality, maintainability, or refactor.
+  - opportunity -- new market, capability, or strategic improvement.
 - Ask: Is this linked to a change request? If so, provide the CR ID.
-- If CR exists: read `docs/planning-artifacts/change-request-{cr_id}.md` for context (impact analysis, approval status).
-- Classify the change as **patch**, **enhancement**, or **feature** based on scope analysis.
-- Present scope summary to user for confirmation before proceeding:
+- If CR exists: read `docs/planning-artifacts/change-request-{cr_id}.md`
+  for context (impact analysis, approval status).
+- Generate `feature_id` in the format `AF-{date}-{N}` where `{date}` is the
+  current date (`AF-{YYYY-MM-DD}-{N}`, e.g. `AF-2026-04-26-1`) and `{N}`
+  is a monotonically increasing integer for that date. To resolve `{N}`,
+  scan `docs/planning-artifacts/epics-and-stories.md` and any prior
+  `docs/planning-artifacts/assessment-AF-{date}-*.md` artifacts; use the
+  highest existing index for today plus one, or `1` if none exist.
+- Classify the change as **patch**, **enhancement**, or **feature** based
+  on scope analysis.
+- Present the scope summary to the user for confirmation before proceeding:
+  - Feature ID: {feature_id}
   - Change: {description}
   - Classification: {patch / enhancement / feature}
-  - Driver: {driver}
+  - Urgency: {critical / high / medium / low}
+  - Driver: {user-request / bug-report / tech-debt / opportunity}
   - CR: {cr_id or "none"}
-  - Expected cascade: {list of artifacts that will be updated per the cascade matrix}
+  - Expected cascade: {list of artifacts that will be updated per the
+    cascade matrix}
 
-### Step 2 -- Execute Cascade (patch)
+### Step 2 -- Val Review Gate (mandatory verdict surfacing)
+
+This step is the canonical Val review gate. It restores the validation
+gate that previously ran silently inside the cascade subagents (the
+regression class closed by ADR-063).
+
+- Spawn a Val subagent via the Agent tool with `context: fork` and the
+  read-only tool allowlist `[Read, Grep, Glob, Bash]` per ADR-045. Pass
+  the intake data captured in Step 1 (feature_id, description,
+  classification, urgency, driver, CR linkage, expected cascade).
+- Val validates the intake against the codebase and ground truth and
+  returns the ADR-037 structured schema:
+  `{ status, summary, artifacts, findings, next }`.
+- Apply the Subagent Dispatch Contract above:
+  1. Display `status` and `summary` inline.
+  2. List every finding with its severity, scope, and recommended action.
+  3. **Halt on CRITICAL** -- if `status == "CRITICAL"` or any finding has
+     `severity == "CRITICAL"`, HALT the skill before cascade execution
+     with an actionable error message that includes the finding text and
+     suggested resolution. Do NOT proceed to Step 3. Do NOT emit an
+     assessment-doc -- the cascade did not run.
+  4. Display WARNING findings inline; record them for the assessment-doc.
+  5. Log INFO findings to the checkpoint and assessment-doc.
+- In YOLO mode the verdict is auto-displayed (no `[c]/[y]/[e]` pause) but
+  a CRITICAL verdict still HALTS per ADR-067.
+- Only when no CRITICAL findings remain does the skill proceed to the
+  cascade steps below.
+
+### Step 3 -- Execute Cascade (patch)
 
 - If classification is `patch`:
   - Apply the fix directly to the affected document.
   - No cascade -- no downstream artifacts are touched.
-  - Skip to Step 8 (Summary).
+  - Skip to Step 9 (Emit Assessment-Doc) then Step 10 (Summary).
 
-### Step 3 -- Edit PRD (feature only)
+### Step 4 -- Edit PRD (feature only)
 
 - If classification is `feature`:
-  - Delegate to the edit-prd sub-workflow via subagent: add new functional and non-functional requirements.
-  - Capture the PRD diff -- identify NEW requirement IDs (FR-*, NFR-*) added.
-  - Capture the cascade classification from edit-prd (architecture impact: NONE/MINOR/SIGNIFICANT).
-  - Store: prd_diff, cascade_to_arch.
+  - Delegate to the edit-prd sub-workflow via subagent: add new functional
+    and non-functional requirements.
+  - Capture the PRD diff -- identify NEW requirement IDs (FR-*, NFR-*)
+    added.
+  - Capture the cascade classification from edit-prd (architecture
+    impact: NONE / MINOR / SIGNIFICANT).
+  - Store: `prd_diff`, `cascade_to_arch`.
 - If classification is `enhancement` or `patch`: skip this step.
 
-### Step 4 -- Edit Architecture (feature only, if needed)
+### Step 5 -- Edit Architecture (feature only, if needed)
 
-- If classification is `feature` AND cascade_to_arch != NONE:
+- If classification is `feature` AND `cascade_to_arch != NONE`:
   - Delegate to the edit-architecture sub-workflow via subagent.
   - Capture the architecture diff -- new ADRs, changed sections.
-  - Store: arch_diff.
-- If cascade_to_arch == NONE: inform user "No architecture changes needed" and skip.
+  - Store: `arch_diff`.
+- If `cascade_to_arch == NONE`: inform the user "No architecture changes
+  needed" and skip.
 - If classification is `enhancement` or `patch`: skip this step.
 
-### Step 5 -- Edit Test Plan (enhancement and feature)
+### Step 6 -- Edit Test Plan (enhancement and feature)
 
 - If classification is `enhancement` or `feature`:
-  - Check if `docs/test-artifacts/test-plan.md` exists. If not, recommend running /gaia-test-design.
-  - If test plan exists: delegate to the edit-test-plan sub-workflow via subagent.
+  - Check if `docs/test-artifacts/test-plan.md` exists. If not, recommend
+    running `/gaia-test-design`.
+  - If the test plan exists: delegate to the edit-test-plan sub-workflow
+    via subagent.
+  - **Orchestrator trigger inheritance (FR-353 / E46-S5).** When
+    delegating to `/gaia-edit-test-plan`, pass the three inheritance
+    contract fields as named invocation parameters:
+    - `feature_description` -- the feature scope captured in Step 1
+    - `prd_diff` -- the PRD diff captured in Step 4 (empty for
+      `enhancement` classification, since Step 4 is skipped -- pass only
+      when populated)
+    - `arch_diff` -- the architecture diff captured in Step 5 (empty for
+      `enhancement` classification, since Step 5 is skipped -- pass only
+      when populated)
+    Pass only the subset that is populated for the current classification.
+    `/gaia-edit-test-plan` Step 2 handles the partial-inheritance case by
+    prompting for missing fields. Do NOT pass empty strings for skipped
+    fields -- omit them so the downstream three-case branch routes to
+    PARTIAL rather than FULL with empty values.
   - Capture test plan additions (new test case IDs).
-  - Store: test_diff.
+  - Store: `test_diff`.
 - If classification is `patch`: skip this step.
 
-### Step 6 -- Edit Threat Model (feature only)
+### Step 7 -- Edit Threat Model (feature only)
 
 - If classification is `feature`:
   - Check if `docs/planning-artifacts/threat-model.md` exists.
-  - If it exists: update the threat model to account for new attack surfaces introduced by the feature.
-  - Store: threat_model_diff.
+  - If it exists: update the threat model to account for new attack
+    surfaces introduced by the feature.
+  - Store: `threat_model_diff`.
 - If classification is `enhancement` or `patch`: skip this step.
 
-### Step 7 -- Add Feature Stories (enhancement and feature)
+### Step 8 -- Add Feature Stories (enhancement and feature)
 
 - If classification is `enhancement` or `feature`:
-  - Delegate to the add-stories sub-workflow via subagent, passing feature_description, prd_diff, arch_diff, and cr_id.
+  - Delegate to the add-stories sub-workflow via subagent, passing
+    `feature_description`, `prd_diff`, `arch_diff`, and `cr_id`.
   - Capture new story keys and epic assignments.
-  - Store: new_stories.
-  - Priority flag integration: if the driver is high-urgency (P0, business-critical, or regulatory), set priority_flag: "next-sprint" in each created story's frontmatter.
+  - Store: `new_stories`.
+  - Priority flag integration: if the urgency is `critical` or the driver
+    is otherwise high-urgency (regulatory, business-critical), set
+    `priority_flag: "next-sprint"` in each created story's frontmatter.
 - If classification is `patch`: skip this step.
 
-### Step 7b -- Update Traceability (enhancement and feature)
+### Step 8b -- Update Traceability (enhancement and feature)
 
 - If classification is `enhancement` or `feature`:
-  - Delegate to the traceability sub-workflow via subagent to regenerate the traceability matrix.
-  - Verify new FR/NFR IDs, test cases, and stories are linked.
+  - Delegate to the traceability sub-workflow via subagent to regenerate
+    the traceability matrix.
+  - Verify new FR / NFR IDs, test cases, and stories are linked.
 - If classification is `patch`: skip this step.
 
-### Step 8 -- Summary
+### Step 9 -- Emit Assessment-Doc Artifact
 
-- Present final summary:
+This step runs only after the cascade completes successfully and Val
+returned no CRITICAL findings in Step 2. If Step 2 halted on CRITICAL,
+no assessment-doc is emitted -- the user must resolve the CRITICAL
+finding first and re-invoke the skill.
+
+- Write the assessment-doc to
+  `docs/planning-artifacts/assessment-{feature_id}.md` with the following
+  sections:
+
+  - **Header** -- feature_id, date, author, classification, urgency,
+    driver, CR linkage.
+  - **Classification** -- the chosen classification (patch / enhancement /
+    feature) with a one-line scope rationale.
+  - **Affected Artifacts** -- the list of artifacts touched per the
+    cascade matrix for the chosen classification, with the actual diff
+    summaries captured during the cascade. Skipped artifacts are listed
+    with "(skipped: classification = {patch|enhancement})" so the audit
+    trail is explicit.
+  - **Cascade Plan** -- a numbered list of the sub-workflows dispatched in
+    order, with the resulting diff IDs (new FR / NFR IDs, ADR numbers,
+    test case IDs, story keys) captured at each step. For patch
+    classification this section reads "(no cascade -- direct edit
+    applied)".
+  - **Val Findings Summary** -- the verdict from Step 2 (PASS / WARNING)
+    plus the full list of WARNING and INFO findings with their severity,
+    scope, and recommended action. CRITICAL findings never appear here
+    because they would have halted the skill before this step.
+
+- The assessment-doc serves as the audit trail: who proposed what change,
+  what Val said about it, what artifacts ended up touched, and which
+  follow-up stories were created. It is written ONLY after the cascade
+  completes successfully.
+
+### Step 10 -- Summary
+
+- Present the final summary:
 
   **Change Addition Complete: {description}**
 
   | Artifact | Status | Details |
   |----------|--------|---------|
-  | Classification | {patch/enhancement/feature} | {scope rationale} |
-  | PRD | {Updated/Skipped} | {new FR/NFR IDs or "N/A"} |
-  | Architecture | {Updated/Skipped} | {new ADRs or "N/A"} |
-  | Test Plan | {Updated/Skipped/Not found} | {new test case IDs or reason} |
-  | Threat Model | {Updated/Skipped} | {changes or "N/A"} |
-  | Stories | {Created/Skipped} | {new story keys or "N/A"} |
-  | Traceability | {Regenerated/Skipped} | {linkage status} |
+  | Feature ID | {feature_id} | {AF-YYYY-MM-DD-N} |
+  | Classification | {patch / enhancement / feature} | {scope rationale} |
+  | Urgency | {critical / high / medium / low} | -- |
+  | Driver | {user-request / bug-report / tech-debt / opportunity} | -- |
+  | Val Verdict | {PASS / WARNING} | {N WARNING findings} |
+  | PRD | {Updated / Skipped} | {new FR/NFR IDs or "N/A"} |
+  | Architecture | {Updated / Skipped} | {new ADRs or "N/A"} |
+  | Test Plan | {Updated / Skipped / Not found} | {new test case IDs or reason} |
+  | Threat Model | {Updated / Skipped} | {changes or "N/A"} |
+  | Stories | {Created / Skipped} | {new story keys or "N/A"} |
+  | Traceability | {Regenerated / Skipped} | {linkage status} |
+  | Assessment Doc | {emitted / skipped} | docs/planning-artifacts/assessment-{feature_id}.md |
 
   **Next steps:**
-  - For each new story: run `/gaia-create-story {story_key}` to elaborate
-  - To start development: run `/gaia-sprint-plan` or `/gaia-correct-course`
+  - For each new story: run `/gaia-create-story {story_key}` to elaborate.
+  - To start development: run `/gaia-sprint-plan` or `/gaia-correct-course`.
+  - To audit this change later: read
+    `docs/planning-artifacts/assessment-{feature_id}.md`.
+
+## References
+
+- ADR-037 -- Structured subagent return schema
+  (`status` / `summary` / `artifacts` / `findings` / `next`).
+- ADR-041 -- Native Execution Model via Claude Code Skills + Subagents +
+  Plugins + Hooks.
+- ADR-042 -- Scripts-over-LLM for Deterministic Operations. The Val gate
+  and assessment-doc emit are LLM-judgment steps and intentionally do NOT
+  introduce new scripts.
+- ADR-045 -- Review Gate via sequential `context: fork` subagents.
+  Val invocations follow this isolation pattern with a read-only tool
+  allowlist.
+- ADR-063 -- Subagent Dispatch Contract -- Mandatory Verdict Surfacing.
+- ADR-067 -- YOLO Mode Contract -- Consistent Non-Interactive Behavior.
+- FR-323 -- Add-feature orchestrator with classification vocabulary and
+  cascade matrix.
+- FR-362 -- Restore the validation gate inside `/gaia-add-feature`.
 
 ## Finalize
 

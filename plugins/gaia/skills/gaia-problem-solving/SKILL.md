@@ -235,8 +235,37 @@ code.
 
 **Synthesize the Context Brief** with all gathered context plus a
 keyword hit-count table and a token-usage breakdown per sub-budget.
-If no relevant context was found across all tiers, proceed gracefully
-with an empty Context Brief — log an info-level note and continue.
+
+#### Empty-context handling (E49-S3 / FR-368 / AC1, AC4 / TC-GR37-11)
+
+When **all six sub-budget sources** (Stories, Architecture, PRD,
+Decision Logs, Codebase, Test Artifacts) return empty or
+not-found:
+
+1. Set the synthesis flag `context_brief_empty: true` in the
+   Context Brief metadata.
+2. Emit an info-level log line: `Context Brief empty -- no artifact
+   sources returned data`. This is the canonical gap-logging
+   signature consumed by FR-393 observability.
+3. Proceed gracefully — do NOT raise a missing-context error and
+   do NOT crash on context-overflow (the zero-context edge case is
+   covered by the same "no context-overflow crash" guarantee from
+   the AC-EC5 analogue).
+4. **Branch on execution mode:**
+   - **Normal mode (default):** continue to Phase 3, where the
+     fallback interrogation path collects the missing context from
+     the user before the Planning Gate fires.
+   - **YOLO mode (per ADR-061):** skip the Phase 3 fallback
+     interrogation prompts entirely. Auto-proceed with the empty
+     Context Brief and emit the gap-log line `Context Brief empty
+     -- proceeding with YOLO defaults (FR-393)`. The Planning Gate
+     still fires but auto-approves per the YOLO mode contract — no
+     user prompts are emitted for missing context. Downstream
+     phases (3-10) operate on the problem statement alone.
+
+If only some sub-budgets return empty (partial context), the
+fallback interrogation is **not** triggered — the available
+context is sufficient and Phase 3 uses it directly.
 
 ### Planning Gate
 
@@ -254,9 +283,50 @@ test results. Define what "solved" looks like — success criteria
 grounded in existing acceptance criteria from related stories and
 PRD requirements found in the Context Brief.
 
-If no Context Brief is available (rare), fall back to
-interrogation-based problem framing — no errors, no degraded
-experience.
+#### Fallback interrogation path (E49-S3 / FR-368 / AC2, AC3 / ADR-066 / TC-GR37-11)
+
+If `context_brief_empty: true` was set by Phase 2 (all six
+sub-budget sources returned empty) and execution mode is **normal**
+(YOLO mode is handled inline in Phase 2 — see "Empty-context
+handling" above), fall back to a structured three-prompt
+interrogation sequence per ADR-066 (inline-ask over fail-fast). The
+fallback runs BEFORE Nova subagent dispatch — Nova receives the
+user-populated Context Brief, not an empty one.
+
+Emit the following three prompts in order, one at a time, waiting
+for the user's answer before the next:
+
+1. **Problem context and background** —
+   `Describe the problem context and background -- what system,
+   feature, or area is affected?`
+2. **Constraints / boundary conditions** —
+   `What constraints or boundary conditions apply? (e.g., time
+   pressure, dependencies, architectural constraints)`
+3. **Observed behaviour and repro** —
+   `Describe the observed behaviour and steps to reproduce`
+
+User-supplied answers populate the same Context Brief fields that
+artifact-sourced context would:
+
+- Prompt 1 answer → **Architecture Context**
+- Prompt 2 answer → **Constraint Context**
+- Prompt 3 answer → **Symptom / Evidence Context**
+
+**Data-contract preservation (AC3):** the fallback interrogation
+MUST produce a Context Brief structurally identical to the
+artifact-sourced version. Downstream phases (4-10) consume the
+same data contract regardless of source. Unmapped fields
+(Related Stories, Relevant Requirements, Decision Log Entries,
+Codebase Scan, Test Coverage) are set to empty arrays / strings —
+**never omitted**. If the user skips an interrogation prompt
+(provides empty input), the corresponding section is left empty
+and the skill proceeds without error — partial answers are valid.
+
+The output artifact at
+`docs/creative-artifacts/problem-solving-{date}.md` produced from
+fallback-interrogation context has the same sectional structure as
+artifact-sourced runs — no degraded experience, no errors, no
+missing sections.
 
 **Phase 4 — Root Cause Analysis.** Load methods from
 `{data_path}/solving-methods.csv` (missing-file handling above).

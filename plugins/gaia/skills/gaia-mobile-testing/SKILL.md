@@ -21,7 +21,7 @@ This skill is the native Claude Code conversion of the legacy `_gaia/testing/wor
 ## Critical Rules
 
 - A story key or project context MUST be available. If no story key is provided as an argument and no project context can be loaded, prompt: "Provide a story key or confirm project-level assessment."
-- Device matrix must cover top 90% of the target user base.
+- Device matrix MUST cover the top 90% of the target user base (FR-386 hard constraint).
 - Platform-specific behaviors must be tested on real devices or emulators.
 - Output MUST be written to `docs/test-artifacts/mobile-test-plan-{date}.md` where `{date}` is today's date in YYYY-MM-DD format.
 - Knowledge fragments are bundled in this skill's `knowledge/` directory -- load them JIT when referenced by a step.
@@ -31,11 +31,21 @@ This skill is the native Claude Code conversion of the legacy `_gaia/testing/wor
 
 ### Step 1 -- Platform Matrix
 
+**Hard constraint (FR-386):** The device matrix MUST cover the top 90% of the
+target user base. The 90% threshold is non-negotiable — it is the minimum
+defensible coverage floor. Acceptable evidence sources for the threshold are
+usage analytics, app-store device telemetry, or vendor reports such as
+StatCounter / DeviceAtlas. List the evidence source alongside the device
+matrix in the generated test plan so the constraint is auditable.
+
 - Define target devices by OS version, screen size, and market share.
 - Include minimum supported versions for iOS and Android.
 - Document screen size breakpoints and orientation requirements.
 - Identify device-specific features used (camera, GPS, biometrics).
 - If architecture.md is available, extract mobile stack details (React Native, Flutter, native).
+- Surface the 90% user-base coverage constraint in the device-matrix section
+  of the generated mobile-test-plan output so reviewers can verify it on a
+  single grep.
 
 ### Step 2 -- Appium Setup
 
@@ -44,6 +54,62 @@ This skill is the native Claude Code conversion of the legacy `_gaia/testing/wor
 - Configure device farm integration (BrowserStack, SauceLabs, or local emulators).
 - Define element location strategies and wait patterns.
 - Include Page Object Model structure for test maintainability.
+
+#### Cloud device lab configuration (FR-386)
+
+The generated test plan MUST include at least one runnable cloud-config
+snippet drawn from one of the two reference providers below. Credentials are
+sourced from environment variables or CI secret stores — never inlined.
+
+**BrowserStack — `browserstack.yml` (Selenium 4 / Appium 2, W3C `bstack:options`):**
+
+```yaml
+# browserstack.yml — minimal Appium 2 mobile capabilities
+userName: ${BROWSERSTACK_USERNAME}
+accessKey: ${BROWSERSTACK_ACCESS_KEY}
+projectName: ${PROJECT_NAME}
+buildName: ${CI_BUILD_NAME}
+platforms:
+  - platformName: iOS
+    deviceName: iPhone 15 Pro
+    osVersion: "17"
+    bstack:options:
+      realMobile: true
+      sessionName: smoke-suite-ios
+  - platformName: Android
+    deviceName: Samsung Galaxy S24
+    osVersion: "14.0"
+    bstack:options:
+      realMobile: true
+      sessionName: smoke-suite-android
+```
+
+**SauceLabs — `sauce:options` capabilities (Appium W3C):**
+
+```yaml
+# sauce.config.yml — minimal Appium W3C capabilities for Sauce Labs
+sauce:options:
+  username: ${SAUCE_USERNAME}
+  accessKey: ${SAUCE_ACCESS_KEY}
+  build: ${CI_BUILD_NAME}
+  name: smoke-suite
+  appiumVersion: "2.0.0"
+platforms:
+  - platformName: iOS
+    appium:deviceName: iPhone 15 Pro
+    appium:platformVersion: "17"
+    appium:automationName: XCUITest
+  - platformName: Android
+    appium:deviceName: Pixel 8
+    appium:platformVersion: "14"
+    appium:automationName: UiAutomator2
+```
+
+Credential placeholders (`BROWSERSTACK_USERNAME`, `SAUCE_USERNAME`, etc.) are
+required — never commit a real `accessKey` or `userName` value to a
+configuration file. CI runners inject them at job start from the secret
+store; local runs read them from a developer-scoped `.env` (which is excluded
+from version control).
 
 ### Step 3 -- React Native / Cross-Platform Testing
 
@@ -79,6 +145,9 @@ This skill is the native Claude Code conversion of the legacy `_gaia/testing/wor
   - Platform-specific test scenarios
   - Touch interaction and gesture testing procedures
 - Write output to `docs/test-artifacts/mobile-test-plan-{date}.md`.
+
+> After artifact write: run open-question detection snippet
+> `!${CLAUDE_PLUGIN_ROOT}/scripts/detect-open-questions.sh docs/test-artifacts/mobile-test-plan-${DATE}.md`
 
 ## Finalize
 

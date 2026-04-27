@@ -180,6 +180,36 @@ is_canonical_state() {
   return 1
 }
 
+# Render the canonical enum as a "value | value | value" string for use in
+# error messages. Centralised so every fail-fast path emits the same hint
+# (E38-S8, AC2). Operators reading the rejection see exactly which values
+# the lifecycle accepts and can fix the call site without reading source.
+canonical_states_hint() {
+  local s out=""
+  for s in "${CANONICAL_STATES[@]}"; do
+    if [ -z "$out" ]; then
+      out="$s"
+    else
+      out="${out} | ${s}"
+    fi
+  done
+  printf '%s' "$out"
+}
+
+# Fail-fast guard for any value about to be written into a lifecycle
+# `status:` field. Any non-canonical value (e.g. the review-gate display
+# strings 'PASSED' / 'FAILED' / 'UNVERIFIED' that triggered the sprint-27
+# F2 finding) MUST be rejected before any tempfile rewrite touches disk —
+# yaml and story file are left byte-identical (E38-S8 AC1, AC2). The error
+# names BOTH the offending value and the allowed enum so the caller can
+# correct the invocation without reading source.
+assert_canonical_state() {
+  local candidate="$1" context="${2:-write}"
+  if ! is_canonical_state "$candidate"; then
+    die "refusing to ${context} non-canonical lifecycle status: '${candidate}' — allowed values: $(canonical_states_hint)"
+  fi
+}
+
 # Exit 1 unless "from -> to" is in ALLOWED_EDGES.
 validate_transition() {
   local from="$1" to="$2"
@@ -302,6 +332,11 @@ read_story_status() {
 # other bytes. Tempfile + atomic mv.
 rewrite_story_status() {
   local file="$1" new_status="$2"
+  # Defense-in-depth (E38-S8 AC1): even if a future caller bypasses
+  # cmd_transition's fail-fast guard, this writer refuses to stamp a
+  # non-canonical value into the story file. Belt-and-braces against the
+  # sprint-27 F2 class of bug.
+  assert_canonical_state "$new_status" "write story status"
   local tmp
   tmp=$(mktemp "${file}.tmp.XXXXXX")
   # shellcheck disable=SC2064
@@ -364,6 +399,12 @@ rewrite_story_status() {
 rewrite_sprint_status_yaml() {
   local story_key="$1" new_status="$2"
   local file="$SPRINT_STATUS_YAML"
+
+  # Defense-in-depth (E38-S8 AC1): refuse to stamp a non-canonical value
+  # into sprint-status.yaml even if the caller bypassed the higher-level
+  # guard. This is the same chokepoint that reconcile and the transition
+  # path both flow through, so guarding here closes every write path.
+  assert_canonical_state "$new_status" "write sprint-status.yaml status"
 
   if [ ! -s "$file" ]; then
     die "sprint-status.yaml is missing or empty: $file"
@@ -612,7 +653,15 @@ do_transition_locked() {
 cmd_transition() {
   local story_key="$1" to_state="$2"
 
-  is_canonical_state "$to_state" || die "unknown target state: '$to_state'"
+  # Fail-fast (E38-S8 AC2): refuse any --to value that is not in the
+  # canonical lifecycle enum. The rejection happens BEFORE the flock and
+  # BEFORE any tempfile is created, so sprint-status.yaml and the story
+  # file are guaranteed byte-identical on a non-canonical input. The error
+  # names both the offending value and the allowed enum so the caller can
+  # correct the invocation without reading source. This is the primary
+  # fix for the sprint-27 F2 root cause where 'PASSED' was passed as the
+  # lifecycle target instead of 'done'.
+  assert_canonical_state "$to_state" "transition --to"
 
   local flock_bin
   flock_bin=$(command -v flock || true)
@@ -646,12 +695,24 @@ cmd_transition() {
 
 # ---------- Subcommand: reconcile (E38-S1, ADR-055 §10.29.1) ----------
 
-# Locate a story file for reconcile. Unlike locate_story_file(), this does NOT
-# enforce the `template: 'story'` filter — reconcile needs to work on the bats
-# test fixtures as well as canonical stories. Returns the first .md match for
-# the given key under IMPLEMENTATION_ARTIFACTS. Case-insensitive glob via
-# nocaseglob so {slug}-story.md fixtures match upper-cased keys on Linux.
-# Returns via stdout. Exits non-zero (return 1) if no file found — caller
+# Locate a story file for reconcile (E38-S7, FR-SPQG-4, ADR-055).
+#
+# Filter the {key}-*.md glob to canonical story files (those whose YAML
+# frontmatter declares `template: 'story'`). This eliminates the prior
+# behaviour where co-located review / qa-tests / security / performance
+# reports could be picked up as the "story" file and trigger spurious
+# parse errors during reconcile.
+#
+# For each glob candidate that is rejected (missing or non-'story' template),
+# emit a structured warning to stderr that names the candidate file:
+#
+#   RECONCILE: {key} candidate {file} skipped — no `template: 'story'` frontmatter
+#
+# This satisfies E38-S7 AC2 / Val WARNING #1: skips are observable, not silent.
+#
+# Case-insensitive glob via nocaseglob so {slug}-story.md fixtures match
+# upper-cased keys on Linux. Returns the first canonical match via stdout.
+# Returns non-zero (return 1) if no canonical story file is found — caller
 # handles the missing-file error.
 reconcile_locate_story_file() {
   local key="$1"
@@ -660,10 +721,23 @@ reconcile_locate_story_file() {
   # shellcheck disable=SC2206
   matches=( "${IMPLEMENTATION_ARTIFACTS}/${key}-"*.md )
   shopt -u nullglob nocaseglob
+
   if [ "${#matches[@]}" -eq 0 ]; then
     return 1
   fi
-  printf '%s' "${matches[0]}"
+
+  local m
+  for m in "${matches[@]}"; do
+    if _is_story_file "$m"; then
+      printf '%s' "$m"
+      return 0
+    fi
+    # Per-candidate structured warning naming the skipped file (Val WARNING #1).
+    printf "RECONCILE: %s candidate %s skipped — no \`template: 'story'\` frontmatter\n" \
+      "$key" "$m" >&2
+  done
+
+  return 1
 }
 
 # Read story-file frontmatter status; prints to stdout. Reuses the stricter

@@ -134,6 +134,11 @@ is_allowlisted() {
   # retired `_gaia/_config/` pattern as literals — they ARE the pattern the
   # test enforces zero-of, so the filename mentions are contractual.
   [[ "$path" == */plugins/gaia/tests/knowledge-paths-guard.bats ]] && return 0
+  # E45-S1 — static-next-steps.bats is the parity guard for ADR-060 / FR-348.
+  # VCP-NXT-11 asserts zero `lifecycle-sequence.yaml` references across the 10
+  # target SKILL.md files; the literal token appears in assertions and prose
+  # comments because it IS the pattern the test enforces zero-of.
+  [[ "$path" == */plugins/gaia/tests/static-next-steps.bats ]] && return 0
   # The Cluster 19 parity guard ASSERTS zero engine loads — preserve verbatim.
   [[ "$path" == */plugins/gaia/test/e28-s133-full-lifecycle-atdd.bats ]] && return 0
   # Comment-only references in foundation scripts (see plan v4 Modified-files table).
@@ -207,6 +212,17 @@ is_allowlisted() {
   [[ "$path" == */plugins/gaia/skills/gaia-brainstorm/SKILL.md ]] && return 0
   # The ADR-048 guard workflow itself names the patterns it is supposed to catch.
   [[ "$path" == */.github/workflows/adr-048-guard.yml ]] && return 0
+  # E29-S7 V1 checkpoint deletion plan fixture — the deletion plan IS the document
+  # describing how to clean up legacy V1 (workflow.xml-engine-era) checkpoints, so
+  # its prose intentionally names workflow.xml as the historical engine the
+  # checkpoints belong to. The fixture is a CI-stable copy of the canonical plan
+  # at docs/planning-artifacts/v1-checkpoint-deletion-plan.md (allowlisted by the
+  # docs/ rule above). The fixture's bats test (e29-s7-v1-checkpoint-deletion-plan.bats)
+  # asserts these exact tokens are present, so scrubbing them would break the gate.
+  [[ "$path" == */plugins/gaia/tests/fixtures/e29-s7-deletion-plan/* ]] && return 0
+  # E29-S7 bats test names workflow.xml in its docstring describing what the
+  # plan covers — passive prose, not an active load.
+  [[ "$path" == */plugins/gaia/tests/e29-s7-v1-checkpoint-deletion-plan.bats ]] && return 0
   # gaia-validate-framework prose now documents what was retired by ADR-044/ADR-048
   # (the new text explicitly calls out the removed mechanisms so future readers
   # understand the native model — these are retirement notices, not active loads).

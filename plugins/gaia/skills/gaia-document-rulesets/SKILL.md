@@ -1,9 +1,9 @@
 ---
 name: gaia-document-rulesets
 description: Document-specific validation rulesets for artifact type detection (path and frontmatter), structural quality checks per artifact type (application, infrastructure, platform PRDs, gap analysis output), and two-pass validation logic. Consumed by the validator subagent as a JIT-loaded library.
-version: '1.2'
+version: '1.3'
 applicable_agents: [validator]
-sections: [type-detection, prd-rules, infra-prd-rules, platform-prd-rules, arch-rules, ux-rules, test-plan-rules, epics-rules, gap-analysis-rules, two-pass-logic]
+sections: [type-detection, prd-rules, infra-prd-rules, platform-prd-rules, arch-rules, ux-rules, test-plan-rules, epics-rules, gap-analysis-rules, brainstorm-rules, market-research-rules, domain-research-rules, technical-research-rules, two-pass-logic]
 allowed-tools: [Read, Write, Edit, Grep]
 ---
 
@@ -43,6 +43,19 @@ Check frontmatter first before falling back to filename detection. If the artifa
 4. If a match is found, return the corresponding ruleset ID(s). For `'platform-prd'`, return both `prd-rules` and `infra-prd-rules` — both rulesets are applied sequentially
 5. If `template` field is absent or does not match, fall through to path-based detection below
 
+### Artifact-Type Slug Mapping (Upstream Caller Hint)
+
+Upstream skills invoke `/gaia-val-validate` with an explicit `artifact_type` slug per the Upstream Integration Contract (see `gaia-val-validate/SKILL.md`). When that slug is present, it takes precedence over both frontmatter and path detection — the caller has authoritative knowledge of the artifact type.
+
+| `artifact_type` Slug | Ruleset ID | Description |
+|----------------------|------------|-------------|
+| `brainstorm` | brainstorm-rules | Brainstorm artifact emitted by `/gaia-brainstorm` |
+| `market-research` | market-research-rules | Market Research artifact emitted by `/gaia-market-research` |
+| `domain-research` | domain-research-rules | Domain Research artifact emitted by `/gaia-domain-research` |
+| `technical-research` | technical-research-rules | Technical Research artifact emitted by `/gaia-tech-research` (slug aligned with filename per E44-S11) |
+
+For the Phase 1 artifact types above, the slug is the canonical detection signal because their on-disk filenames vary by `{slug}` (brainstorm) or live in `docs/planning-artifacts/` alongside other planning docs (market/domain/technical research) and may not carry a `template:` frontmatter field. Detection precedence: `artifact_type` slug -> frontmatter `template` -> filename basename -> unknown.
+
 ### Path-to-Ruleset Mapping (Fallback)
 
 If no frontmatter match is found, detect the artifact type from the file path basename. Match against these patterns:
@@ -55,6 +68,10 @@ If no frontmatter match is found, detect the artifact type from the file path ba
 | `test-plan.md` | test-plan-rules | Test Plan |
 | `epics-and-stories.md` | epics-rules | Epics and Stories |
 | `test-gap-analysis-*.md` | gap-analysis-rules | Test Gap Analysis Output (E19-S3, FR-223) |
+| `brainstorm-*.md` | brainstorm-rules | Brainstorm artifact (E44-S12, Phase 1) |
+| `market-research.md` | market-research-rules | Market Research artifact (E44-S12, Phase 1) |
+| `domain-research.md` | domain-research-rules | Domain Research artifact (E44-S12, Phase 1) |
+| `technical-research.md` | technical-research-rules | Technical Research artifact (E44-S12, Phase 1) |
 
 ### Path-Based Detection Algorithm
 
@@ -327,6 +344,173 @@ verification` appears in the frontmatter.
   `total_executed == sum(story.executed)` — mismatch is a WARNING.
 
 **References:** FR-223, FR-226, ADR-030 §10.22, stories E19-S3 and E19-S7, test cases TGA-17–20, TGA-30–32.
+<!-- END SECTION -->
+
+<!-- SECTION: brainstorm-rules -->
+## Brainstorm Validation Rules
+
+Structural quality checks for brainstorm artifacts emitted by `/gaia-brainstorm` to `docs/creative-artifacts/brainstorm-{slug}.md`. This ruleset complements the `/gaia-brainstorm` 24-item finalize.sh checklist (E42-S1) — finalize.sh enforces the script-verifiable items at write time; this ruleset is what Val applies during auto-review.
+
+**Scope:** files matching `docs/creative-artifacts/brainstorm-*.md`. Detected via `artifact_type = brainstorm` per the slug mapping table.
+
+### Required Sections
+
+Verify presence of the following top-level sections. Missing any section is a WARNING.
+
+1. `## Vision Summary`
+2. `## Target Users`
+3. `## Pain Points`
+4. `## Differentiators`
+5. `## Competitive Landscape`
+6. `## Opportunity Areas`
+7. `## Parking Lot`
+8. `## Next Steps`
+
+### Opportunity Areas Minimum Count
+
+The `## Opportunity Areas` section must contain at least 3 enumerated opportunity entries. Fewer than 3 is a CRITICAL finding — brainstorm output below this threshold has insufficient breadth for downstream PRD/market-research consumption (mirrors the V1 24-item checklist gate, VCP-CHK-02).
+
+### Opportunity Entry Quality
+
+Each opportunity entry should declare Impact and Feasibility (e.g., `Impact: high; Feasibility: medium`). Missing Impact or Feasibility on any opportunity entry is a WARNING.
+
+### Parking Lot Revival Triggers
+
+Each `## Parking Lot` entry should declare a revival condition (e.g., `Revival condition: when X demand is validated`). Parking-lot entries without a revival condition are an INFO finding — they signal a future-elicitation gap rather than a structural defect.
+
+### Next Steps Traceability
+
+The `## Next Steps` section must reference at least one downstream GAIA workflow (e.g., `/gaia-market-research`, `/gaia-domain-research`, `/gaia-create-prd`). A missing or empty Next Steps section is a WARNING.
+
+**References:** E42-S1 (V1->V2 checklist port), E44-S3 (Val auto-review wire-in), E44-S12 (this ruleset).
+<!-- END SECTION -->
+
+<!-- SECTION: market-research-rules -->
+## Market Research Validation Rules
+
+Structural quality checks for market research artifacts emitted by `/gaia-market-research` to `docs/planning-artifacts/market-research.md`. This ruleset complements the `/gaia-market-research` 28-item finalize.sh checklist (E42-S2).
+
+**Scope:** files matching `docs/planning-artifacts/market-research.md`. Detected via `artifact_type = market-research` per the slug mapping table.
+
+### Required Sections
+
+Verify presence of the following top-level sections. Missing any section is a WARNING.
+
+1. `## Executive Summary`
+2. `## Market Definition`
+3. `## Competitive Analysis`
+4. `## Customer Segments`
+5. `## Market Sizing`
+6. `## Key Findings`
+7. `## Strategic Recommendations`
+
+### Geographic Scope Declaration
+
+The `## Market Definition` or `## Executive Summary` section must declare a geographic scope (e.g., `global`, `North America`, `EMEA`). A missing geographic scope is a WARNING — the market sizing is not interpretable without it.
+
+### Competitive Analysis Minimum Count
+
+The `## Competitive Analysis` section must enumerate at least 3 competitors. Fewer than 3 is a CRITICAL finding — competitive positioning below this threshold cannot meaningfully differentiate (mirrors the V1 28-item checklist gate, VCP-CHK-04).
+
+### Competitor Strengths/Weaknesses
+
+For each named competitor, the artifact should declare both Strengths and Weaknesses. A competitor entry missing either is a WARNING.
+
+### TAM/SAM/SOM Estimates and Assumptions
+
+The `## Market Sizing` section must include three estimates: TAM, SAM, and SOM. Each estimate must be accompanied by stated assumptions (e.g., `TAM assumptions: 40M product professionals worldwide, $200 ACV per seat`). Missing any of the three estimates is a CRITICAL finding. Missing assumptions on a present estimate is a WARNING (mirrors the V1 finalize.sh `tam_assumptions` / `sam_assumptions` / `som_assumptions` items).
+
+### Customer Segment Evidence
+
+Each customer segment in `## Customer Segments` should cite evidence (e.g., interview counts, survey results, behavioral data). Segments without evidence are a WARNING.
+
+### Web Access Disclosure
+
+The artifact should declare whether web access was available during the research session (e.g., a `## Web Access` section noting availability). A missing web-access disclosure is an INFO finding.
+
+**References:** E42-S2 (V1->V2 checklist port), E44-S5 (Val auto-review wire-in), E44-S12 (this ruleset).
+<!-- END SECTION -->
+
+<!-- SECTION: domain-research-rules -->
+## Domain Research Validation Rules
+
+Structural quality checks for domain research artifacts emitted by `/gaia-domain-research` to `docs/planning-artifacts/domain-research.md`. This ruleset complements the `/gaia-domain-research` finalize.sh checklist (E42-S3).
+
+**Scope:** files matching `docs/planning-artifacts/domain-research.md`. Detected via `artifact_type = domain-research` per the slug mapping table.
+
+### Required Sections
+
+Verify presence of the following top-level sections. Missing any section is a WARNING.
+
+1. `## Domain Overview`
+2. `## Key Players`
+3. `## Regulatory Landscape`
+4. `## Trends`
+5. `## Terminology Glossary`
+6. `## Risk Assessment`
+7. `## Recommendations`
+
+### Terminology Glossary Mandatory
+
+The `## Terminology Glossary` section is mandatory and must contain at least 5 defined terms. A missing or empty glossary is a CRITICAL finding — domain research without a shared vocabulary cannot be reliably consumed by downstream workflows (mirrors VCP-CHK-06 negative-fixture gate).
+
+### Key Players Coverage
+
+The `## Key Players` section must enumerate at least 3 named players with role descriptions. Fewer than 3 named players is a WARNING.
+
+### Risk Assessment Categorization
+
+The `## Risk Assessment` section should partition risks into named subcategories (e.g., `### Regulatory and Compliance Risks`, `### Technical Risks`, `### Market and Competitive Risks`). A flat unstructured Risk Assessment is a WARNING.
+
+### Regulatory Landscape Specificity
+
+The `## Regulatory Landscape` section should cite named regulations, standards, or licensing regimes (e.g., GDPR, PSD2, PCI-DSS). A regulatory section without named regulations is a WARNING.
+
+### Web Access Disclosure
+
+The artifact should declare whether web access was available during the research session. A missing web-access disclosure is an INFO finding.
+
+**References:** E42-S3 (V1->V2 checklist port), E44-S6 (Val auto-review wire-in), E44-S12 (this ruleset).
+<!-- END SECTION -->
+
+<!-- SECTION: technical-research-rules -->
+## Technical Research Validation Rules
+
+Structural quality checks for technical research artifacts emitted by `/gaia-tech-research` to `docs/planning-artifacts/technical-research.md`. This ruleset complements the `/gaia-tech-research` 22-item finalize.sh checklist (E42-S4). The artifact_type slug `technical-research` is aligned with the on-disk filename per E44-S11.
+
+**Scope:** files matching `docs/planning-artifacts/technical-research.md`. Detected via `artifact_type = technical-research` per the slug mapping table.
+
+### Required Sections
+
+Verify presence of the following top-level sections. Missing any section is a WARNING.
+
+1. `## Technology Overview`
+2. `## Evaluation Matrix`
+3. `## Trade-off Analysis`
+4. `## Recommendation`
+5. `## Migration / Adoption Considerations`
+
+### Alternatives Minimum Count
+
+The `## Trade-off Analysis` (or its `### Alternatives Compared` subsection) must compare at least 2 alternatives. Fewer than 2 is a CRITICAL finding — a single-candidate "comparison" is a recommendation, not research (mirrors VCP-CHK-08 negative-fixture gate).
+
+### Evaluation Matrix Dimensions
+
+The `## Evaluation Matrix` must declare at least 5 evaluation dimensions (e.g., maturity, community, learning curve, licensing, ecosystem, performance, scalability). Fewer than 5 is a WARNING.
+
+### Recommendation Rationale
+
+The `## Recommendation` section must declare both the recommended technology and a rationale referencing constraints from the Technology Overview (e.g., team size, runway, licensing preference). A recommendation without explicit rationale is a WARNING.
+
+### Migration Considerations
+
+The `## Migration / Adoption Considerations` section must address at minimum: timeline, team ramp-up, and risk factors. A migration section missing any of these three is a WARNING.
+
+### Web Access Disclosure
+
+The artifact should declare whether web access was available during the research session. A missing web-access disclosure is an INFO finding.
+
+**References:** E42-S4 (V1->V2 checklist port), E44-S4 (Val auto-review wire-in), E44-S11 (slug alignment), E44-S12 (this ruleset).
 <!-- END SECTION -->
 
 <!-- SECTION: two-pass-logic -->

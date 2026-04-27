@@ -19,6 +19,7 @@ This skill is the native Claude Code conversion of the legacy `_gaia/core/tasks/
 - **Attack from multiple angles: technical, business, user, security, scale.** Do not confine the attack to one dimension.
 - **Produce a ranked findings report with severity and confidence levels.** Every finding row MUST have severity (critical / high / medium / low) AND confidence (high / medium / low) — confidence communicates how certain you are the issue is real.
 - **Do NOT suggest fixes — only identify problems.** Fixing is a separate step (handed off to a downstream workflow). Findings without remediation are the deliverable shape.
+- **Step 4 auto-incorporation is restricted to four callers — see the Step 4 Invocation Contract for the allowlist.** Critical Rules is a reminder surface only; the authoritative caller list lives in `### Step 4 Invocation Contract` below. Edits to the allowlist happen in the Step 4 contract section, never here.
 - This review is attitude-driven. It is explicitly orthogonal to `gaia-edge-cases` (method-driven boundary tracing) — do not collapse the two.
 
 ## Inputs
@@ -34,6 +35,8 @@ This skill is the native Claude Code conversion of the legacy `_gaia/core/tasks/
 - Identify what kind of artifact it is (PRD, architecture, story, code, UX design, etc.) — this shapes the set of attack angles.
 - Derive the `{target}` label used for the output filename: use the target label passed by the caller (e.g., `prd`, `architecture`, `epics`, `readiness`). If no label is given, derive it from the target filename by stripping the extension (e.g., `prd.md` → `prd`, `architecture.md` → `architecture`, `epics-and-stories.md` → `epics`).
 
+> `!scripts/write-checkpoint.sh gaia-adversarial 1 target_artifact_path="$TARGET_ARTIFACT_PATH" adversarial_angle=load target_label="$TARGET_LABEL"`
+
 ### Step 2 — Adversarial Analysis
 
 Attack the target from each of these perspectives:
@@ -48,6 +51,8 @@ Attack the target from each of these perspectives:
 - **Security:** what attack surfaces are exposed? Auth, secrets, input validation, injection?
 - **User impact:** where will users get confused or frustrated? Empty states, error recovery, mode switches?
 - **Business risk:** what could make this commercially unviable? Pricing, partnerships, legal, reputational?
+
+> `!scripts/write-checkpoint.sh gaia-adversarial 2 target_artifact_path="$TARGET_ARTIFACT_PATH" adversarial_angle=analysis target_label="$TARGET_LABEL"`
 
 ### Step 3 — Generate Report
 
@@ -75,6 +80,32 @@ The report contains, in order:
 
 If the target is empty or resolves to no files (AC-EC6), exit with `No review target resolved` and do NOT write an empty report.
 
+> `!scripts/write-checkpoint.sh gaia-adversarial 3 target_artifact_path="$TARGET_ARTIFACT_PATH" adversarial_angle=report target_label="$TARGET_LABEL" --paths "$REPORT_PATH"`
+
+### Step 4 Invocation Contract
+
+Step 4 (Incorporate Findings) is **opt-in on a per-caller basis** — the closed allowlist below is the single source of truth. Any caller not on the list defaults to standalone behavior.
+
+**Auto-incorporation allowlist** — only these four callers may trigger Step 4 auto-incorporation:
+
+- `/gaia-create-arch` — adversarial findings strengthen the architecture decision log before the ADR section is finalized.
+- `/gaia-create-prd` — adversarial findings sharpen requirements and goals before the PRD is locked for downstream planning.
+- `/gaia-create-epics` — adversarial findings expose missing epics, scope gaps, and contradictory acceptance criteria before story breakdown.
+- `/gaia-readiness-check` — adversarial findings surface unresolved blockers before the readiness gate flips to PASS.
+
+**Opt-in signal — both conditions required.** Auto-incorporation triggers if and only if BOTH conditions hold:
+
+1. The caller's identity appears on the four-caller allowlist above.
+2. The caller passes an explicit opt-in signal — a named parameter such as `incorporate: true`, or the documented invocation pattern used by that caller in its own SKILL.md.
+
+**Either condition alone is insufficient — both are required.** A non-listed caller passing `incorporate: true` MUST be rejected as standalone; a listed caller invoking without the opt-in signal MUST also default to standalone. This narrow safety gate prevents accidental auto-writes from drift on either side.
+
+**Standalone default.** When `/gaia-adversarial` is invoked directly by the user, or by any caller NOT listed in the auto-incorporation allowlist, Step 4 runs in standalone mode — findings are presented for manual review and NO artifact is modified automatically.
+
+**Non-listed caller rule.** Future callers must be explicitly added to the allowlist above before they can opt into auto-incorporation. There is no implicit promotion based on context, invocation path, or parameter inference. The allowlist is closed by default; adding a caller is an explicit, reviewed change.
+
+**Caller responsibility.** Each of the four allowlisted callers (`gaia-create-arch`, `gaia-create-prd`, `gaia-create-epics`, `gaia-readiness-check`) is responsible for passing the opt-in signal from its own adversarial-review invocation — their SKILL.md files document the exact signal shape they use.
+
 ### Step 4 — Incorporate Findings (optional, only when the caller requested it)
 
 - Read the adversarial review report just generated at `{planning_artifacts}/adversarial-review-{target}-{date}.md`.
@@ -83,6 +114,8 @@ If the target is empty or resolves to no files (AC-EC6), exit with `No review ta
 - Add a `## Review Findings Incorporated` section to the target document listing each finding, its severity, and how it was addressed (revised / added / acknowledged as risk).
 
 This step is **only** executed when the caller explicitly requests incorporation. Per the critical rule above, adversarial review itself does not suggest or apply fixes — this optional follow-on is a controlled handoff to the target document owner.
+
+> `!scripts/write-checkpoint.sh gaia-adversarial 4 target_artifact_path="$TARGET_ARTIFACT_PATH" adversarial_angle=incorporate target_label="$TARGET_LABEL"`
 
 ## References
 

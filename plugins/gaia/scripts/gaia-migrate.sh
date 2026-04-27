@@ -29,6 +29,52 @@ MODE=""
 PROJECT_ROOT=""
 DRY_RUN=false
 ASSUME_YES=false      # --yes / --force bypasses the destructive confirmation prompt (E28-S188)
+BACKUP_DIR=""         # populated by _run_backup; printed by _on_interrupt (E28-S182)
+
+# ---------------------------------------------------------------------------
+# E28-S182 — SIGINT / SIGTERM trap handler
+#
+# When the operator hits Ctrl+C (or a supervisor sends SIGTERM) during a
+# migration, surface (a) a clear "partial migration" banner, (b) the absolute
+# backup path, and (c) the exact `cp -a` command needed to restore the project
+# from that backup. Exits 130 on SIGINT (128 + SIGINT, the bash convention) and
+# 143 on SIGTERM (128 + SIGTERM). If the signal arrives BEFORE _run_backup has
+# populated $BACKUP_DIR (e.g., during _detect_v1), the handler still prints a
+# safe banner explaining there is nothing yet to restore — backups are taken
+# before any destructive write, so v1 state on disk is intact.
+#
+# Refs: AC-EC7 (E28-S170 manual integration test plan, §6).
+# ---------------------------------------------------------------------------
+_on_interrupt() {
+  local sig="${1:-INT}"
+  local exit_code
+  case "$sig" in
+    TERM) exit_code=143 ;;
+    *)    exit_code=130 ;;
+  esac
+
+  echo
+  echo "=== partial migration — run restore ==="
+  if [[ -n "${BACKUP_DIR:-}" ]]; then
+    # BACKUP_DIR is published as soon as `_run_backup` has mkdir'd it
+    # (before the heavy cp -a phase), so this branch covers the
+    # "interrupt landed during/after backup" cases — including a partial
+    # backup where the cp was mid-flight. The printed cp -a command is
+    # safe to run because no destructive writes have happened yet (the
+    # backup MUST complete in full BEFORE _migrate_config_split rewrites
+    # any v1 source — see backup-before-migration ordering, AC-EC7 §6.4).
+    echo "Backup: $BACKUP_DIR"
+    echo "Restore: cp -a \"$BACKUP_DIR/.\" \"$PROJECT_ROOT/\""
+  else
+    echo "Backup: (none yet — interrupted before backup directory was created)"
+    echo "Restore: not required — no destructive writes have run; v1 state on disk is intact."
+  fi
+  echo "Exit: $exit_code (interrupted by SIG$sig)"
+  exit "$exit_code"
+}
+
+trap '_on_interrupt INT' INT
+trap '_on_interrupt TERM' TERM
 
 # ---------------------------------------------------------------------------
 # Arg parsing
@@ -211,6 +257,14 @@ _run_backup() {
 
   _safe_write mkdir "$bdir"
 
+  # E28-S182 — publish the backup destination as soon as it has been mkdir'd
+  # so that a SIGINT/SIGTERM arriving mid-backup can still print a useful
+  # restore command. The directory may be partially populated at signal time;
+  # the trap handler's printed `cp -a "$BACKUP_DIR/." "$PROJECT_ROOT/"` is
+  # always safe (no destructive writes have run yet — see backup-before-
+  # migration ordering in §6.4 of E28-S170 test plan).
+  BACKUP_DIR="$bdir"
+
   # Copy each source — silently skip if absent
   for src in _gaia _memory custom; do
     if [[ -d "$PROJECT_ROOT/$src" ]]; then
@@ -254,8 +308,9 @@ EOF
     echo "  [dry-run] would write manifest: $bdir/backup-manifest.yaml"
   fi
 
-  # Export for use by other steps
-  BACKUP_DIR="$bdir"
+  # BACKUP_DIR was already exported at the top of this function (E28-S182)
+  # so an interrupt during the cp -a phase can still print a meaningful
+  # restore path; no further assignment is needed here.
   echo "  backup PASS"
 }
 

@@ -212,7 +212,16 @@ prepare_enriched_fixture() {
   local planning_dir="$PROJECT_ROOT/docs/planning-artifacts"
   local test_dir="$PROJECT_ROOT/docs/test-artifacts"
   local impl_dir="$PROJECT_ROOT/docs/implementation-artifacts"
-  mkdir -p "$planning_dir" "$test_dir" "$impl_dir"
+  local creative_dir="$PROJECT_ROOT/docs/creative-artifacts"
+  mkdir -p "$planning_dir" "$test_dir" "$impl_dir" "$creative_dir"
+
+  # E45-S2 — Seed a brainstorm fixture so gaia-product-brief's
+  # pre_start quality gate (file_exists:docs/creative-artifacts/brainstorm-*.md)
+  # passes in enriched mode. The audit only cares that the file exists.
+  if [ ! -s "$creative_dir/brainstorm-fixture.md" ]; then
+    printf '# placeholder — audit-v2-migration.sh --fixture-mode enriched (E45-S2 brainstorm prereq)\n' \
+      > "$creative_dir/brainstorm-fixture.md"
+  fi
 
   # Write only if absent so re-running the harness is idempotent. The file
   # set covers every validate-gate.sh gate the installed skills invoke

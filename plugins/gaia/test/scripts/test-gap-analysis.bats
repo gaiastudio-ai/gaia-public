@@ -69,6 +69,71 @@ FIXTURES_DIR="$(cd "$(dirname "$BATS_TEST_FILENAME")/fixtures/test-gap-analysis"
   [ "$output" -ge 1 ]
 }
 
+# ----- E48-S5: inline AC linkage validation + schema pinning -----
+
+@test "E48-S5 AC1: Step 4 mandates inline AC-to-test-case linkage validation in the skill" {
+  # Step 4 must explicitly state the skill cross-references ACs against test cases inline
+  run grep -E "inline|AC Linkage|AC linkage" "$SKILLS_DIR/gaia-test-gap-analysis/SKILL.md"
+  [ "$status" -eq 0 ]
+  run grep -c "AC Linkage" "$SKILLS_DIR/gaia-test-gap-analysis/SKILL.md"
+  [ "$output" -ge 1 ]
+}
+
+@test "E48-S5 AC2: SKILL.md mandates story-key + AC-id flagging for unmapped ACs" {
+  # Documentation must show the story-key + AC identifier flagging convention
+  run grep -E "unmapped" "$SKILLS_DIR/gaia-test-gap-analysis/SKILL.md"
+  [ "$status" -eq 0 ]
+  # Example of the flagged format (e.g. "E{n}-S{n} AC{n}: unmapped" or similar)
+  run grep -E "AC[0-9]+: unmapped|AC\{n\}: unmapped|AC[0-9]+\".*unmapped|unmapped.*AC" "$SKILLS_DIR/gaia-test-gap-analysis/SKILL.md"
+  [ "$status" -eq 0 ]
+}
+
+@test "E48-S5 AC2: SKILL.md instructs that linkage is surfaced inline (not solely delegated)" {
+  # The inline-surfacing mandate (ADR-063 verdict surfacing)
+  run grep -E "ADR-063|verdict|inline by the skill|surfaces" "$SKILLS_DIR/gaia-test-gap-analysis/SKILL.md"
+  [ "$status" -eq 0 ]
+}
+
+@test "E48-S5 AC3: SKILL.md pins test-plan.md column schema" {
+  # Test case ID, Story Key, AC must appear as documented column names
+  run grep -E "Test Case ID" "$SKILLS_DIR/gaia-test-gap-analysis/SKILL.md"
+  [ "$status" -eq 0 ]
+  run grep -E "Story Key" "$SKILLS_DIR/gaia-test-gap-analysis/SKILL.md"
+  [ "$status" -eq 0 ]
+}
+
+@test "E48-S5 AC3: SKILL.md pins story-key format E{n}-S{n}" {
+  # The pinned story key format must be present
+  run grep -E "E\{n\}-S\{n\}|E[0-9]+-S[0-9]+" "$SKILLS_DIR/gaia-test-gap-analysis/SKILL.md"
+  [ "$status" -eq 0 ]
+}
+
+@test "E48-S5 AC3: SKILL.md pins AC identifier format AC{n}" {
+  run grep -E "AC\{n\}|AC[0-9]+" "$SKILLS_DIR/gaia-test-gap-analysis/SKILL.md"
+  [ "$status" -eq 0 ]
+}
+
+@test "E48-S5 AC4: SKILL.md documents required epic: frontmatter field for per-epic grouping" {
+  # The epic: frontmatter field must be explicitly documented as required for Step 4c grouping
+  run grep -E "epic:.*frontmatter|epic:\` field|required.*epic|epic:.*field" "$SKILLS_DIR/gaia-test-gap-analysis/SKILL.md"
+  [ "$status" -eq 0 ]
+  # And the E{n} format
+  run grep -E "E\{n\}" "$SKILLS_DIR/gaia-test-gap-analysis/SKILL.md"
+  [ "$status" -eq 0 ]
+}
+
+@test "E48-S5 AC4: SKILL.md documents fallback for missing epic: field" {
+  # Stories without epic: get skipped with warning per Dev Notes
+  run grep -E "skip story with warning|skip with warning|skip.*missing.*epic|fallback" "$SKILLS_DIR/gaia-test-gap-analysis/SKILL.md"
+  [ "$status" -eq 0 ]
+}
+
+@test "E48-S5: SKILL.md adds a Pinned Schemas section anchor" {
+  # A dedicated section pins the schemas inline (test-plan.md columns + epic frontmatter)
+  run grep -E "^## .*Schema|^### .*Schema|Pinned Schema|Schema Pinning" "$SKILLS_DIR/gaia-test-gap-analysis/SKILL.md"
+  [ "$status" -eq 0 ]
+}
+
 # ----- gaia-test-gap-analysis scripts -----
 
 @test "gaia-test-gap-analysis/scripts/setup.sh exists and is executable" {

@@ -77,6 +77,7 @@ mk_story_file() {
   local path="$dir/${slug}-story.md"
   {
     printf -- '---\n'
+    printf "template: 'story'\n"
     printf 'key: "%s"\n' "$key"
     printf 'status: %s\n' "$status"
     printf 'risk: "%s"\n' "$risk"
@@ -97,6 +98,7 @@ mk_malformed_story_file() {
   local path="$dir/${slug}-story.md"
   {
     printf -- '---\n'
+    printf "template: 'story'\n"
     printf 'key: %s\n' "$key"
     printf 'status: : : malformed: [unclosed\n'
     printf 'risk: !!invalid_tag !!\n'

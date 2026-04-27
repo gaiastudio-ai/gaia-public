@@ -30,12 +30,16 @@ This skill is the native Claude Code conversion of the legacy `_gaia/core/tasks/
 - If `$ARGUMENTS` is non-empty, use it as the target. Otherwise ask the user inline for the code or component to review (preserves the legacy Step 1 "Ask user for code/component to review" behavior — AC-EC4).
 - Read the target file(s). If a directory is given, recursively read all source files under it.
 
+> `!scripts/write-checkpoint.sh gaia-review-a11y 1 a11y_scope="$A11Y_SCOPE" report_path="$REPORT_PATH" wcag_level="$WCAG_LEVEL" stage=scope-resolved`
+
 ### Step 2 — Semantic HTML and ARIA
 
 - Check that interactive elements use the proper semantic HTML element (`<button>`, `<a>`, `<nav>`, `<main>`, `<article>`, etc.) rather than `<div>` + `onclick`.
 - Verify ARIA attributes, roles, states, and labels — `aria-label`, `aria-labelledby`, `aria-describedby`, `role`, `aria-expanded`, `aria-controls`, `aria-live`, etc.
 - Check for `alt` text on images (WCAG 1.1.1) and labels on form inputs (WCAG 1.3.1, 3.3.2, 4.1.2).
 - For every finding, cite the specific WCAG 2.1 criterion — e.g., `1.1.1 Non-text Content (A)`, `1.3.1 Info and Relationships (A)`, `4.1.2 Name, Role, Value (A)` — and note its conformance level.
+
+> `!scripts/write-checkpoint.sh gaia-review-a11y 2 a11y_scope="$A11Y_SCOPE" report_path="$REPORT_PATH" wcag_level="$WCAG_LEVEL" stage=semantic-aria-reviewed`
 
 ### Step 3 — Keyboard and Focus
 
@@ -45,6 +49,8 @@ This skill is the native Claude Code conversion of the legacy `_gaia/core/tasks/
 - Verify skip-navigation links are present on pages with repeated blocks (WCAG 2.4.1).
 - For every finding, cite the specific WCAG 2.1 criterion — e.g., `2.1.1 Keyboard (A)`, `2.4.3 Focus Order (A)`, `2.4.1 Bypass Blocks (A)`, `2.4.7 Focus Visible (AA)` — and note its conformance level.
 
+> `!scripts/write-checkpoint.sh gaia-review-a11y 3 a11y_scope="$A11Y_SCOPE" report_path="$REPORT_PATH" wcag_level="$WCAG_LEVEL" stage=keyboard-focus-reviewed`
+
 ### Step 4 — Visual and Screen Reader
 
 - Measure color contrast ratios: body text ≥ 4.5:1, large text (≥ 18pt or 14pt bold) ≥ 3:1 — WCAG 1.4.3.
@@ -52,6 +58,8 @@ This skill is the native Claude Code conversion of the legacy `_gaia/core/tasks/
 - Verify text scaling: content must remain usable when scaled up to 200% (WCAG 1.4.4) and 400% (WCAG 1.4.10 Reflow).
 - Confirm no information is conveyed by color alone — WCAG 1.4.1 and 1.3.3.
 - For every finding, cite the specific WCAG 2.1 criterion — e.g., `1.4.3 Contrast (Minimum) (AA)`, `1.4.4 Resize Text (AA)`, `1.3.3 Sensory Characteristics (A)`, `1.4.1 Use of Color (A)` — and note its conformance level.
+
+> `!scripts/write-checkpoint.sh gaia-review-a11y 4 a11y_scope="$A11Y_SCOPE" report_path="$REPORT_PATH" wcag_level="$WCAG_LEVEL" stage=visual-sr-reviewed`
 
 ### Step 5 — Generate Report
 
@@ -76,6 +84,8 @@ The report is organised by category (semantic HTML, ARIA, keyboard, focus, visua
 | WCAG Criterion ID | Criterion Name | Conformance Level (A/AA/AAA) | Severity (Critical/High/Medium/Low) | Finding Description | Remediation Guidance |
 
 If the target directory is empty or the target resolves to no files (AC-EC6), exit with `No review target resolved` and do NOT write an empty report file — mirrors the legacy task's behavior on empty fixtures.
+
+> `!scripts/write-checkpoint.sh gaia-review-a11y 5 a11y_scope="$A11Y_SCOPE" report_path="$REPORT_PATH" wcag_level="$WCAG_LEVEL" stage=report-generated --paths "$REPORT_PATH"`
 
 ## References
 

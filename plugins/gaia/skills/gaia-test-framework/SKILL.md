@@ -34,6 +34,8 @@ This skill is the native Claude Code conversion of the legacy `_gaia/testing/wor
 - Identify any existing test configuration (vitest.config.ts, jest.config.js, pytest.ini, etc.).
 - Report detected stack to the user: language, framework, existing test infrastructure.
 
+> `!scripts/write-checkpoint.sh gaia-test-framework 1 detected_stack="$DETECTED_STACK" framework_config_path="$FRAMEWORK_CONFIG_PATH" stage=stack-detected`
+
 ### Step 2 — Select Framework
 
 - Load stack-specific knowledge fragments based on detected stack:
@@ -50,12 +52,16 @@ This skill is the native Claude Code conversion of the legacy `_gaia/testing/wor
 - Consider existing project conventions — if a framework is already partially set up, prefer extending it over replacing it.
 - Present recommendation with rationale.
 
+> `!scripts/write-checkpoint.sh gaia-test-framework 2 detected_stack="$DETECTED_STACK" framework_config_path="$FRAMEWORK_CONFIG_PATH" stage=framework-selected`
+
 ### Step 3 — Scaffold
 
 - Generate config files for the selected framework (e.g., vitest.config.ts, jest.config.js, pytest.ini).
 - Create folder structure for tests (e.g., `tests/unit/`, `tests/integration/`, `tests/e2e/`).
 - Add test runner scripts to the project build tool (e.g., npm scripts in package.json, Makefile targets).
 - Do NOT write sample tests or run any test suite — only set up the infrastructure.
+
+> `!scripts/write-checkpoint.sh gaia-test-framework 3 detected_stack="$DETECTED_STACK" framework_config_path="$FRAMEWORK_CONFIG_PATH" stage=scaffolded`
 
 ### Step 4 — Fixture Architecture
 
@@ -65,6 +71,8 @@ This skill is the native Claude Code conversion of the legacy `_gaia/testing/wor
 - Pure functions first — framework fixtures as wrappers around pure factory functions.
 - Define a consistent pattern for test data creation (factory functions, builder pattern, or fixture files).
 - Document the fixture architecture in the output.
+
+> `!scripts/write-checkpoint.sh gaia-test-framework 4 detected_stack="$DETECTED_STACK" framework_config_path="$FRAMEWORK_CONFIG_PATH" stage=fixtures-designed`
 
 ### Step 5 — Generate Output
 
@@ -76,6 +84,43 @@ Write the test framework setup document to `docs/test-artifacts/test-framework-s
 - Test runner commands
 - Fixture/factory architecture
 - Instructions for adding tests
+
+> `!scripts/write-checkpoint.sh gaia-test-framework 5 detected_stack="$DETECTED_STACK" framework_config_path="$FRAMEWORK_CONFIG_PATH" stage=output-generated --paths docs/test-artifacts/test-framework-setup.md`
+
+## Validation
+
+<!--
+  E42-S15 — V1→V2 7-item checklist port (FR-341, FR-359, VCP-CHK-31, VCP-CHK-32).
+  Classification (7 items total — V1 verbatim, no extras):
+    - Script-verifiable: 4 (SV-01..SV-04) — enforced by finalize.sh.
+    - LLM-checkable:     3 (LLM-01..LLM-03) — evaluated by the host LLM
+      against the test-framework-setup.md artifact at finalize time.
+  Exit code 0 when all 4 script-verifiable items PASS; non-zero otherwise.
+
+  V1 source: 7 items (clean). V1 → V2 mapping (1:1, no drop, no merge):
+    V1 "Project stack detected correctly"                 → LLM-01 (semantic)
+    V1 "Framework recommendation matches stack"           → LLM-02 (semantic)
+    V1 "Config files generated"                           → SV-01 (heading + config-file regex)
+    V1 "Folder structure scaffolded"                      → SV-02 (heading + tests/ regex)
+    V1 "Test runner script configured and executable"     → SV-03 (heading + runner regex)
+    V1 "Fixture architecture designed"                    → SV-04 (heading)
+    V1 "No actual test implementations created — tests
+        are written in Phase 4"                           → LLM-03 (semantic, negative)
+
+  Invoked by `finalize.sh` at post-complete (per architecture §10.31.1).
+  Validation runs BEFORE the checkpoint and lifecycle-event writes
+  (observability is never suppressed by checklist outcome — story AC6).
+
+  See docs/implementation-artifacts/E42-S15-port-gaia-test-framework-atdd-ci-setup-checklists-to-v2.md.
+-->
+
+- [script-verifiable] SV-01 — Config files generated
+- [script-verifiable] SV-02 — Folder structure scaffolded
+- [script-verifiable] SV-03 — Test runner script configured and executable
+- [script-verifiable] SV-04 — Fixture architecture designed
+- [LLM-checkable] LLM-01 — Project stack detected correctly
+- [LLM-checkable] LLM-02 — Framework recommendation matches stack
+- [LLM-checkable] LLM-03 — No actual test implementations created — tests are written in Phase 4
 
 ## Finalize
 

@@ -29,11 +29,15 @@ This skill is the native Claude Code conversion of the legacy `_gaia/core/tasks/
 - If `$ARGUMENTS` is non-empty, resolve it as the target. Otherwise ask the user inline for the API spec or route code (preserves the legacy Step 1 "Ask user for API specification or code to review" behavior — AC-EC4).
 - Read the target file(s). If a directory is given, recursively read all relevant API-definition files.
 
+> `!scripts/write-checkpoint.sh gaia-review-api 1 api_spec_path="$API_SPEC_PATH" review_scope="$REVIEW_SCOPE"`
+
 ### Step 2 — Naming Conventions
 
 - Check resource naming: plural nouns (`/users` not `/user`), kebab-case in path segments (`/audit-logs` not `/auditLogs`), no verbs in URLs (prefer `GET /orders/{id}/items` over `GET /getOrderItems`).
 - Verify consistent naming across endpoints — pluralisation, casing, hyphenation must be uniform.
 - Check path parameter naming — `{id}`, `{userId}`, consistent casing.
+
+> `!scripts/write-checkpoint.sh gaia-review-api 2 api_spec_path="$API_SPEC_PATH" review_scope="$REVIEW_SCOPE" review_stage=naming`
 
 ### Step 3 — HTTP Methods and Status Codes
 
@@ -49,11 +53,15 @@ This skill is the native Claude Code conversion of the legacy `_gaia/core/tasks/
   - `500`, `502`, `503`, `504` for server error
 - Flag misuse (e.g., returning `200` with an error body, or using `POST` where `PATCH` is correct).
 
+> `!scripts/write-checkpoint.sh gaia-review-api 3 api_spec_path="$API_SPEC_PATH" review_scope="$REVIEW_SCOPE" review_stage=methods-codes`
+
 ### Step 4 — Error Format and Versioning
 
 - Check the error response format follows RFC 7807 (Problem Details) or a consistent documented pattern. Required RFC 7807 fields: `type`, `title`, `status`; recommended: `detail`, `instance`. Deviations are flagged with severity.
 - Verify the API declares a versioning strategy — URL segment (`/v1/`), custom header (`Api-Version: 1`), media-type (`Accept: application/vnd.example+json; version=1`), or query parameter. Lack of versioning is a critical finding.
 - Verify breaking changes follow the declared versioning strategy — additive changes inside a major version, breaking changes require a new version.
+
+> `!scripts/write-checkpoint.sh gaia-review-api 4 api_spec_path="$API_SPEC_PATH" review_scope="$REVIEW_SCOPE" review_stage=errors-versioning`
 
 ### Step 5 — Report
 
@@ -76,6 +84,37 @@ If the file already exists for the same day (AC-EC3), write to a suffix-incremen
 The report is organised by category (naming, HTTP methods, status codes, error format, versioning). Each finding row includes: category, severity (critical / high / medium / low), endpoint or location, finding description, recommendation.
 
 If the target is empty or resolves to no API definitions (AC-EC6), exit with `No review target resolved` and do NOT write an empty report.
+
+> `!scripts/write-checkpoint.sh gaia-review-api 5 api_spec_path="$API_SPEC_PATH" review_scope="$REVIEW_SCOPE" review_stage=report --paths "$REPORT_PATH"`
+
+### Step 6 — Val Auto-Fix Loop (E44-S2 / ADR-058)
+
+> Reuses the canonical pattern at `gaia-public/plugins/gaia/skills/gaia-val-validate/SKILL.md`
+> § "Auto-Fix Loop Pattern". Do not duplicate the spec here; cite this anchor.
+
+**Guards (run before invocation):**
+
+- Artifact-existence guard (AC-EC3): if not exists `$REPORT_PATH` (the actual resolved write path emitted by Step 5, which may be `docs/planning-artifacts/api-design-review-{date}.md` or a same-day suffix-incremented variant such as `api-design-review-{date}-2.md`) -> skip Val auto-review and exit (no Val invocation, no checkpoint, no iteration log).
+- Val-skill-availability guard (AC-EC6): if `/gaia-val-validate` SKILL.md is not resolvable at runtime -> warn `Val auto-review unavailable: /gaia-val-validate not found`, preserve the artifact, and exit cleanly.
+
+**Loop:**
+
+1. iteration = 1.
+2. Invoke `/gaia-val-validate` with `artifact_path = $REPORT_PATH`, `artifact_type = api-design-review`. The `artifact_path` MUST be the runtime-resolved path captured by Step 5 (post-suffix-increment), NOT the templated `api-design-review-{date}.md` literal — see story E44-S5 AC-EC3.
+3. If findings is empty: proceed past the loop.
+4. If findings contains only INFO: log informational notes, proceed past the loop.
+5. If findings contains CRITICAL or WARNING:
+     a. Apply a fix to `$REPORT_PATH` addressing the findings.
+     b. Append an iteration log record to checkpoint `custom.val_loop_iterations`.
+     c. iteration += 1.
+     d. If iteration <= 3: go to step 2.
+     e. Else: present the iteration-3 prompt verbatim (centralized in `gaia-val-validate` SKILL.md § "Auto-Fix Loop Pattern") and dispatch.
+
+YOLO INVARIANT: the iteration-3 prompt MUST NOT be auto-answered under YOLO. This wire-in does not introduce a YOLO bypass branch. See ADR-057 FR-YOLO-2(e) and ADR-058 for the hard-gate contract.
+
+> Val auto-review per E44-S2 pattern (ADR-058, architecture.md §10.31.2).
+
+> `!scripts/write-checkpoint.sh gaia-review-api 6 api_spec_path="$API_SPEC_PATH" review_scope="$REVIEW_SCOPE" stage=val-auto-review --paths "$REPORT_PATH"`
 
 ## References
 

@@ -32,10 +32,14 @@ Ask the user, in order, and wait for a response on each:
 - **"What domain or industry do you want to research?"**
 - **"Are there specific aspects you want to focus on?"**
 
+> `!scripts/write-checkpoint.sh gaia-domain-research 1 domain="$DOMAIN" research_scope="$RESEARCH_SCOPE"`
+
 ### Step 2 — Web Access Check
 
 - Check if MCP web tools are available.
 - If no web access, notify the user and proceed with general knowledge only.
+
+> `!scripts/write-checkpoint.sh gaia-domain-research 2 domain="$DOMAIN" research_scope="$RESEARCH_SCOPE"`
 
 ### Step 3 — Domain Landscape
 
@@ -44,11 +48,15 @@ Ask the user, in order, and wait for a response on each:
 - Map industry trends and emerging patterns.
 - Define domain-specific terminology and concepts.
 
+> `!scripts/write-checkpoint.sh gaia-domain-research 3 domain="$DOMAIN" research_scope="$RESEARCH_SCOPE"`
+
 ### Step 4 — Domain-Specific Risks
 
 - Identify regulatory and compliance risks.
 - Assess technical risks specific to the domain.
 - Evaluate market and competitive risks.
+
+> `!scripts/write-checkpoint.sh gaia-domain-research 4 domain="$DOMAIN" research_scope="$RESEARCH_SCOPE"`
 
 ### Step 5 — Generate Output
 
@@ -65,11 +73,97 @@ Write a structured domain research report to `docs/planning-artifacts/domain-res
 [Source: _gaia/lifecycle/workflows/1-analysis/domain-research/instructions.xml]
 [Source: _gaia/lifecycle/workflows/1-analysis/domain-research/workflow.yaml]
 
+> After artifact write: run open-question detection snippet
+> `!${CLAUDE_PLUGIN_ROOT}/scripts/detect-open-questions.sh docs/planning-artifacts/domain-research.md`
+
+> `!scripts/write-checkpoint.sh gaia-domain-research 5 domain="$DOMAIN" research_scope="$RESEARCH_SCOPE" --paths docs/planning-artifacts/domain-research.md`
+
+### Step 6 — Val Auto-Fix Loop (E44-S2 / ADR-058)
+
+> Reuses the canonical pattern at `gaia-public/plugins/gaia/skills/gaia-val-validate/SKILL.md`
+> § "Auto-Fix Loop Pattern". Do not duplicate the spec here; cite this anchor.
+
+**Guards (run before invocation):**
+
+- Artifact-existence guard (AC-EC3): if not exists `docs/planning-artifacts/domain-research.md` -> skip Val auto-review and exit (no Val invocation, no checkpoint, no iteration log).
+- Val-skill-availability guard (AC-EC6): if `/gaia-val-validate` SKILL.md is not resolvable at runtime -> warn `Val auto-review unavailable: /gaia-val-validate not found`, preserve the artifact, and exit cleanly.
+
+**Loop:**
+
+1. iteration = 1.
+2. Invoke `/gaia-val-validate` with `artifact_path = docs/planning-artifacts/domain-research.md`, `artifact_type = domain-research`.
+3. If findings is empty: proceed past the loop.
+4. If findings contains only INFO: log informational notes, proceed past the loop.
+5. If findings contains CRITICAL or WARNING:
+     a. Apply a fix to `docs/planning-artifacts/domain-research.md` addressing the findings.
+     b. Append an iteration log record to checkpoint `custom.val_loop_iterations`.
+     c. iteration += 1.
+     d. If iteration <= 3: go to step 2.
+     e. Else: present the iteration-3 prompt verbatim (centralized in `gaia-val-validate` SKILL.md § "Auto-Fix Loop Pattern") and dispatch.
+
+YOLO INVARIANT: the iteration-3 prompt MUST NOT be auto-answered under YOLO. This wire-in does not introduce a YOLO bypass branch. See ADR-057 FR-YOLO-2(e) and ADR-058 for the hard-gate contract.
+
+> Val auto-review per E44-S2 pattern (ADR-058, architecture.md §10.31.2). The `domain-research` artifact_type may not have a canonical document-ruleset; per E44-S1 AC-EC1 Val skips structural validation for unknown types and still runs factual-claim validation.
+
+> `!scripts/write-checkpoint.sh gaia-domain-research 6 domain="$DOMAIN" research_scope="$RESEARCH_SCOPE" stage=val-auto-review --paths docs/planning-artifacts/domain-research.md`
+
+## Validation
+
+<!--
+  E42-S3 — V1→V2 22-item checklist port (FR-341, FR-359).
+  Classification (22 items total):
+    - Script-verifiable: 13 (SV-01..SV-13) — enforced by finalize.sh.
+    - LLM-checkable:      9 (LLM-01..LLM-09) — evaluated by the host LLM
+      against the domain-research artifact below.
+  Exit code 0 when all script-verifiable items PASS; non-zero otherwise.
+  Dedup / expand rule applied to the V1 surface (2 rules + 11 checkboxes):
+    - "Domain clearly defined" and "Risk assessment included" validation
+      rules collapse into the Scope (SV-04) and Risk Assessment section
+      (SV-11) items respectively — counted once.
+    - "All required sections present" in V1 Output Verification expands
+      into one check per V2 Step 5 required section (Domain Overview,
+      Key Players, Regulatory Landscape, Trends, Terminology Glossary,
+      Risk Assessment, Recommendations — SV-06..SV-12) so each section
+      fails independently rather than as a single binary.
+    - "Terminology glossary included" splits into section-present
+      (SV-10) and content-populated (SV-13, ≥3 terms) so an empty
+      heading cannot spoof a PASS.
+    - The three Risk Assessment sub-items (regulatory/technical/market)
+      are LLM-checkable (semantic judgement on coverage quality) while
+      the umbrella ## Risk Assessment heading is script-verifiable.
+    - Web Access checkboxes from V1 fold into LLM-08 (semantic check on
+      the limitation wording).
+  See docs/implementation-artifacts/E42-S3-port-gaia-domain-research-checklist-to-v2.md.
+-->
+
+- [script-verifiable] SV-01 — Output artifact exists at docs/planning-artifacts/domain-research.md
+- [script-verifiable] SV-02 — Output artifact is non-empty
+- [script-verifiable] SV-03 — Artifact has frontmatter or top-level title
+- [script-verifiable] SV-04 — Domain/industry clearly defined
+- [script-verifiable] SV-05 — Focus areas identified
+- [script-verifiable] SV-06 — Domain Overview section present
+- [script-verifiable] SV-07 — Key Players section present
+- [script-verifiable] SV-08 — Regulatory Landscape section present
+- [script-verifiable] SV-09 — Trends section present
+- [script-verifiable] SV-10 — Terminology Glossary section present
+- [script-verifiable] SV-11 — Risk Assessment section present
+- [script-verifiable] SV-12 — Recommendations section present
+- [script-verifiable] SV-13 — Terminology Glossary populated with at least 3 terms
+- [LLM-checkable] LLM-01 — Key players identified with roles and context
+- [LLM-checkable] LLM-02 — Regulatory landscape captures applicable regulations with scope
+- [LLM-checkable] LLM-03 — Industry trends mapped with evidence or direction of travel
+- [LLM-checkable] LLM-04 — Terminology glossary entries are accurate and domain-specific
+- [LLM-checkable] LLM-05 — Regulatory and compliance risks identified with impact/likelihood
+- [LLM-checkable] LLM-06 — Technical risks specific to the domain identified
+- [LLM-checkable] LLM-07 — Market and competitive risks evaluated
+- [LLM-checkable] LLM-08 — Web access availability and limitations noted if web access unavailable
+- [LLM-checkable] LLM-09 — Recommendations actionable and grounded in the risk assessment
+
 ## Finalize
 
 !${CLAUDE_PLUGIN_ROOT}/skills/gaia-domain-research/scripts/finalize.sh
 
 ## Next Steps
 
-- Primary: `/gaia-tech-research` — evaluate technology options for the project.
-- Alternative: `/gaia-product-brief` — if all research is complete.
+- **Primary:** `/gaia-product-brief` — consolidate domain findings into a structured product brief.
+- **Alternative:** `/gaia-tech-research` — when technology trade-offs still need evaluation before the brief.

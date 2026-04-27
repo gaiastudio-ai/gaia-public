@@ -1,0 +1,128 @@
+#!/usr/bin/env bats
+# vcp-chk-15-create-arch-positive.bats — E42-S8 positive test for the
+# V1 33-item /gaia-create-arch checklist ported to V2.
+#
+# Covers VCP-CHK-15 (positive) per docs/test-artifacts/test-plan.md
+# and story AC1: given an architecture artifact satisfying all 33
+# items, finalize.sh exits 0 and every script-verifiable item reports
+# PASS.
+#
+# The finalize.sh under test reads an optional ARCHITECTURE_ARTIFACT
+# env var so tests point it at a fixture rather than scanning
+# docs/planning-artifacts/. The checkpoint + lifecycle-event side
+# effects must continue to succeed regardless of checklist outcome
+# (story AC5 + E42-S1..S7 precedent: "observability is not contingent
+# on checklist pass").
+
+load 'test_helper.bash'
+
+FIXTURES="$BATS_TEST_DIRNAME/fixtures"
+SKILL_DIR="$BATS_TEST_DIRNAME/../skills/gaia-create-arch"
+FINALIZE="$SKILL_DIR/scripts/finalize.sh"
+SKILL_MD="$SKILL_DIR/SKILL.md"
+
+setup() {
+  common_setup
+  export CHECKPOINT_PATH="$TEST_TMP/_memory/checkpoints"
+  mkdir -p "$CHECKPOINT_PATH"
+  export LIFECYCLE_EVENTS_LOG="$TEST_TMP/_memory/lifecycle-events.ndjson"
+}
+
+teardown() { common_teardown; }
+
+# -------------------------------------------------------------------------
+# VCP-CHK-15 — Positive: all 33 items satisfied.
+# -------------------------------------------------------------------------
+
+@test "VCP-CHK-15: finalize.sh exits 0 when all script-verifiable items satisfied" {
+  export ARCHITECTURE_ARTIFACT="$FIXTURES/architecture-complete.md"
+  run "$FINALIZE"
+  [ "$status" -eq 0 ]
+}
+
+@test "VCP-CHK-15: finalize.sh emits a checklist summary" {
+  export ARCHITECTURE_ARTIFACT="$FIXTURES/architecture-complete.md"
+  run bash -c "'$FINALIZE' 2>&1"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Checklist"* ]]
+}
+
+@test "VCP-CHK-15: finalize.sh reports PASS for each required section" {
+  export ARCHITECTURE_ARTIFACT="$FIXTURES/architecture-complete.md"
+  run bash -c "'$FINALIZE' 2>&1"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"System Overview"* ]]
+  [[ "$output" == *"Architecture Decisions"* ]]
+  [[ "$output" == *"System Components"* ]]
+  [[ "$output" == *"Data Architecture"* ]]
+  [[ "$output" == *"Integration Points"* ]]
+  [[ "$output" == *"Infrastructure"* ]]
+  [[ "$output" == *"Security Architecture"* ]]
+  [[ "$output" == *"Cross-Cutting Concerns"* ]]
+}
+
+# -------------------------------------------------------------------------
+# AC3 — Classification audit. Every item in the SKILL.md ## Validation
+# section must carry a [script-verifiable] or [LLM-checkable] tag, and
+# the count must be exactly 33.
+# -------------------------------------------------------------------------
+
+@test "AC3: SKILL.md ## Validation section contains exactly 33 classified items" {
+  run awk '
+    /^## Validation/ { in_section = 1; next }
+    in_section && /^## / { in_section = 0 }
+    in_section && /^- \[(script-verifiable|LLM-checkable)\]/ { count++ }
+    END { print count + 0 }
+  ' "$SKILL_MD"
+  [ "$status" -eq 0 ]
+  [ "$output" = "33" ]
+}
+
+@test "AC3: every Validation item is classified script-verifiable or LLM-checkable" {
+  run awk '
+    /^## Validation/ { in_section = 1; next }
+    in_section && /^## / { in_section = 0 }
+    in_section && /^- / && !/^- \[(script-verifiable|LLM-checkable)\]/ { bad++ }
+    END { print bad + 0 }
+  ' "$SKILL_MD"
+  [ "$status" -eq 0 ]
+  [ "$output" = "0" ]
+}
+
+@test "AC3: structural items are classified script-verifiable" {
+  # Decision Log, Tech Stack, System Components — structural anchors
+  # MUST be SV, never LLM.
+  run grep -E '^\- \[script-verifiable\].*Decision Log' "$SKILL_MD"
+  [ "$status" -eq 0 ]
+  run grep -E '^\- \[script-verifiable\].*Stack selected' "$SKILL_MD"
+  [ "$status" -eq 0 ]
+  run grep -E '^\- \[script-verifiable\].*Component diagram' "$SKILL_MD"
+  [ "$status" -eq 0 ]
+}
+
+@test "AC3: SKILL.md ## Validation sits between ## Steps and ## Finalize" {
+  run awk '
+    /^## Steps/     { steps = NR }
+    /^## Validation/ { validation = NR }
+    /^## Finalize/  { finalize = NR }
+    END {
+      if (steps > 0 && validation > 0 && finalize > 0 \
+          && validation > steps && validation < finalize) { print "ok" }
+      else { print "bad" }
+    }
+  ' "$SKILL_MD"
+  [ "$status" -eq 0 ]
+  [ "$output" = "ok" ]
+}
+
+# -------------------------------------------------------------------------
+# Non-regression (AC5): checkpoint + lifecycle event still run on
+# positive path. Observability must not be contingent on checklist.
+# -------------------------------------------------------------------------
+
+@test "Non-regression: checkpoint written on positive path" {
+  export ARCHITECTURE_ARTIFACT="$FIXTURES/architecture-complete.md"
+  run "$FINALIZE"
+  [ "$status" -eq 0 ]
+  [ -f "$CHECKPOINT_PATH/create-architecture.yaml" ] || [ -f "$CHECKPOINT_PATH/gaia-create-arch.yaml" ]
+}

@@ -1,0 +1,37 @@
+# Fixture: VCP-ETP-02 — standalone invocation (no upstream context)
+# Drives the no-fields-present case for /gaia-edit-test-plan Step 2.
+# Story: E46-S5 (FR-353)
+#
+# When /gaia-edit-test-plan is invoked directly by the user (not via
+# /gaia-add-feature or any other orchestrator), the inheritance layer
+# MUST be a silent no-op and the existing Step 2 prompts MUST run
+# verbatim — preserving standalone behavior bit-for-bit (AC2).
+#
+# Expected inheritance log line (Subtask 1.3 of E46-S5):
+#   Step 2: inherited none from upstream;
+#           prompted for feature_description, prd_diff, arch_diff.
+#
+# This case is the regression-canary for the three-case branch: a malformed
+# implementation that conflates "absent context" with "empty fields" would
+# silently swallow the standalone prompts. VCP-ETP-02 catches that.
+
+upstream: null         # standalone invocation — no orchestrator
+case: none
+
+context:
+  feature_description: null
+  prd_diff: null
+  arch_diff: null
+
+expected:
+  step2_prompts_asked:
+    - feature_description
+    - prd_diff
+    - arch_diff
+  step2_inherited_fields: []
+  step2_log_line_substring: "inherited none"
+  step2_log_line_must_also_contain: "prompted for feature_description, prd_diff, arch_diff"
+  internal_vars_set:
+    - new_requirements
+    - change_description
+    - affected_test_areas   # all three populated by the user via prompts

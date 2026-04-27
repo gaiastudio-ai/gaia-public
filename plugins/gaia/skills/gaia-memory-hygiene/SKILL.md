@@ -156,6 +156,28 @@ For all entries: scan the `Related:` field for artifact paths and story / epic k
 
 **AC-EC5 — cross-reference matrix missing:** if `cross_references:` is absent from `_memory/config.yaml`, the skill degrades to structural checks + budget reporting only. Log a warning "cross-reference matrix missing from `_memory/config.yaml` — skipping cross-agent validation" and do NOT crash.
 
+**Cross-Agent Read Authorisation Matrix (FR-383):** the `cross_references:` block in `_memory/config.yaml` is the authoritative boundary for every cross-agent read this skill performs. The matrix authorises nine canonical reader contexts (each entry is a reader → source/file/mode triple):
+
+- `architect` — reads `pm/decision-log` and `validator/ground-truth`
+- `pm` — reads `architect/decision-log` and `sm/ground-truth`
+- `sm` — reads `architect/decision-log`, `pm/decision-log`, and `validator/ground-truth`
+- `orchestrator` — reads `validator`, `architect`, `pm`, and `sm` `conversation-context` (summary mode)
+- `security` — reads `architect/decision-log` and `validator/ground-truth`
+- `devops` — reads `architect/decision-log`
+- `test-architect` — reads `architect/decision-log` and `validator/ground-truth`
+- `validator` — reads `architect`, `pm`, and `sm` `decision-log` (full mode, capped at 50% of session budget)
+- `dev-agents` — reads `validator/ground-truth` and `architect/decision-log`
+
+The matrix is the cross-agent authorisation source of truth — the SKILL.md does NOT duplicate the triples; it points readers to `_memory/config.yaml#cross_references` as the single canonical record. Any reader / source / file combination NOT enumerated above is unauthorised by definition.
+
+**Cross-agent authorisation gate (block-and-log):** before invoking `memory-loader.sh <source_agent> <file>` for ANY cross-reference, the skill MUST verify that the (reader, source_agent, file) triple is present in `_memory/config.yaml#cross_references`. If the triple is NOT present:
+
+1. Skip the read — do NOT load the source agent's file.
+2. Log the denial as `cross-ref denied: {reader} → {source}/{file} (not in matrix)` to the report's Detailed Findings (or to a "Cross-Ref Denials" sub-section if present).
+3. Continue scanning the remaining entries — denial is non-fatal.
+
+This block-and-log gate operationalises the existing "limited to the declared matrix" rule in the Critical Rules section. It does NOT replace AC-EC5: when `cross_references:` is absent entirely, the AC-EC5 graceful-degrade path still fires (warn and skip cross-agent validation; complete structural + budget reporting).
+
 **AC-EC8 — Unicode / non-ASCII agent sidecar names:** path resolution preserves the original encoding (no re-encoding applied). The scan completes without raising encoding errors.
 
 ## Step 5 — Stale Detection via Shared Skill
@@ -208,6 +230,16 @@ Classify each recommendation:
 - **Actionable** — budget pressure and staleness recommendations should be acted on.
 - **Advisory** — age-based recommendations are informational; the user decides.
 
+**Per-item estimated token recovery (FR-383):** every archival recommendation row MUST carry an explicit per-item token recovery estimate — averages or aggregate-only counts are NOT sufficient. Compute the estimate as `Estimated recovery: ~{N} tokens` where:
+
+- `{N}` = `bytes / token_approximation` rounded to the nearest integer
+- `bytes` is the on-disk byte size of the candidate entry (from the Step 2 content inventory)
+- `token_approximation` is the value loaded from `_memory/config.yaml` `archival.token_approximation` (default 4 chars/token)
+
+Reuse the same `archival.token_approximation` ratio that drives the Step 7 Token Budget Table — do NOT hard-code a different ratio in archival recommendations. The two outputs share a single source of truth.
+
+Example: a stale entry of 640 bytes flagged for archival reports `Estimated recovery: ~160 tokens` (640 / 4). When three candidates of 400, 800, and 1200 bytes are flagged, the rows report `~100`, `~200`, and `~300` tokens respectively. The estimate appears in the report's §4 Archival Recommendations table (Step 10) under the `Estimated Recovery` column.
+
 Archival is never auto-executed — all recommendations require user confirmation per entry before any file changes are made.
 
 ## Step 9 — Ground Truth Refresh Trigger
@@ -247,9 +279,9 @@ Grouped by sidecar, sorted by severity: CONTRADICTED > STALE > ORPHANED > UNVERI
 
 ### 4. Archival Recommendations
 
-| # | Agent | Entry | Reason | Type | Action |
+| # | Agent | Entry | Reason | Type | Estimated Recovery | Action |
 
-Budget pressure first, then staleness, then age.
+Budget pressure first, then staleness, then age. The `Estimated Recovery` column carries the per-item token recovery estimate (`~{N} tokens`) computed in Step 8 from `bytes / archival.token_approximation` — same source-of-truth ratio used by the Step 7 Token Budget Table.
 
 ### 5. Ground Truth Refresh Recommendations
 

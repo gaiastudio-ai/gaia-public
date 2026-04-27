@@ -84,18 +84,22 @@ For each performance-relevant file, scan for:
 
 Measure, don't guess. Where a finding is load-sensitive, cite P50 / P95 / P99 latency numbers if they are available in profiling output or test artifacts. Do not cite averages — averages hide tails.
 
+- **Percentile extraction (latency)** — when profiling output, benchmark files, or test artifacts in the changed-file set carry latency measurements, extract the P50 / P95 / P99 percentile values and quote them in each load-sensitive finding. Never cite arithmetic means in their place — averages mask the tail behaviour the finding is meant to flag.
+
 ### Step 5 — Memory and Bundle Analysis
 
 - **Memory leaks** — closures retaining DOM references; event listeners registered without a corresponding `removeEventListener`; subscriptions / timers / intervals not torn down.
 - **Large payloads** — response bodies that materialize the full dataset client-side; server-to-server payloads that serialize the entire entity graph.
 - **Bundle size impact** — large transitive imports (`lodash` vs. `lodash-es`, whole-library imports), images shipped client-side without compression or responsive `srcset`.
 - **Render blocking** — synchronous hydration paths that block the main thread; long tasks > 50 ms; unnecessary re-renders on parent state change without memoization.
+- **Percentile extraction (memory)** — when heap / RSS / GC profiling output is present in the changed-file set, extract the P50 / P95 / P99 percentile values for memory usage (peak allocation, retained heap) and quote them in each finding. Averages of memory series hide the tail spikes that drive OOM kills — percentiles surface them.
 
 ### Step 6 — Caching and Algorithmic Complexity Review
 
 - **Caching strategy** — what is cached, what should be, and how cache invalidation is triggered. Flag TTL-less caches and missing cache-busting on write paths.
 - **Blocking operations** — synchronous I/O on hot paths; long-running synchronous computations inside request handlers.
 - **Algorithmic complexity** — flag O(n²) or worse on hot paths (double-nested iteration over `N`-sized collections; quadratic membership checks like `indexOf` inside a loop).
+- **Percentile extraction (throughput)** — when benchmark files or load-test artifacts in the changed-file set carry throughput numbers (requests/sec, ops/sec, cache-hit-time distributions), extract the P50 / P95 / P99 percentile values and quote them in each finding. The P99 throughput floor is the load the system can actually sustain; the average is what marketing slides report.
 
 ### Step 7 — Verdict
 
@@ -113,12 +117,13 @@ Measure, don't guess. Where a finding is load-sensitive, cite P50 / P95 / P99 la
 Write the report to `docs/implementation-artifacts/{story_key}-performance-review.md`. Required sections:
 
 - **Story:** key + title.
-- **Auto-Pass Classification** (if triggered): `No performance-relevant code changes — auto-passed`.
-- **Files Reviewed:** list of performance-relevant files analyzed.
-- **N+1 and Database Analysis** — findings, empty block if none.
-- **Memory and Bundle Analysis** — findings, empty block if none.
-- **Caching and Complexity Review** — findings, empty block if none.
-- **Findings by Severity** — sorted tables: Critical, High, Medium, Low.
+- **Auto-Pass Classification** (if triggered): `No performance-relevant code changes — auto-passed`. When the auto-pass branch fires (Step 3 emitted `PASSED (auto)`), the Files Reviewed list is empty by definition — the all-files-listed mandate below applies only when at least one perf-relevant file went through Steps 4–6.
+- **Files Reviewed** — log every perf-relevant file analysed, even when no findings are produced for that file. The list is the complete classifier output (`classify-files.sh` REVIEW set), not only the files that produced findings. Each entry is a single line of the form `path/to/file.ts — N findings (C: a, H: b, M: c, L: d)` for files that produced findings, or `path/to/file.ts — no findings` for files that went through Steps 4–6 cleanly. The "no findings" annotation is mandatory so reviewers can distinguish a skipped file from an analysed-clean one. Render every perf-relevant file regardless of severity outcome.
+- **Measurements** — record the extracted percentile values per file in a sub-block under Files Reviewed. For each file that carried profiling, benchmark, or test-artifact data, list the P50 / P95 / P99 numbers (latency, memory, throughput) that Steps 4–6 extracted. When no percentile data was available for a file, write `— no percentile data —` so the absence is auditable. This sub-block is the single record of measurements per file consumed by load-sensitive findings.
+- **N+1 and Database Analysis** — findings, empty block if none. Cite percentile values where available (per Step 4).
+- **Memory and Bundle Analysis** — findings, empty block if none. Cite percentile values where available (per Step 5).
+- **Caching and Complexity Review** — findings, empty block if none. Cite percentile values where available (per Step 6).
+- **Findings by Severity** — sorted tables: Critical, High, Medium, Low. Each row cites the originating file path so the row maps back to the Files Reviewed log.
 - **Machine-readable verdict line** — exactly `**Verdict: PASSED**` or `**Verdict: FAILED**` on its own line. This is the single source of truth for Review Gate parsing.
 
 ### Step 9 — Update Review Gate

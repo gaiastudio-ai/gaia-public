@@ -176,7 +176,7 @@ Every iteration produces one log record. Records are routed into the ADR-059 che
 | `findings` | array | The full Val response `findings` array for this iteration. Severity-classified per the Upstream Integration Contract. |
 | `fix_diff_summary` | string | Unified-diff excerpt or patch hash describing the fix applied at the end of this iteration. Empty string for iterations that did not apply a fix (clean / INFO-only). |
 | `revalidation_outcome` | enum | One of `clean`, `info_only`, `findings_present`, `val_invocation_failed`. |
-| `tokens_consumed` | int \| null | Per-iteration token count (input context + Val response + fix generation). `null` if the runtime token-counting primitive is unavailable (AC-EC8). |
+| `token_estimate` | int \| float \| null | Per-iteration token count (input context + Val response + fix generation). `null` if the runtime token-counting primitive is unavailable (AC-EC8). This field is the canonical NFR-VCP-2 harness contract — `scripts/measure-val-auto-fix-token-budget.sh` reads `token_estimate` directly. (Earlier drafts of this skill referenced the field as `tokens_consumed`; the harness, the producer at `scripts/append-val-iteration.sh` (E44-S15), and this canonical record shape are unified on `token_estimate`.) |
 | `user_decision` | enum \| null | Set only on iteration 3+ records when the prompt was shown: `continue`, `accept-as-is`, `abort`. `null` otherwise. |
 | `event_type` | enum \| null | Set to `yolo_hard_gate_violation` on bypass-attempt records; `null` otherwise. |
 
@@ -194,6 +194,8 @@ The iteration log is the structured, per-iteration record stream emitted by the 
 
 **Programmatic parsing.** Consumers (`/gaia-resume`, debug scripts, audit tooling) parse the array with a standard JSON reader — the field names and enum values above are the contract. No regex scraping is required (AC2).
 
+**Producer-side instrumentation (E44-S15).** Consumer skills append iteration records by invoking `${CLAUDE_PLUGIN_ROOT}/scripts/append-val-iteration.sh`. The script merges the prior `val_loop_iterations` array from the latest checkpoint, appends the new record with the canonical fields (including a numeric or `null` `token_estimate`), and writes a fresh ADR-059 schema-v1 checkpoint via `write-checkpoint.sh`. This is the single producer for the field — `scripts/measure-val-auto-fix-token-budget.sh` reads `token_estimate` from the resulting stream to verify NFR-VCP-2 ratios.
+
 **Post-escape iterations (Task 2.3).** When the user selects `continue` at the iteration-3 prompt (AC3 of E44-S2), the loop re-enters with monotonic iteration numbers 4, 5, 6, … Each post-escape record carries `post_escape: true` so an audit can distinguish a 5-iteration run that respected the cap-then-continue contract from a hypothetical bug that ignored the cap. Records 1–3 either omit the field or set it to `false` (the absence is treated as `false` by parsers).
 
 **Concrete example — 3-iteration thrash (VCP-FIX-07 witness).**
@@ -210,7 +212,7 @@ The iteration log is the structured, per-iteration record stream emitted by the 
         ],
         "fix_diff_summary": "patched prd.md:42 → corrected path to docs/planning-artifacts/prd.md",
         "revalidation_outcome": "findings_present",
-        "tokens_consumed": 4820,
+        "token_estimate": 4820,
         "user_decision": null,
         "event_type": null
       },
@@ -222,7 +224,7 @@ The iteration log is the structured, per-iteration record stream emitted by the 
         ],
         "fix_diff_summary": "no-op (byte-identical fix; thrash detected vs iteration 1)",
         "revalidation_outcome": "findings_present",
-        "tokens_consumed": 4790,
+        "token_estimate": 4790,
         "user_decision": null,
         "event_type": null
       },
@@ -234,7 +236,7 @@ The iteration log is the structured, per-iteration record stream emitted by the 
         ],
         "fix_diff_summary": "no-op (byte-identical fix; thrash detected vs iteration 2)",
         "revalidation_outcome": "findings_present",
-        "tokens_consumed": 4815,
+        "token_estimate": 4815,
         "user_decision": null,
         "event_type": null
       }
@@ -269,7 +271,7 @@ The pattern targets the following token-budget envelope, verified by VCP-FIX-08:
 - **Per-iteration cost ≤ 2x** the single-pass `/gaia-val-validate` baseline (one call to Val on a representative 5–10 KB artifact, no fix generation).
 - **3-iteration total cost ≤ 6x** baseline.
 
-Token consumption is measured per iteration via the LLM runtime's token-count return value and persisted in `tokens_consumed`. If the runtime token-counting primitive is **unavailable** at runtime, the loop proceeds normally and a single one-line "measurement unavailable" note is logged into the iteration record (AC-EC8). NFR-VCP-2 verification then falls back to off-line sampling.
+Token consumption is measured per iteration via the LLM runtime's token-count return value and persisted in `token_estimate` (E44-S15 producer at `scripts/append-val-iteration.sh` writes this field; the field name was unified from the historical `tokens_consumed` to match the harness contract). If the runtime token-counting primitive is **unavailable** at runtime, the loop proceeds normally and the iteration record carries `token_estimate: null` (AC-EC8). NFR-VCP-2 verification then falls back to off-line sampling.
 
 ### Error Handling Outside the Cap
 

@@ -9,7 +9,7 @@ allowed-tools: [Read, Write, Edit, Bash, Grep]
 
 You are producing a **Keep a Changelog**-formatted changelog entry for this repository. You gather commits since the last release tag, group them by conventional-commit type, cross-reference story keys back to `docs/implementation-artifacts/`, and emit (or append to) `CHANGELOG.md` in the repository root.
 
-This skill is the native Claude Code conversion of the legacy `_gaia/core/tasks/generate-changelog.xml` task (35 lines). Per **ADR-041** (Native Execution Model) and **ADR-042** (Scripts-over-LLM for Deterministic Operations), the legacy task-runner engine is retired and deterministic git operations are delegated to inline bash (not re-prosed by the LLM).
+This skill is the native Claude Code conversion of the legacy generate-changelog task. Per **ADR-041** (Native Execution Model) and **ADR-042** (Scripts-over-LLM for Deterministic Operations), the legacy task-runner engine is retired and deterministic git operations are delegated to inline bash (not re-prosed by the LLM).
 
 ## Critical Rules
 
@@ -22,7 +22,11 @@ This skill is the native Claude Code conversion of the legacy `_gaia/core/tasks/
 
 ## Inputs
 
-- `$ARGUMENTS`: optional version identifier (e.g., `1.127.2`). If omitted, use the range since the last tag (or the full history when no tag exists) and label the entry `Unreleased`.
+- `$ARGUMENTS`: optional version identifier. When supplied, it MUST be either:
+  1. A valid SemVer 2.0.0 string of the form `MAJOR.MINOR.PATCH` with optional `-prerelease` and `+build` suffixes (e.g., `1.127.2`, `1.127.2-rc.1`, `2.0.0+build.42`), OR
+  2. The literal string `Unreleased`.
+
+  Anything else is rejected before any git work runs (see Step 1.5 — Validate Version Argument). When `$ARGUMENTS` is empty, the entry is labelled `Unreleased` (existing default — no rejection).
 
 ## Instructions
 
@@ -40,6 +44,28 @@ Then read any sprint-status files in `docs/implementation-artifacts/` that name 
 
 Identify the version number for this entry (argument, next tag, or `Unreleased`).
 
+### Step 1.5 — Validate Version Argument
+
+Before any further git work runs, validate `$ARGUMENTS` against the canonical accepted formats. Per **ADR-042** (Scripts-over-LLM for Deterministic Operations), this is a deterministic regex check — not LLM judgment. The user's intent (`semver` vs `Unreleased`) is binary; LLM interpretation would re-introduce non-determinism.
+
+Accept `$ARGUMENTS` if and only if ONE of the following holds:
+
+1. **Empty** — no argument supplied. Continue with the default (`Unreleased` label). No rejection.
+2. **Literal `Unreleased`** — case-sensitive equality with the string `Unreleased`. Accept.
+3. **Valid SemVer 2.0.0** — matches the canonical SemVer regex:
+   ```
+   ^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$
+   ```
+   This requires `MAJOR.MINOR.PATCH` (each a non-negative integer with no leading zeros) and allows optional `-prerelease` and `+build` suffixes per [SemVer 2.0.0](https://semver.org/). Pure shell or grep is sufficient — do NOT add a parser dependency.
+
+On any other input (e.g., `v1.x`, `1.0`, `latest`, `1.127`, `release-2`), HALT immediately with a single-line guidance message naming the two accepted formats and an example of each:
+
+```
+Expected semver (e.g., 1.127.2) or the literal "Unreleased". Got: "{value}".
+```
+
+Do NOT write `CHANGELOG.md` on rejection — the artifact stays untouched. The validation MUST run BEFORE the `git log` command in Step 1; rejecting an invalid version after running git wastes work and produces confusing partial output.
+
 ### Step 2 — Categorize Changes
 
 Walk the commit list and bucket each commit into one of the Keep a Changelog categories:
@@ -51,7 +77,33 @@ Walk the commit list and bucket each commit into one of the Keep a Changelog cat
 - **Removed** — `BREAKING CHANGE:` footer, `!` marker after the type, or explicit removal notices.
 - **Security** — commits that mention a CVE, a security fix, or start with `security:`.
 
-Extract a meaningful one-line description from each commit subject (strip the conventional-commit prefix). For story-linked commits, append `— [{story_key}](docs/implementation-artifacts/{story_key}-*.md)` so reviewers can open the story file.
+Extract a meaningful one-line description from each commit subject (strip the conventional-commit prefix). For story-linked commits, append `— [{story_key}](docs/implementation-artifacts/{story_key}-*.md)` so reviewers can open the story file. The story-key cross-reference (`E\d+-S\d+`) is a V2 win and MUST be preserved — do NOT silently drop story-linked commits (FR-394).
+
+Commits with no recognizable conventional-commit prefix are placed in an **Uncategorized** group rather than being silently dropped. The "Uncategorized" group is the V2-added uncategorised-commit capture and MUST be preserved as a distinct section so unparseable commits remain visible (FR-394).
+
+#### Excluded-Commit Logging
+
+When iterating the commit list, some commits are excluded from categorisation entirely. The base `git log ... --no-merges` invocation already filters merges out; this step makes that exclusion **observable** rather than silent (FR-394 audit trail).
+
+For each commit excluded from categorisation, log a structured line to the conversation transcript (NOT to `CHANGELOG.md` — the artifact stays clean):
+
+```
+Excluded {sha:7} — reason: {merge|revert|unparseable|other}
+```
+
+Reason taxonomy:
+- `merge` — merge commit (filtered by `--no-merges`).
+- `revert` — `revert:` prefixed commit (excluded from category emission to avoid double-counting the original).
+- `unparseable` — subject line that cannot be parsed (e.g., empty, non-UTF-8). Note: this is distinct from "no conventional-commit prefix" — those commits go to the **Uncategorized** group, NOT the excluded log.
+- `other` — any other deliberate exclusion.
+
+At end of Step 2, emit a single-line summary so the count is observable at a glance:
+
+```
+Excluded N commits (Mm, Rr, Uu, Oo)
+```
+
+where `N` is the total, `M` is the merge count, `R` is the revert count, `U` is the unparseable count, and `O` is the other count. The audit trail belongs in the run log so reviewers can reconstruct what was filtered without inspecting `CHANGELOG.md`.
 
 ### Step 3 — Format
 
@@ -97,11 +149,13 @@ If the commit range is empty (no commits since last tag), append a single-line n
 
 ## References
 
-- Source: `_gaia/core/tasks/generate-changelog.xml` (legacy 35-line task body — ported per ADR-041 + ADR-042).
+- Source: legacy `generate-changelog` task body — ported per ADR-041 + ADR-042.
 - Keep a Changelog: https://keepachangelog.com/
 - Semantic Versioning: https://semver.org/
 - ADR-041: Native Execution Model via Claude Code Skills + Subagents + Plugins + Hooks.
-- ADR-042: Scripts-over-LLM for Deterministic Operations.
+- ADR-042: Scripts-over-LLM for Deterministic Operations — version validation is a deterministic regex check expressed in prose, NOT LLM judgment.
 - ADR-048: Engine Deletion as Program-Closing Action — legacy task coexists with this skill until program close.
 - FR-323: Skill Conversion — slash-command identity preserved.
+- FR-378: Changelog version validation — `$ARGUMENTS` MUST be valid SemVer or the literal `Unreleased` (Step 1.5).
+- FR-394: Excluded-commit logging plus V2 wins (story-key cross-references and uncategorised-commit capture preserved unchanged).
 - NFR-053: Full v1.127.2-rc.1 Feature Parity.

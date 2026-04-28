@@ -208,16 +208,23 @@ else:
 - Review any out-of-scope issues discovered during implementation.
 - Add findings to the story file's Findings table.
 
+<!-- E55-S8: step 9 dod-check wire begin -->
 ### Step 9 -- Definition of Done
 
-- Verify all DoD items: code compiles, tests pass, ACs met, no lint errors, conventions followed, no secrets, subtasks complete, docs updated.
-- Auto-fix failing items up to 3 iterations.
+- Run `${CLAUDE_PLUGIN_ROOT}/skills/gaia-dev-story/scripts/dod-check.sh` (export `STORY_FILE` to the absolute story path so the subtask check fires). The script runs build / tests / lint / secrets / subtask checks and emits one YAML row per check: `- { item: <name>, status: PASSED|FAILED, output: <captured output> }`. Exit 0 = all PASSED; non-zero = at least one FAILED.
+- Parse the YAML output and render a human-readable summary; per FR-DSH-10 the helper script holds the deterministic mechanics — DO NOT re-implement build/test/lint/secrets/subtask checks inline in this skill.
+- On any FAILED row: auto-fix the underlying issue (test failure, lint warning, staged secret, unchecked subtask) and re-run `dod-check.sh`. Cap at 3 auto-fix iterations; on cap exhaustion, HALT with the failing rows and direct the user to intervene.
+- ACs met / docs updated remain LLM-evaluated since they are intent-level checks, not script-checkable.
+<!-- E55-S8: step 9 dod-check wire end -->
 
+<!-- E55-S8: step 10 git-push wire begin -->
 ### Step 10 -- Commit and Push
 
 - Run `scripts/git-branch.sh` to verify branch state.
 - Stage and commit with conventional commit format.
+- Run `${CLAUDE_PLUGIN_ROOT}/scripts/git-push.sh` to push the current branch to `origin`. The shared helper (a) refuses to push from `main` / `staging` (delegating to `lib/dev-story-security-invariants.sh::assert_branch_not_protected` from E55-S6 when present), (b) retries ONCE on transient network errors (e.g., `Could not resolve host`, `Operation timed out`) with a 5-second backoff, and (c) fails LOUDLY on auth / permission errors with no retry. DO NOT inline `git push` here — the helper is the single source of truth.
 - Run `scripts/update-story-status.sh {story_key} review` after all gates pass.
+<!-- E55-S8: step 10 git-push wire end -->
 
 ### Step 11 -- Create PR
 
@@ -246,10 +253,32 @@ else:
   - **E17-S1 (sprint-17):** Dev-story subagent completed implementation but never pushed commits. Orchestrator accepted `status=done` at face value. Sprint closed with unmerged code.
   - **E28-S213 (sprint-25):** Dev-story subagent completed all reviews but skipped push/PR/merge steps. Same outcome -- orchestrator trusted the status and sprint closed without the code landing.
 
+<!-- E55-S8: step 15 init-review-gate wire begin -->
 ### Step 15 -- Update Review Gate
 
-- Initialize the Review Gate table in the story file: all 6 rows set to UNVERIFIED.
-- Update story status to `review`.
+- Run `${CLAUDE_PLUGIN_ROOT}/skills/gaia-dev-story/scripts/init-review-gate.sh {story_file}` to seed (or replace) the Review Gate table with the canonical 6-row UNVERIFIED block. The helper is idempotent — re-running on a story file that already has the block yields a byte-identical result.
+- Update story status to `review` via `scripts/update-story-status.sh {story_key} review`.
+<!-- E55-S8: step 15 init-review-gate wire end -->
+
+<!-- E55-S8: step 16 begin -->
+### Step 16 -- Auto-Reviews (YOLO-only)
+
+YOLO-gated invocation of the six reviews that populate the Review Gate. Non-YOLO runs MUST NOT auto-fire reviews — the user manually invokes each review from the Review Gate UNVERIFIED rows. Forbidden by ADR-073: silently auto-firing reviews in non-YOLO would erase user oversight.
+
+- Run `${CLAUDE_PLUGIN_ROOT}/scripts/yolo-mode.sh is_yolo` to detect YOLO mode (single source of truth — never re-implement detection inline per ADR-057 / ADR-073).
+
+- If `is_yolo` returns non-zero (non-YOLO branch — default):
+  - SKIP Step 16 entirely. Review Gate rows remain UNVERIFIED for manual user review.
+  - Emit a single-line gate log to stderr (NFR-DSH-5): `step16_gate: yolo=false verdict=skipped`.
+  - Proceed to skill end.
+
+- If `is_yolo` returns zero (YOLO branch):
+  - Invoke `gaia-run-all-reviews` via Skill-to-Skill delegation. The aggregator runs all six reviews (Code Review, QA Tests, Security Review, Test Automation, Test Review, Performance Review) sequentially in subagents.
+  - Each review writes its verdict (PASSED / FAILED) into the matching Review Gate row via `review-gate.sh`. After the aggregator completes, the Review Gate table is fully populated — no row remains UNVERIFIED.
+  - Emit `step16_gate: yolo=true verdict=invoked` on entry and `step16_gate: yolo=true verdict=complete` on aggregator return.
+
+- **Sequencing invariant (AC4):** Step 14 (post-completion gate, E20-S19) MUST run BEFORE Step 16. Step 16 NEVER precedes Step 14. The skill ordering above enforces this — Step 14's begin marker precedes Step 16's begin marker.
+<!-- E55-S8: step 16 end -->
 
 ## Finalize
 

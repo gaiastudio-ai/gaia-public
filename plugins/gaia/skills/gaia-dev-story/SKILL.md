@@ -164,6 +164,45 @@ Backward-compatibility note (NFR-DSH-3): a resumed in-progress story with no Ste
 - Extract shared utilities, decompose large functions, improve naming, remove duplication.
 - Run the test suite -- verify all tests STILL PASS.
 
+<!-- E55-S4: step 7b begin -->
+### Step 7b -- Val-in-TDD single post-Refactor pass (ADR-073)
+
+After Step 7 Refactor completes with all tests green, run a SINGLE Val pass over the diff (artifacts touched during Steps 5-7) before moving on to Step 8 Capture Findings. This restores V1's Val-in-TDD capability without re-introducing per-phase pauses inside the TDD body — Steps 5/6/7 remain pause-free per the contract enforced by `tests/skills/gaia-dev-story-step7b-val.bats`.
+
+This loop runs unconditionally — both YOLO and non-YOLO. There is NO YOLO-mode gate at Step 7b; YOLO-mode detection lives only at the Step 4 planning gate (ADR-057, ADR-073). The body MUST NOT redefine or re-implement YOLO-mode detection — single-source-of-truth.
+
+Loop semantics mirror E55-S2 (planning-gate YOLO loop): 3-iteration cap, CRITICAL+WARNING gating, INFO-only break, audit-file append, HALT-on-exhaustion. The differences from E55-S2 are the input (TDD diff vs. plan) and the audit-file name (`{story_key}-tdd-val-findings.md` vs. `{story_key}-yolo-plan-findings.md`).
+
+- The next tool invocation MUST be the `gaia-val-validate` skill on the diff (artifacts touched during Steps 5-7) with `context: fork`. Auto-fix is inline using this skill's own `Edit`/`Write` tools (NFR-046 single-spawn-level) — no nested subagent spawn inside the loop.
+- **T-37 path-traversal mitigation:** BEFORE constructing the audit-file path, validate `story_key` against the regex `^E[0-9]+-S[0-9]+$`. On mismatch, abort Step 7b with a clear error and emit no writes — never sanitize-and-continue. Reference shell idiom: `printf '%s\n' "$story_key" | grep -Eq '^E[0-9]+-S[0-9]+$'`. The regex check MUST run before any path is constructed and before any audit-file write.
+- **Audit file:** persist findings to `_memory/checkpoints/{story_key}-tdd-val-findings.md` on every iteration. Append per iteration — never overwrite, never truncate. Two consecutive end-of-story runs append a fresh set of `## Iteration {N} — {timestamp}` sections under the existing ones; entries from prior runs MUST be preserved verbatim. Each section body is the structured findings JSON or YAML returned by Val.
+- **Auto-fix vocabulary** for diff-level findings: line edits, function-signature corrections, missing test assertions, dead code removal. Anything beyond the diff (e.g., cross-cutting refactors) is logged as Dev Notes and deferred — auto-fix MUST stay scoped to the diff.
+- **ADR-073 canonical pseudocode (DoD documentation requirement):**
+
+```
+diff = gather_diff(steps=[5,6,7])
+iteration = 0
+while iteration < 3:
+  findings = val.validate(diff)              # gaia-val-validate, severity in {CRITICAL, WARNING, INFO}
+  critical = filter(findings, severity="CRITICAL")
+  warning  = filter(findings, severity="WARNING")
+  audit_append(iteration, findings)          # _memory/checkpoints/{story_key}-tdd-val-findings.md
+  if not critical and not warning:           # INFO-only or empty -> break
+    break
+  apply_fixes(critical + warning)            # inline Edit/Write — no subagent spawn
+  iteration += 1
+if iteration == 3 and (critical or warning):
+  HALT with remaining findings + audit-file path
+else:
+  proceed to Step 8 (Capture Findings)
+```
+
+- **Halt-on-exhaust behavior (AC2):** if the loop exhausts the 3-iteration cap with remaining CRITICAL or WARNING findings, HALT with an actionable message that names the remaining findings and points to `_memory/checkpoints/{story_key}-tdd-val-findings.md`. Direct the user to `/gaia-fix-story` or to re-run with the audit file as context. The 3-iteration cap MUST NOT be bypassed.
+- **INFO-only break:** if Val returns INFO-only findings (or no findings) on any iteration, break the loop and proceed to Step 8 immediately — INFO findings are advisory and never gating.
+- **Single Val pass per story:** Step 7b runs Val ONCE per story-end, not once per Refactor cycle. Multiple Refactor iterations within Step 7 are part of the TDD body — they do NOT each trigger a Val pass.
+- Emit a single-line gate log to stderr per iteration (NFR-DSH-5): `step7b_gate: iteration={N} outcome={clean|info_only|findings_present}`. On loop exit emit a terminal verdict: `step7b_gate: verdict=passed` when the loop broke on clean / info_only, or `step7b_gate: verdict=halted` when the 3-iteration cap was reached with remaining CRITICAL or WARNING findings.
+<!-- E55-S4: step 7b end -->
+
 ### Step 8 -- Capture Findings
 
 - Review any out-of-scope issues discovered during implementation.

@@ -149,6 +149,152 @@ Sequential dispatch (spawn → await → spawn) is forbidden. The single-message
 
 Gather edge cases, implementation preferences, constraints, and any additional context returned by whichever path the user selected, and pass them forward to Step 4.
 
+### Step 3b -- Edge Case Analysis (V1 pipeline restoration, E54-S4)
+
+This step JIT-invokes the `edge-cases` skill to enumerate boundary, error, timing, concurrency, integration, security, data, and environment scenarios for the story's acceptance criteria. It restores the V1 R1 parity pipeline that was dropped in V2. Steps 3b/3c/3d run **non-interactively** — they MUST NOT introduce any new user prompts and behave identically in YOLO mode (AC6).
+
+**Traces to:** FR-227 (edge-case enumeration mandatory for M+ stories), FR-229 (AC append), NFR-042 (8K token budget).
+
+**Size gate (AC4).** If the story `size` is `S`, skip Step 3b entirely:
+
+```
+if [ "${SIZE}" = "S" ]; then
+  log "edge_case_skip: size=S"
+  edge_case_results=[]
+  # proceed to Step 3c with empty results — Step 3c becomes a no-op
+fi
+```
+
+For sizes M, L, or XL, proceed with the JIT skill invocation below.
+
+**JIT skill invocation.** Invoke the `edge-cases` skill (canonical name; namespaced form `gaia:edge-cases` resolves equivalently) via the Skill tool. Pass the input context:
+
+```yaml
+story_key:           "{STORY_KEY}"
+story_title:         "{TITLE}"
+story_description:   "{DESCRIPTION}"
+acceptance_criteria: ["{AC1}", "{AC2}", ...]   # primary ACs from Step 3 elaboration
+size:                "{SIZE}"                  # M | L | XL
+architecture_excerpt: "{relevant ADR/architecture section, optional}"
+```
+
+The skill returns a structured `edge_case_results` list with the canonical schema:
+
+```yaml
+edge_case_results:
+  - id:       "EC-1"          # sequential EC-{N}
+    scenario: "..."            # one-line description
+    input:    "..."            # triggering input/precondition
+    expected: "..."            # expected behavior
+    category: "boundary"       # one of: boundary | error | timing | concurrency | integration | security | data | environment
+    severity: "high"           # optional: critical | high | medium | low (used by Step 3d row format)
+```
+
+**Token budget cap (NFR-042, AC5).** The combined input context plus skill output MUST stay under **8K tokens** total. The edge-cases skill self-truncates its output when over budget; this skill (the consumer) enforces the **truncation order** when post-processing results that still exceed budget after the skill returns:
+
+1. **Keep first:** `boundary`, `error`, `security` (highest-priority categories).
+2. **Keep next:** `concurrency`, `timing`.
+3. **Keep last (drop from tail when over budget):** `data`, `integration`, `environment`.
+
+Implement the order as a category priority array. Drop results from the lowest-priority category first until the total fits inside 8K. Final result MUST be `<= 8K`.
+
+**Telemetry (AC5).** After each invocation, log the token usage:
+
+```
+log "edge_case_token_usage=${tokens}"
+```
+
+When usage exceeds 80% of the 8K budget, also log a `Dev Notes` entry (per the edge-cases skill's NFR-042 contract).
+
+**Failure handling (AC1).** The skill is **non-blocking**. On any error — skill not found, timeout (>30s wall clock), malformed output, exception — the consumer MUST:
+
+```
+edge_case_results = []
+log "edge_case_pipeline: failed reason=${reason}"
+log "warning: edge-cases skill failed — continuing without edge cases"
+# proceed to Step 3c (do not halt, do not re-raise)
+```
+
+Under no circumstance should an edge-case skill failure block story creation.
+
+**YOLO compatibility (AC6).** Step 3b is fully non-interactive — it issues no prompts and produces the same `edge_case_results` for the same inputs regardless of `YOLO_MODE`.
+
+### Step 3c -- Append Edge Cases to Acceptance Criteria (V1 pipeline restoration, E54-S4)
+
+This step appends edge-case-derived acceptance criteria rows to the story's AC list. It enforces a count-drift safety check that aborts the append if the primary AC list is corrupted during the operation.
+
+**Traces to:** FR-229 (V1 ACs append).
+
+**Format (FR-229).** For each entry in `edge_case_results`, emit one AC row using:
+
+```
+- [ ] AC-EC{N}: Given {input}, when {scenario}, then {expected}
+```
+
+`{N}` is sequential (EC1, EC2, ...) per story.
+
+**Append position.** Append edge-case ACs **after the last primary AC**. Primary ACs (those produced in Step 3 by elaboration) are **immutable** — Step 3c MUST NOT modify, reorder, or delete any primary AC. Edge-case ACs always trail the primary block.
+
+**Primary AC count drift safety check (the AC4-of-this-story safety check, distinct from this story's AC4 size gate).** Snapshot the primary AC count before the append, perform the append, then recount:
+
+```
+primary_count_before = count(ACs not matching /^AC-EC/)
+for each ec in edge_case_results:
+  append "- [ ] AC-EC${i}: Given ${ec.input}, when ${ec.scenario}, then ${ec.expected}"
+primary_count_after = count(ACs not matching /^AC-EC/)
+if primary_count_before != primary_count_after:
+  rollback append      # restore the AC list to its pre-append state
+  log warning "edge_case_ac_append: aborted reason=primary_ac_count_drift"
+  edge_case_ac_appended = false
+  # leave AC list unchanged; proceed to Step 3d
+else:
+  edge_case_ac_appended = true
+```
+
+Rationale: primary ACs are contractual user/PM/Architect output. Drift indicates a parsing/regex bug in the appender, and the safest action is to abort the append rather than corrupt the AC list. Story creation continues with the unchanged primary ACs.
+
+**YOLO compatibility (AC6).** Step 3c is fully non-interactive.
+
+### Step 3d -- Append Edge Cases to Test Plan (V1 pipeline restoration, E54-S4)
+
+This step appends one test-plan row per edge case to the story's section in `docs/planning-artifacts/test-plan.md`. Re-runs are idempotent — duplicate rows are deduplicated by `(story_key, scenario)` pair.
+
+**Traces to:** FR-230 (V1 test-plan append).
+
+**Target file.** `docs/planning-artifacts/test-plan.md`. If the file does not exist, this step is **non-blocking**:
+
+```
+if [ ! -f "docs/planning-artifacts/test-plan.md" ]; then
+  log "warning: test-plan.md missing — skipping Step 3d test-plan append (non-blocking)"
+  return
+fi
+```
+
+**Locate the story's test-plan section.** Search for a heading match of the form `## {story_key}` or `### {story_key}` (e.g., `## E54-S4` or `### E54-S4`). If the section is missing, append a new section with that heading at the end of the file.
+
+**Compute next TC ID.** For the located story section, find the maximum existing `TC-{N}` numeric suffix scoped to that section and compute `next_tc_id = max(existing TC-{N} for this story) + 1`. TC IDs may be re-allocated on re-run — they are NOT used for dedup (see below).
+
+**Dedup by `(story_key, scenario)` pair (AC3).** Build the set of existing `(story_key, scenario)` pairs for the story's section by parsing existing rows. For each `ec` in `edge_case_results`:
+
+```
+if (story_key, ec.scenario) in existing_pairs:
+  skip   # already present — idempotent re-run, no duplicate row
+else:
+  append row, increment next_tc_id, add (story_key, ec.scenario) to existing_pairs
+```
+
+This makes Step 3d idempotent on re-run: the same `(story_key, scenario)` pair never inflates the test plan with duplicates, even when TC IDs shift.
+
+**Row format (FR-230).** Each appended row uses the canonical pipe-delimited table format:
+
+```
+| TC-{N} | {scenario} | edge-case | {severity} | {story_key} |
+```
+
+Columns: `TC ID | Scenario | Type | Severity | Story Key`. The literal `edge-case` token in the Type column distinguishes these rows from primary test cases (which use `unit`, `integration`, `e2e`, etc.). The `{severity}` is taken from `ec.severity` if provided by the edge-cases skill, otherwise default to `medium`.
+
+**YOLO compatibility (AC6).** Step 3d is fully non-interactive.
+
 ### Step 4 -- Generate Story File
 
 - Load the bundled story template from `${CLAUDE_PLUGIN_ROOT}/skills/gaia-create-story/story-template.md`.

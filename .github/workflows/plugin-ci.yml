@@ -106,6 +106,7 @@ jobs:
             tests/skills/gaia-dev-story-three-option-prompt.bats \
             tests/skills/gaia-dev-story-yolo-plan-loop.bats \
             tests/skills/gaia-dev-story-step2b-atdd.bats \
+            tests/skills/gaia-dev-story-step7b-val.bats \
             tests/skills/gaia-dev-story-figma-degrade.bats \
             tests/skills/validate-plan-structure.bats
 

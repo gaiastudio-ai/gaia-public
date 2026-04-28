@@ -158,6 +158,22 @@ Backward-compatibility note (NFR-DSH-3): a resumed in-progress story with no Ste
 - Run the test suite -- verify all tests PASS.
 - Mark each completed subtask in the story file.
 
+<!-- E55-S7: step 6b begin -->
+### Step 6b -- Conditional Check Advisory Hints (FR-DSH-9)
+
+After Step 6 Green completes with all tests passing, run a single advisory pass over the staged diff to surface change patterns that commonly carry hidden risk. Step 6b is PURELY ADVISORY — it MUST NOT halt the workflow under any condition. The agent reads the advisory output and either addresses each item within the current story or captures it as a Finding, then proceeds to Step 7 Refactor.
+
+- Run `${CLAUDE_PLUGIN_ROOT}/skills/gaia-dev-story/scripts/conditional-check-hints.sh` against the staged diff. The helper reads `git diff --cached --name-only` and emits one advisory line per matched category. Exit code is ALWAYS 0.
+- The helper checks three patterns and emits AT MOST one advisory line per category (advisory output is informational; never multiple per category):
+  1. **API route changes** — any path matching `*/routes/*.{ts,py,go}` OR `*/api/*.{ts,py,go}` triggers a contract-test advisory.
+  2. **Schema/migration changes** — any path matching `*/migrations/*.sql` OR a filename containing `schema` with extension `.ts` / `.py` / `.sql` triggers a migration-script verification advisory.
+  3. **Large blast radius** — total staged file count >= `BLAST_RADIUS_THRESHOLD` (default 10) triggers a feature-flag candidacy advisory.
+- The advisories run in BOTH YOLO and non-YOLO modes — there is no `is_yolo` gate at Step 6b. The same staged set produces identical output regardless of run mode (distinct from E55-S2 / E55-S8 which are YOLO-gated).
+- Each advisory line lists at most 10 file paths; longer lists are truncated with a trailing `,...`. This avoids advisory spam when many files in the same category change.
+- **Non-halting contract:** Step 6b MUST NOT halt the workflow. The skill always proceeds to Step 7 Refactor after the advisory pass — even when all three advisories fire.
+- Emit a single-line gate log to stderr (NFR-DSH-5): `step6b_gate: advisories={count}` where `count` is the number of advisory lines emitted (0, 1, 2, or 3).
+<!-- E55-S7: step 6b end -->
+
 ### Step 7 -- TDD Refactor Phase
 
 - Improve code quality while keeping all tests green.

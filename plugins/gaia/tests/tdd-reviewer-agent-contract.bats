@@ -36,14 +36,26 @@ load 'test_helper.bash'
 
 setup() {
   common_setup
-  # Two roots:
-  #   GAIA_ROOT (workspace) — owns docs/planning-artifacts/. Walks up
-  #     tests/ -> plugins/gaia/ -> plugins/ -> gaia-public/ -> GAIA-Framework/.
-  #   PUBLIC_ROOT (gaia-public) — owns plugins/gaia/agents/. One level shallower.
+  # PUBLIC_ROOT (gaia-public) — owns plugins/gaia/agents/. Walks up
+  # tests/ -> plugins/gaia/ -> plugins/ -> gaia-public/.
   PUBLIC_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
-  GAIA_ROOT="$(cd "$BATS_TEST_DIRNAME/../../../.." && pwd)"
-  ADR_MEMO="$GAIA_ROOT/docs/planning-artifacts/adr-memo-tdd-reviewer-subagent.md"
   AGENT_FILE="$PUBLIC_ROOT/plugins/gaia/agents/tdd-reviewer.md"
+
+  # ADR memo locations — the canonical authored location is the workspace
+  # path docs/planning-artifacts/adr-memo-tdd-reviewer-subagent.md (one
+  # level above gaia-public/). On CI the workspace tree is not present;
+  # the fixture under tests/fixtures/ is the CI-stable mirror so the same
+  # content checks run in both environments. Resolution order:
+  #   1. Workspace path (when running inside GAIA-Framework/).
+  #   2. Fixture under tests/fixtures/e57-s3-adr-memo/ (CI-stable).
+  WORKSPACE_ROOT="$(cd "$BATS_TEST_DIRNAME/../../../.." && pwd 2>/dev/null || echo "")"
+  WORKSPACE_MEMO="$WORKSPACE_ROOT/docs/planning-artifacts/adr-memo-tdd-reviewer-subagent.md"
+  FIXTURE_MEMO="$BATS_TEST_DIRNAME/fixtures/e57-s3-adr-memo/adr-memo-tdd-reviewer-subagent.md"
+  if [ -f "$WORKSPACE_MEMO" ]; then
+    ADR_MEMO="$WORKSPACE_MEMO"
+  else
+    ADR_MEMO="$FIXTURE_MEMO"
+  fi
 }
 
 teardown() { common_teardown; }

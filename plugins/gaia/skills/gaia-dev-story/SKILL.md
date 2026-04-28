@@ -52,6 +52,16 @@ This skill is the native Claude Code conversion of the legacy dev-story workflow
 - For FRESH mode: run `scripts/update-story-status.sh {story_key} in-progress`.
 - For REWORK/RESUME: skip -- story is already in-progress.
 
+<!-- E55-S5: step 2b atdd gate begin -->
+### Step 2b -- ATDD Gate (high-risk stories only)
+
+- Run `${CLAUDE_PLUGIN_ROOT}/skills/gaia-dev-story/scripts/atdd-gate.sh {story_key}`.
+- The script reads the story's `risk` frontmatter field (canonical) — `risk_level` is a PRD/ADR longhand alias for the same semantic field. If `risk: high`, the script requires at least one ATDD scenarios file matching `atdd-{epic_key}*.md` OR `atdd-{story_key}*.md` under `docs/test-artifacts/`. For `medium`, `low`, or unset risk it exits 0 unconditionally.
+- On non-zero exit (high-risk story, no ATDD file): HALT with the script's stderr message naming the expected paths under `docs/test-artifacts/`. Direct the user to `/gaia-atdd {story_key}` to generate the scenarios file before re-running `/gaia-dev-story`.
+- On exit 0: proceed to Step 3.
+- **Sequencing trade-off:** Step 2b sits AFTER Step 2 (status is already `in-progress`) but BEFORE Step 3 (no feature branch yet). Halting at 2b leaves the story status updated but no branch created — the user reverts status manually (or re-runs /gaia-dev-story after producing the ATDD file) to recover.
+<!-- E55-S5: step 2b atdd gate end -->
+
 ### Step 3 -- Create Feature Branch
 
 - Run `scripts/git-branch.sh {story_key} {slug}` to create a feature branch.
@@ -65,8 +75,24 @@ This skill is the native Claude Code conversion of the legacy dev-story workflow
 - For RESUME mode: continue from checkpoint state.
 - Render the plan to the user.
 
+<!-- E55-S5: figma graceful-degrade begin -->
+**Figma graceful-degrade (FR-DSH-8):** Before rendering the plan, if the story frontmatter has a `figma:` block, probe the Figma MCP server (e.g., `mcp__claude_ai_Figma__whoami`). If the probe fails (server unavailable, auth error, timeout, or the server is not listed):
+
+- Log a single-line warning to stderr: `figma_mcp_unavailable: server={name} fallback=text-only` (NFR-DSH-5 single-line gate-log convention).
+- Proceed with text-only context — DO NOT halt, no exception. Plan rendering continues with whatever non-Figma context is available.
+
+Stories without a `figma:` frontmatter block proceed unchanged — this region only fires when Figma context was requested.
+<!-- E55-S5: figma graceful-degrade end -->
+
 <!-- E55-S1: planning gate begin -->
 <!-- E55-S5: plan-structure validator hook (added by E55-S5) -->
+
+**Plan-structure validator (FR-DSH-4):** BEFORE the planning gate halt fires (E55-S1) and BEFORE the YOLO auto-validation loop (E55-S2), run `${CLAUDE_PLUGIN_ROOT}/skills/gaia-dev-story/scripts/validate-plan-structure.sh` against the rendered plan. Pass `--rework` when the execution mode is REWORK so the `Root Cause` section is required; otherwise the script enforces 8 sections (REWORK-only `Root Cause` skipped).
+
+- The validator reports the FIRST missing canonical section on stderr and exits non-zero. Do NOT advance to the gate halt or the YOLO branch until the validator passes (TC-DSH-10).
+- On non-zero exit: log the missing section, instruct the agent to regenerate the plan with the missing section included, then re-run the validator.
+- Cap the regenerate loop at 5 attempts to avoid infinite agent loops on a structurally broken plan template. On cap exhaustion, HALT with the last validator stderr and the attempt count so the user can intervene before the gate fires.
+- T-38 mitigation: the validator uses `grep -F` with literal ASCII section names — Cyrillic homoglyphs (e.g., `Сontext` U+0421) are correctly treated as MISSING.
 
 After the plan is rendered, the planning gate halts the workflow. YOLO mode detection is the single source of truth that selects the branch -- never re-implement detection inline (per ADR-057, ADR-073).
 

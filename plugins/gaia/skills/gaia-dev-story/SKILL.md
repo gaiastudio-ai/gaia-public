@@ -63,7 +63,30 @@ This skill is the native Claude Code conversion of the legacy dev-story workflow
 - For FRESH mode: read architecture.md and ux-design.md for context. Generate a detailed implementation plan covering: context, implementation steps, files to modify, testing strategy, risks.
 - For REWORK mode: read failed review reports. Focus plan on fixing review issues.
 - For RESUME mode: continue from checkpoint state.
-- Present the plan and wait for user confirmation.
+- Render the plan to the user.
+
+<!-- E55-S1: planning gate begin -->
+<!-- E55-S5: plan-structure validator hook (added by E55-S5) -->
+
+After the plan is rendered, the planning gate halts the workflow. YOLO mode detection is the single source of truth that selects the branch -- never re-implement detection inline (per ADR-057, ADR-073).
+
+Run `${CLAUDE_PLUGIN_ROOT}/scripts/yolo-mode.sh is_yolo` to detect YOLO mode. The exit status is the verdict (0 = YOLO active, non-zero = interactive).
+
+If `is_yolo` returns non-zero (non-YOLO branch -- default):
+  - The next tool invocation MUST be `AskUserQuestion`. Do NOT invoke any other tool first. In particular, do NOT issue any `Edit` or `Write` tool call to a test file or implementation file between the plan render and the user's response -- the plan the user sees is the plan that gets implemented.
+  - The `AskUserQuestion` prompt body offers a single option for E55-S1: `approve` -> advance to Step 5 TDD Red.
+  <!-- E55-S3: three-option prompt body (replaces single-approve in E55-S3) -->
+  - Only an explicit `approve` response from the user advances to Step 5. Any other response (including silence) keeps the workflow halted.
+  - Emit a single-line gate log to stderr (NFR-DSH-5): `step4_gate: yolo=false verdict=halted` on entry, then `step4_gate: yolo=false verdict=passed` once the user responds with approve.
+
+If `is_yolo` returns zero (YOLO branch -- E55-S1 placeholder, full loop lands in E55-S2):
+  <!-- E55-S2: YOLO Val auto-validation loop (added by E55-S2) -->
+  - For E55-S1 this branch is a no-op pass-through to Step 5. The YOLO Val auto-validation loop semantics (`(critical|warning|info, max_iter=3)` per ADR-073) land in E55-S2.
+  - Emit a single-line gate log to stderr (NFR-DSH-5): `step4_gate: yolo=true verdict=passed`.
+
+Backward-compatibility note (NFR-DSH-3): a resumed in-progress story with no Step 4 gate-clearance record on the checkpoint is treated as "halt not yet presented" and re-issues the halt -- it does NOT silently advance to Step 5.
+
+<!-- E55-S1: planning gate end -->
 
 ### Step 5 -- TDD Red Phase (Write Failing Tests)
 

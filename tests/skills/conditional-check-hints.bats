@@ -257,3 +257,111 @@ make_staged_repo() {
   run bash -c "cd '$repo' && '$HINTS_SCRIPT'"
   [ "$status" -eq 0 ]
 }
+
+# ---------- NFR-DSH-5 — step6b_gate stderr line ----------
+#
+# Per SKILL.md Step 6b: emit a single-line gate log to stderr in the form
+#   step6b_gate: advisories={count}
+# where {count} is 0, 1, 2, or 3. The line MUST be on stderr (not stdout) so it
+# does not pollute the advisory stream consumed by the agent.
+
+@test "NFR-DSH-5: step6b_gate stderr line emitted with advisories=0 on empty diff" {
+  repo="$TEST_TMPDIR/empty-repo"
+  mkdir -p "$repo"
+  (
+    cd "$repo"
+    git init -q
+    git config user.email "test@example.com"
+    git config user.name "test"
+  )
+  err_file="$TEST_TMPDIR/err.log"
+  run bash -c "cd '$repo' && '$HINTS_SCRIPT' 2> '$err_file'"
+  [ "$status" -eq 0 ]
+  err="$(cat "$err_file")"
+  echo "$err" | grep -qE '^step6b_gate: advisories=0$'
+  # And the gate log must NOT appear on stdout.
+  ! echo "$output" | grep -qE 'step6b_gate:'
+}
+
+@test "NFR-DSH-5: step6b_gate=1 when only api-route advisory fires" {
+  repo="$(make_staged_repo "src/routes/api/v1/users.ts")"
+  err_file="$TEST_TMPDIR/err.log"
+  run bash -c "cd '$repo' && '$HINTS_SCRIPT' 2> '$err_file'"
+  [ "$status" -eq 0 ]
+  err="$(cat "$err_file")"
+  echo "$err" | grep -qE '^step6b_gate: advisories=1$'
+}
+
+@test "NFR-DSH-5: step6b_gate=2 when api-route + schema/migration advisories fire" {
+  repo="$(make_staged_repo "src/routes/api/v1/users.ts" "db/migrations/2026_04_28_add_users.sql")"
+  err_file="$TEST_TMPDIR/err.log"
+  run bash -c "cd '$repo' && '$HINTS_SCRIPT' 2> '$err_file'"
+  [ "$status" -eq 0 ]
+  err="$(cat "$err_file")"
+  echo "$err" | grep -qE '^step6b_gate: advisories=2$'
+}
+
+@test "NFR-DSH-5: step6b_gate=3 when all three advisories fire simultaneously" {
+  files=("src/routes/api/v1/users.ts" "db/migrations/2026_04_28_add_users.sql")
+  for i in 1 2 3 4 5 6 7 8; do
+    files+=("docs/note-$i.md")
+  done
+  repo="$(make_staged_repo "${files[@]}")"
+  err_file="$TEST_TMPDIR/err.log"
+  run bash -c "cd '$repo' && '$HINTS_SCRIPT' 2> '$err_file'"
+  [ "$status" -eq 0 ]
+  err="$(cat "$err_file")"
+  echo "$err" | grep -qE '^step6b_gate: advisories=3$'
+}
+
+# ---------- Pattern 2 — schema-by-filename branch ----------
+#
+# The schema/migration pattern has a second arm: a basename containing `schema`
+# with extension `.ts` / `.py` / `.sql`, even when the path is OUTSIDE a
+# `migrations/` directory (e.g., `db/schema.ts`, `app/schema.py`,
+# `models/schema.sql`). All three must trigger the schema/migration advisory.
+
+@test "Pattern 2 schema-by-filename: db/schema.ts triggers schema/migration advisory" {
+  repo="$(make_staged_repo "db/schema.ts")"
+  run bash -c "cd '$repo' && '$HINTS_SCRIPT'"
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -qE "advisory: schema/migration changes detected"
+  echo "$output" | grep -qF "db/schema.ts"
+}
+
+@test "Pattern 2 schema-by-filename: app/schema.py triggers schema/migration advisory" {
+  repo="$(make_staged_repo "app/schema.py")"
+  run bash -c "cd '$repo' && '$HINTS_SCRIPT'"
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -qE "advisory: schema/migration changes detected"
+  echo "$output" | grep -qF "app/schema.py"
+}
+
+@test "Pattern 2 schema-by-filename: models/schema.sql (outside migrations/) triggers advisory" {
+  repo="$(make_staged_repo "models/schema.sql")"
+  run bash -c "cd '$repo' && '$HINTS_SCRIPT'"
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -qE "advisory: schema/migration changes detected"
+  echo "$output" | grep -qF "models/schema.sql"
+}
+
+# ---------- Pattern 1 — multi-extension api-route coverage ----------
+#
+# The api-route pattern matches `.ts`, `.py`, and `.go` extensions. The base
+# AC2 test covers `.ts`; these two cover the `.py` and `.go` arms.
+
+@test "Pattern 1 api-route .py: app/routes/users.py triggers api-route advisory" {
+  repo="$(make_staged_repo "app/routes/users.py")"
+  run bash -c "cd '$repo' && '$HINTS_SCRIPT'"
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -qE "advisory: api-route changes detected"
+  echo "$output" | grep -qF "app/routes/users.py"
+}
+
+@test "Pattern 1 api-route .go: internal/api/users.go triggers api-route advisory" {
+  repo="$(make_staged_repo "internal/api/users.go")"
+  run bash -c "cd '$repo' && '$HINTS_SCRIPT'"
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -qE "advisory: api-route changes detected"
+  echo "$output" | grep -qF "internal/api/users.go"
+}

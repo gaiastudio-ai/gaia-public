@@ -37,6 +37,14 @@
 #                            without re-shipping; documented in the story
 #                            E55-S7 Dev Notes.
 #
+# Outputs:
+#   stdout — zero or more advisory lines (one per matched category) of the
+#            form `advisory: ...`.
+#   stderr — exactly one gate log line per invocation, of the form
+#            `step6b_gate: advisories={count}` where {count} is 0..3
+#            (NFR-DSH-5: single-line gate logs). Always emitted, even when
+#            no advisories fire, so the absence of advisories is observable.
+#
 # Exit codes:
 #   0 — always (advisories are informational, never blocking).
 
@@ -103,19 +111,32 @@ format_files() {
 
 # ---------- Emit advisories ----------
 
+advisory_count=0
+
 if (( "${#api_files[@]}" > 0 )); then
   printf 'advisory: api-route changes detected — verify contract tests cover the new/modified endpoints. files=%s\n' \
     "$(format_files "${api_files[@]}")"
+  advisory_count=$(( advisory_count + 1 ))
 fi
 
 if (( "${#schema_files[@]}" > 0 )); then
   printf 'advisory: schema/migration changes detected — verify migration script runs cleanly forward and (if applicable) backward. files=%s\n' \
     "$(format_files "${schema_files[@]}")"
+  advisory_count=$(( advisory_count + 1 ))
 fi
 
 if (( "${#files[@]}" >= THRESHOLD )); then
   printf 'advisory: large blast radius (%d files) — consider feature-flag candidacy review. count=%d\n' \
     "${#files[@]}" "${#files[@]}"
+  advisory_count=$(( advisory_count + 1 ))
 fi
+
+# ---------- Gate log (NFR-DSH-5) ----------
+#
+# Single-line, machine-grep-able gate log on stderr. Stdout carries the
+# advisories the agent surfaces to the user; stderr carries operational
+# telemetry for log aggregation. Always emitted (even when count=0) so the
+# absence of advisories is observable.
+printf 'step6b_gate: advisories=%d\n' "$advisory_count" >&2
 
 exit 0

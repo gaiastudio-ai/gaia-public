@@ -44,8 +44,6 @@ This skill is the native Claude Code conversion of the legacy create-story workf
   - If status is anything else: HALT -- "Story {key} is in '{status}' status. Use /gaia-fix-story {key} to edit."
 - If no story key was provided: display a prioritized list of stories without files and ask the user to select.
 
-> **YOLO hard guard (E54-S1, AC3, FR-340):** The existing-story-status HALT above runs unconditionally — including in YOLO mode. YOLO MUST NOT bypass the HALT gate. Order of evaluation: existing-story-status HALT first, YOLO branch (Step 3) second. A `status: in-progress` story HALTs before any subagent spawn even with `yolo`/`--yolo` set.
-
 ### Step 2 -- Load Context
 
 - Read story summary from `docs/planning-artifacts/epics-and-stories.md`.
@@ -54,267 +52,9 @@ This skill is the native Claude Code conversion of the legacy create-story workf
 
 ### Step 3 -- Elaborate Story
 
-#### YOLO branch (E54-S1, FR-340)
-
-Read `YOLO_MODE` from the setup script's stdout (the `gaia-create-story/setup.sh: yolo_mode={true|false}` line).
-
-When `YOLO_MODE=true`:
-
-- **Skip the routing prompt entirely.** Do NOT display the `[u]/[a]` menu; do NOT wait for user input. Auto-select the `[a]` Auto-delegate path and proceed directly to subagent spawn.
-- **Auto-continue any post-subagent or template-output review prompts.** YOLO mode replaces every `[c]/[e]/[a]` or `[c]/[e]/[v]` interactive review prompt with an automatic continue — there must be zero user prompts between Step 4 (file write) and Step 6 (Val dispatch) (AC6).
-- **YOLO MUST NOT bypass the Step 1 existing-story-status HALT gate (AC3) nor the Step 6 3-attempt cap or terminal FAILED verdict (AC2, FR-340).** The HALT gate in Step 1 fires before the YOLO branch ever evaluates; the cap and verdict in Step 6 are unconditional.
-
-When `YOLO_MODE=false` (interactive default), proceed to the prompt below.
-
-#### Non-YOLO routing prompt
-
-Present a brief summary of what was loaded, then offer the user how to elaborate. The canonical prompt is (text below is part of the AC4 contract — do not paraphrase):
-
-```
-How would you like to elaborate this story?
-[u] I'll answer the elaboration questions myself
-[a] Auto-delegate to PM (Derek), Architect (Theo){UX_CLAUSE}    -- recommended
-```
-
-The `{UX_CLAUSE}` token is replaced based on the **four-rule UX detection** below:
-
-- When any rule matches: `, and UX Designer (Christy)`
-- When no rule matches: `` (empty string — the `[a]` line **omits** the "and UX Designer" clause)
-
-Concrete examples:
-
-- UX match → `[a] Auto-delegate to PM (Derek), Architect (Theo), and UX Designer (Christy)`
-- No UX match → `[a] Auto-delegate to PM (Derek) and Architect (Theo)`
-
-#### Four-rule UX detection
-
-Run all four rules. Any rule matching → spawn UX Designer. No rule matching → omit UX Designer (backend-only path).
-
-**Rule #1 — `figma:` frontmatter block (definitive signal).** Parse the story frontmatter and check for a top-level `figma:` key. Presence is a hard match.
-
-**Rule #2 — UI/UX terms in description or AC text.** Case-insensitive substring match against the UI_TERMS list:
-
-```
-screen | page | modal | form | button | navigation | wizard | flow |
-interaction | accessibility | responsive | mobile view | design
-```
-
-Treat `flow` carefully: prefer word-boundary regex and exclude `data flow` / `control flow` to avoid false positives in backend stories.
-
-**Rule #3 — Epic UX classification.** The epic this story belongs to has a UX-tagged classification in `epics-and-stories.md` (look for an explicit `tags:` or `classification:` line on the epic).
-
-**Rule #4 — `ux-design.md` references the epic.** `docs/planning-artifacts/ux-design.md` exists AND the story's epic key is referenced inside that file. If the file is missing (the common case for early-stage projects), rule #4 must **skip cleanly** — no error, no halt — and rules 1-3 still evaluate. Use a file-exists guard (`[ -f "$UX_DESIGN_MD" ]`).
-
-**Detection pseudocode** (telemetry-friendly; runs all rules for observability):
-
-```
-ux_match = false
-rule_fired = []
-if frontmatter has 'figma:' key:                       ux_match=true; rule_fired += "rule1"
-if description or any AC contains UI_TERMS (case-insensitive): ux_match=true; rule_fired += "rule2"
-if epic in epics-and-stories.md has UX classification: ux_match=true; rule_fired += "rule3"
-if file_exists(ux-design.md) and grep -q "$EPIC_KEY" ux-design.md: ux_match=true; rule_fired += "rule4"
-log "ux_detection: match=${ux_match} rules=${rule_fired[*]}"
-```
-
-A story matching multiple rules still results in **a single UX Designer spawn** — priority order matters for telemetry only. Always log which rule(s) fired.
-
-#### Subagent contracts
-
-When the user picks `[a]`, dispatch the selected subagents with the contracts below.
-
-**PM (Derek) — `gaia:pm`.** Always spawned on `[a]`.
-- Loads: `docs/planning-artifacts/epics-and-stories.md`, `docs/planning-artifacts/prd.md`, `docs/planning-artifacts/ux-design.md` (when present).
-- Answers 3 questions: (Q1) edge cases from a product/stakeholder lens; (Q2) AC prioritization (must-have vs nice-to-have); (Q3) stakeholder notes / cross-team callouts.
-
-**Architect (Theo) — `gaia:architect`.** Always spawned on `[a]`.
-- Loads: `docs/planning-artifacts/architecture.md`, `docs/planning-artifacts/test-plan.md`, `docs/planning-artifacts/epics-and-stories.md`.
-- Answers 2 questions: (Q1) implementation constraints (ADRs, patterns, tech choices); (Q2) technical dependencies (other modules, services, libraries).
-
-**UX Designer (Christy) — `gaia:ux-designer`.** Spawned on `[a]` ONLY when the four-rule UX detection matches. NOT spawned for backend-only stories.
-- Loads: `docs/planning-artifacts/ux-design.md` (when present), `docs/planning-artifacts/epics-and-stories.md`, the story frontmatter (including any `figma:` block).
-- Answers exactly 3 questions: (Q1) UX edge cases — empty, loading, error, no-data, offline states; (Q2) accessibility — keyboard navigation, screen-reader support, color contrast, ARIA semantics; (Q3) interaction patterns — which design-system components/patterns to reuse vs build custom.
-
-PM still loads `ux-design.md` even when UX Designer is also spawned — this is intentional. PM brings stakeholder context; UX Designer brings design-system expertise. The question scopes do not overlap.
-
-#### Parallel spawn protocol — single message, multiple Agent calls
-
-```
-+-----------------------------------------------------------+
-| HARD CONSTRAINT                                            |
-| All selected subagents MUST be spawned in a SINGLE message |
-| containing multiple Agent tool calls — true parallel,      |
-| NOT sequential. This is the canonical Claude Code parallel |
-| pattern. Do NOT spawn one, await its return, then spawn    |
-| the next — that is sequential and violates AC6.            |
-+-----------------------------------------------------------+
-```
-
-Concretely, when `[a]` is selected:
-
-- Backend-only story (no UX match): emit ONE assistant message containing TWO Agent tool calls — PM and Architect — invoked in parallel.
-- UX-scoped story (any rule matches): emit ONE assistant message containing THREE Agent tool calls — PM, Architect, and UX Designer — invoked in parallel.
-
-Sequential dispatch (spawn → await → spawn) is forbidden. The single-message multi-Agent-call pattern is the canonical Claude Code parallel mechanism — not a custom invention.
-
-#### `[u]` Manual elaboration path (4-question flow, AC5)
-
-When the user selects `[u]`, ask exactly 4 questions in this canonical order. No additional questions, no reordering, no merging:
-
-1. **Edge cases.** "What edge cases should this story handle? (empty/loading/error states, boundary inputs, failure modes)"
-2. **Implementation preferences.** "Any implementation preferences or constraints? (libraries, patterns, ADRs to honor, anti-patterns to avoid)"
-3. **AC splits.** "Should any acceptance criterion be split into smaller ACs for clarity or test isolation?"
-4. **Additional context.** "Any additional context — stakeholders, integrations, or cross-team callouts — to include?"
-
-The 4 questions are exactly 4 — sized to mirror V1's `[u]` UX. Do NOT inflate the count by walking the PM/Architect/UX scopes from the `[a]` path.
-
-Gather edge cases, implementation preferences, AC splits, and additional context returned by the `[u]` flow (or by the subagents on the `[a]` path) and pass them forward to Step 4.
-
-### Step 3b -- Edge Case Analysis (V1 pipeline restoration, E54-S4)
-
-This step JIT-invokes the `edge-cases` skill to enumerate boundary, error, timing, concurrency, integration, security, data, and environment scenarios for the story's acceptance criteria. It restores the V1 R1 parity pipeline that was dropped in V2. Steps 3b/3c/3d run **non-interactively** — they MUST NOT introduce any new user prompts and behave identically in YOLO mode (AC6).
-
-**Traces to:** FR-227 (edge-case enumeration mandatory for M+ stories), FR-229 (AC append), NFR-042 (8K token budget).
-
-**Size gate (AC4).** If the story `size` is `S`, skip Step 3b entirely:
-
-```
-if [ "${SIZE}" = "S" ]; then
-  log "edge_case_skip: size=S"
-  edge_case_results=[]
-  # proceed to Step 3c with empty results — Step 3c becomes a no-op
-fi
-```
-
-For sizes M, L, or XL, proceed with the JIT skill invocation below.
-
-**JIT skill invocation.** Invoke the `edge-cases` skill (canonical name; namespaced form `gaia:edge-cases` resolves equivalently) via the Skill tool. Pass the input context:
-
-```yaml
-story_key:           "{STORY_KEY}"
-story_title:         "{TITLE}"
-story_description:   "{DESCRIPTION}"
-acceptance_criteria: ["{AC1}", "{AC2}", ...]   # primary ACs from Step 3 elaboration
-size:                "{SIZE}"                  # M | L | XL
-architecture_excerpt: "{relevant ADR/architecture section, optional}"
-```
-
-The skill returns a structured `edge_case_results` list with the canonical schema:
-
-```yaml
-edge_case_results:
-  - id:       "EC-1"          # sequential EC-{N}
-    scenario: "..."            # one-line description
-    input:    "..."            # triggering input/precondition
-    expected: "..."            # expected behavior
-    category: "boundary"       # one of: boundary | error | timing | concurrency | integration | security | data | environment
-    severity: "high"           # optional: critical | high | medium | low (used by Step 3d row format)
-```
-
-**Token budget cap (NFR-042, AC5).** The combined input context plus skill output MUST stay under **8K tokens** total. The edge-cases skill self-truncates its output when over budget; this skill (the consumer) enforces the **truncation order** when post-processing results that still exceed budget after the skill returns:
-
-1. **Keep first:** `boundary`, `error`, `security` (highest-priority categories).
-2. **Keep next:** `concurrency`, `timing`.
-3. **Keep last (drop from tail when over budget):** `data`, `integration`, `environment`.
-
-Implement the order as a category priority array. Drop results from the lowest-priority category first until the total fits inside 8K. Final result MUST be `<= 8K`.
-
-**Telemetry (AC5).** After each invocation, log the token usage:
-
-```
-log "edge_case_token_usage=${tokens}"
-```
-
-When usage exceeds 80% of the 8K budget, also log a `Dev Notes` entry (per the edge-cases skill's NFR-042 contract).
-
-**Failure handling (AC1).** The skill is **non-blocking**. On any error — skill not found, timeout (>30s wall clock), malformed output, exception — the consumer MUST:
-
-```
-edge_case_results = []
-log "edge_case_pipeline: failed reason=${reason}"
-log "warning: edge-cases skill failed — continuing without edge cases"
-# proceed to Step 3c (do not halt, do not re-raise)
-```
-
-Under no circumstance should an edge-case skill failure block story creation.
-
-**YOLO compatibility (AC6).** Step 3b is fully non-interactive — it issues no prompts and produces the same `edge_case_results` for the same inputs regardless of `YOLO_MODE`.
-
-### Step 3c -- Append Edge Cases to Acceptance Criteria (V1 pipeline restoration, E54-S4)
-
-This step appends edge-case-derived acceptance criteria rows to the story's AC list. It enforces a count-drift safety check that aborts the append if the primary AC list is corrupted during the operation.
-
-**Traces to:** FR-229 (V1 ACs append).
-
-**Format (FR-229).** For each entry in `edge_case_results`, emit one AC row using:
-
-```
-- [ ] AC-EC{N}: Given {input}, when {scenario}, then {expected}
-```
-
-`{N}` is sequential (EC1, EC2, ...) per story.
-
-**Append position.** Append edge-case ACs **after the last primary AC**. Primary ACs (those produced in Step 3 by elaboration) are **immutable** — Step 3c MUST NOT modify, reorder, or delete any primary AC. Edge-case ACs always trail the primary block.
-
-**Primary AC count drift safety check (the AC4-of-this-story safety check, distinct from this story's AC4 size gate).** Snapshot the primary AC count before the append, perform the append, then recount:
-
-```
-primary_count_before = count(ACs not matching /^AC-EC/)
-for each ec in edge_case_results:
-  append "- [ ] AC-EC${i}: Given ${ec.input}, when ${ec.scenario}, then ${ec.expected}"
-primary_count_after = count(ACs not matching /^AC-EC/)
-if primary_count_before != primary_count_after:
-  rollback append      # restore the AC list to its pre-append state
-  log warning "edge_case_ac_append: aborted reason=primary_ac_count_drift"
-  edge_case_ac_appended = false
-  # leave AC list unchanged; proceed to Step 3d
-else:
-  edge_case_ac_appended = true
-```
-
-Rationale: primary ACs are contractual user/PM/Architect output. Drift indicates a parsing/regex bug in the appender, and the safest action is to abort the append rather than corrupt the AC list. Story creation continues with the unchanged primary ACs.
-
-**YOLO compatibility (AC6).** Step 3c is fully non-interactive.
-
-### Step 3d -- Append Edge Cases to Test Plan (V1 pipeline restoration, E54-S4)
-
-This step appends one test-plan row per edge case to the story's section in `docs/planning-artifacts/test-plan.md`. Re-runs are idempotent — duplicate rows are deduplicated by `(story_key, scenario)` pair.
-
-**Traces to:** FR-230 (V1 test-plan append).
-
-**Target file.** `docs/planning-artifacts/test-plan.md`. If the file does not exist, this step is **non-blocking**:
-
-```
-if [ ! -f "docs/planning-artifacts/test-plan.md" ]; then
-  log "warning: test-plan.md missing — skipping Step 3d test-plan append (non-blocking)"
-  return
-fi
-```
-
-**Locate the story's test-plan section.** Search for a heading match of the form `## {story_key}` or `### {story_key}` (e.g., `## E54-S4` or `### E54-S4`). If the section is missing, append a new section with that heading at the end of the file.
-
-**Compute next TC ID.** For the located story section, find the maximum existing `TC-{N}` numeric suffix scoped to that section and compute `next_tc_id = max(existing TC-{N} for this story) + 1`. TC IDs may be re-allocated on re-run — they are NOT used for dedup (see below).
-
-**Dedup by `(story_key, scenario)` pair (AC3).** Build the set of existing `(story_key, scenario)` pairs for the story's section by parsing existing rows. For each `ec` in `edge_case_results`:
-
-```
-if (story_key, ec.scenario) in existing_pairs:
-  skip   # already present — idempotent re-run, no duplicate row
-else:
-  append row, increment next_tc_id, add (story_key, ec.scenario) to existing_pairs
-```
-
-This makes Step 3d idempotent on re-run: the same `(story_key, scenario)` pair never inflates the test plan with duplicates, even when TC IDs shift.
-
-**Row format (FR-230).** Each appended row uses the canonical pipe-delimited table format:
-
-```
-| TC-{N} | {scenario} | edge-case | {severity} | {story_key} |
-```
-
-Columns: `TC ID | Scenario | Type | Severity | Story Key`. The literal `edge-case` token in the Type column distinguishes these rows from primary test cases (which use `unit`, `integration`, `e2e`, etc.). The `{severity}` is taken from `ec.severity` if provided by the edge-cases skill, otherwise default to `medium`.
-
-**YOLO compatibility (AC6).** Step 3d is fully non-interactive.
+- Present a brief summary of what was loaded.
+- Ask the user how to elaborate (manual answers or auto-delegation to PM/Architect subagents).
+- Gather edge cases, implementation preferences, constraints, and additional context.
 
 ### Step 4 -- Generate Story File
 
@@ -333,9 +73,8 @@ Columns: `TC ID | Scenario | Type | Severity | Story Key`. The literal `edge-cas
 
 ### Step 5 -- Register in Sprint Status
 
-- Call `${CLAUDE_PLUGIN_ROOT}/scripts/transition-story-status.sh {story_key} --to backlog` to register the story atomically across the four canonical status surfaces (story-file frontmatter, sprint-status.yaml, epics-and-stories.md, story-index.yaml). This is the unified atomic writer introduced by E54-S3.
+- Call `scripts/update-story-status.sh {story_key} backlog` to register the story in `sprint-status.yaml`.
 - This MUST happen AFTER the story file write has succeeded (story file is source of truth).
-- Legacy callers still using `scripts/update-story-status.sh {story_key} backlog` continue to work via the deprecation wrapper (E54-S3) but emit a WARNING to stderr; new code MUST call `transition-story-status.sh` directly.
 
 ### Step 6 -- Validation (ADR-050 Shared Val + SM Fix-Loop Dispatch Pattern)
 
@@ -368,15 +107,15 @@ Scope is restricted to the single story file path and (for Component 6) the `rev
 
 **Component 4 — Re-validation.** After each fix attempt, re-invoke Val as a FRESH `context: fork` subagent. Each attempt is a new dispatch — not a continuation of the prior Val session. Use the same parameters as Component 1.
 
-**Component 5 — Status-sync after every attempt (FR-338, NFR-056).** After the fix applies (Component 3), invoke the unified atomic transition script:
+**Component 5 — Status-sync after every attempt (FR-338, NFR-056).** After the fix applies (Component 3), write the frontmatter `status` field to the story file, then invoke the skill-scoped wrapper:
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/transition-story-status.sh {story_key} --to {new_status}
+${CLAUDE_PLUGIN_ROOT}/skills/gaia-create-story/scripts/update-story-status.sh {story_key} {new_status}
 ```
 
-`transition-story-status.sh` (E54-S3) atomically updates ALL FOUR locations the status lives in — the story-file frontmatter, sprint-status.yaml, epics-and-stories.md per-story status indicator, and story-index.yaml — under a shared flock with rollback on partial failure (FR-338, NFR-056). It supersedes the legacy `update-story-status.sh` wrapper, which now logs a deprecation warning and forwards.
+That wrapper delegates to the shared `${CLAUDE_PLUGIN_ROOT}/scripts/sprint-state.sh` foundation script, which ensures `sprint-status.yaml` is byte-identically in sync with the story frontmatter `status` (VLR-04).
 
-**AC-EC3 — self-transition is benign.** `transition-story-status.sh` treats a self-transition (current status equal to `--to` value) as a no-op: it logs the no-op, performs no writes, and exits 0. Step 6 callers MUST treat this as benign (non-blocking) and proceed to re-validation. Do NOT HALT.
+**AC-EC3 — self-transition rejection is benign.** If the fix attempt produced no net change to the frontmatter `status` field, `sprint-state.sh` will reject the self-transition. Treat this as benign (non-blocking) — log it and proceed to re-validation. Do NOT HALT.
 
 **Component 6 — Attempt cap and terminal verdict.** The hard cap is 3 attempts (FR-337). Track the attempt counter; new findings introduced by an SM fix (AC-EC5) do NOT reset the counter. Identical finding IDs across two consecutive attempts (oscillation / non-convergence, AC-EC4) must be logged to Dev Agent Record as a stall signal, but the loop MUST NOT short-circuit — the cap still runs to 3.
 
@@ -410,36 +149,11 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/review-gate.sh status \
 
 Canonical vocabulary is strict: exactly `PASSED`, `FAILED`, or `UNVERIFIED`. No other variant (lowercase, "failed", "ERROR") is accepted — enforced by `review-gate.sh`.
 
-**Component 6b — Status transition on terminal verdict (E54-S3 / FR-338).** After the terminal verdict is recorded via `review-gate.sh`, transition the story status via the unified atomic writer. The canonical Step 6 ordering is:
-
-1. `review-gate.sh update --verdict <PASSED|FAILED|UNVERIFIED>` (terminal ledger write)
-2. `transition-story-status.sh {story_key} --to <target_status>` (four-file atomic status update)
-3. (Step 7) `val-sidecar-write.sh` (memory persistence)
-
-The target status per verdict:
-
-```bash
-# PASSED — flip to ready-for-dev (the story is ready for development).
-${CLAUDE_PLUGIN_ROOT}/scripts/transition-story-status.sh {story_key} --to ready-for-dev
-
-# FAILED — keep at validating (the story is parked pending /gaia-fix-story).
-${CLAUDE_PLUGIN_ROOT}/scripts/transition-story-status.sh {story_key} --to validating
-
-# UNVERIFIED — same as FAILED: keep at validating until validation can complete.
-${CLAUDE_PLUGIN_ROOT}/scripts/transition-story-status.sh {story_key} --to validating
-```
-
-`transition-story-status.sh` is idempotent (self-transitions are no-ops, see AC-EC3 above), so calling `--to validating` when the story is already at `validating` is harmless.
-
-The ordering is load-bearing: review-gate.sh records the verdict that downstream consumers query; transition-story-status.sh reflects that verdict in the canonical status; val-sidecar-write.sh (Step 7) persists the decision payload referencing both. Reversing any pair leaves a window where queryable state disagrees.
-
 **AC-EC2 — missing review-gate.sh.** If `review-gate.sh` is not present or not executable at Component 6, HALT with an actionable error that references the expected path. Do NOT silently skip the terminal verdict write.
 
 **AC-EC6 — Val timeout / model unavailable.** If Val's `context: fork` invocation times out, crashes, or returns no response, HALT with the canonical message "Val validation could not complete: {reason}" and record the terminal verdict as UNVERIFIED via `review-gate.sh`. Never silently PASSED.
 
 **AC-EC8 / FR-340 — YOLO does not bypass the cap.** YOLO-mode invocations run the same 3-attempt loop with the same terminal verdict rules. YOLO MUST NOT override the cap and MUST NOT override a terminal FAILED verdict. On a YOLO-mode FAILED, HALT with guidance pointing to `/gaia-fix-story {story_key}`.
-
-**E54-S1 / AC6 — YOLO auto-triggers Val dispatch.** When `YOLO_MODE=true`, Step 6 dispatches Val (Component 1 above) immediately after Step 4 file write — no user prompt, no confirmation. The auto-continue applies to the dispatch trigger only; the 3-attempt cap, severity classification, terminal verdict, and HALT-on-FAILED rules are unchanged. There must be zero user prompts between Step 4 (file write) and Step 6 Val dispatch in YOLO mode.
 
 **Token budget (NFR-055).** Log per-attempt Val token usage to Dev Agent Record. Total loop overhead MUST NOT exceed 3x a single-pass Val budget.
 

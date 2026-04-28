@@ -3,6 +3,15 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.130.0] — 2026-04-28
+
+### Added
+
+- (create-story) add YOLO param + non-YOLO [u]/[a] routing prompt (E54-S1) (#311)
+- (create-story) restore V1 edge-case pipeline Steps 3b/3c/3d (E54-S4) (#310)
+- (create-story) conditional ux-designer routing + parallel spawn (E54-S2) (#309)
+- (scripts) unified transition-story-status.sh (E54-S3) (#308)
+
 ## [1.129.0] — 2026-04-27
 
 ### Added

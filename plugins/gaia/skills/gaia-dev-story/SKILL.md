@@ -74,10 +74,12 @@ Run `${CLAUDE_PLUGIN_ROOT}/scripts/yolo-mode.sh is_yolo` to detect YOLO mode. Th
 
 If `is_yolo` returns non-zero (non-YOLO branch -- default):
   - The next tool invocation MUST be `AskUserQuestion`. Do NOT invoke any other tool first. In particular, do NOT issue any `Edit` or `Write` tool call to a test file or implementation file between the plan render and the user's response -- the plan the user sees is the plan that gets implemented.
-  - The `AskUserQuestion` prompt body offers a single option for E55-S1: `approve` -> advance to Step 5 TDD Red.
-  <!-- E55-S3: three-option prompt body (replaces single-approve in E55-S3) -->
-  - Only an explicit `approve` response from the user advances to Step 5. Any other response (including silence) keeps the workflow halted.
-  - Emit a single-line gate log to stderr (NFR-DSH-5): `step4_gate: yolo=false verdict=halted` on entry, then `step4_gate: yolo=false verdict=passed` once the user responds with approve.
+  <!-- E55-S3: three-option prompt body (labels: approve, revise, validate) -->
+  - The `AskUserQuestion` prompt body offers exactly three labeled options -- `approve`, `revise`, `validate` -- lowercase, no punctuation, no synonyms. Match TC-DSH-02 expectations exactly. Do NOT add a fourth option (no `skip`, `verify`, `cancel`, etc.).
+  - On `approve`: advance to Step 5 TDD Red. Only an explicit `approve` response advances; any other response (including silence) keeps the workflow halted (preserves E55-S1 behavior).
+  - On `revise`: ask the user for free-form feedback text via a follow-up `AskUserQuestion` (or harness-equivalent). Pass the feedback to the plan regenerator and regenerate the plan reflecting the feedback. Then re-ask the same three-option question. The `revise` loop is user-driven and unbounded -- there is NO iteration cap; the user decides when to `approve` (TC-DSH-03).
+  - On `validate`: route the rendered plan to the `gaia-val-validate` skill via Skill-to-Skill delegation with `context: fork`. Render Val's findings inline, grouped into CRITICAL / WARNING / INFO buckets. Then re-ask the same three-option question. The `validate` loop is user-driven and unbounded -- there is NO iteration cap; the user decides when to `approve` or `revise` (TC-DSH-04). This is intentionally distinct from the YOLO branch's 3-iteration auto-fix cap (E55-S2 / FR-340).
+  - Emit a single-line gate log to stderr (NFR-DSH-5): `step4_gate: yolo=false verdict=halted` on entry, then `step4_gate: yolo=false verdict=passed` once the user responds with `approve`. Emit `step4_gate: yolo=false verdict=revise` and `step4_gate: yolo=false verdict=validate` per loop iteration on the corresponding branch.
 
 If `is_yolo` returns zero (YOLO branch):
   <!-- E55-S2: YOLO Val auto-validation loop (added by E55-S2) -->

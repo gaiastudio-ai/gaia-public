@@ -9,6 +9,26 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) for t
 
 ## [Unreleased]
 
+### v1.131.x — TDD Review Gate Default
+
+- **E57-S1**: introduce the `dev_story.tdd_review` config block consumed by
+  `/gaia-dev-story`. The block ships in `project-config.schema.yaml` and
+  `project-config.yaml.example` with the following defaults:
+  - `threshold: medium` — risk threshold at which the post-Red TDD review
+    gate prompt fires. Allowed values: `off | low | medium | high`.
+  - `phases: [red]` — TDD phases at which the review fires.
+  - `qa_auto_in_yolo: true` — YOLO mode auto-runs the QA review after
+    the gate.
+  - `qa_timeout_seconds: 600` — per-review timeout for the QA auto-run.
+  - **User-visible effect:** stories with `risk: medium` or higher will
+    see a one-time prompt after the TDD Red phase asking whether to run
+    the review immediately. Existing low-risk and unset-risk stories see
+    no behavior change.
+  - **Opt-out:** set `threshold: off` in your shared `project-config.yaml`
+    to disable the gate entirely.
+  - The four resolved values round-trip via
+    `resolve-config.sh --field dev_story.tdd_review.<key>`.
+
 ### Sprint 24 (E28 — GAIA Native Conversion Program)
 
 #### Reverted

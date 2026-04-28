@@ -27,6 +27,12 @@ export LC_ALL
 # and emits deterministic output on stdout:
 #   - default:        KEY='VALUE' lines, single-quoted, alpha-sorted
 #   - --format json:  a single JSON object with the same keys
+#   - --field <key>:  prints ONLY the resolved scalar for that dotted key
+#                     and exits 0. Currently scoped to E57-S1 lookup keys:
+#                       dev_story.tdd_review.threshold
+#                       dev_story.tdd_review.phases
+#                       dev_story.tdd_review.qa_auto_in_yolo
+#                       dev_story.tdd_review.qa_timeout_seconds
 #
 # =============================================================================
 # Config Split Merge (ADR-044 / E28-S141 / E28-S142)
@@ -161,6 +167,42 @@ parse_yaml_nested_key() {
   ' "$file"
 }
 
+parse_yaml_doubly_nested_key() {
+  # parse_yaml_doubly_nested_key <file> <grandparent> <parent> <child>
+  # Prints the value of grandparent.parent.child where the YAML looks like:
+  #   grandparent:
+  #     parent:
+  #       child: value
+  # Prints empty if absent. Handles single-line comments. E57-S1.
+  local file="$1" grandparent="$2" parent="$3" child="$4"
+  [ -f "$file" ] || return 0
+  awk -v G="$grandparent" -v P="$parent" -v C="$child" '
+    BEGIN { in_grand=0; in_parent=0 }
+    # New zero-indent key — close any open grand block (and parent inside it).
+    /^[A-Za-z_][A-Za-z0-9_]*[[:space:]]*:/ {
+      if (in_grand) { in_grand=0; in_parent=0 }
+    }
+    $0 ~ "^"G"[[:space:]]*:[[:space:]]*$" { in_grand=1; in_parent=0; next }
+    in_grand && $0 ~ "^[[:space:]]+"P"[[:space:]]*:[[:space:]]*$" { in_parent=1; next }
+    # Two-space-indent (parent-level) key that is not P closes any open parent.
+    in_grand && in_parent && /^[[:space:]]{1,2}[A-Za-z_][A-Za-z0-9_]*[[:space:]]*:/ {
+      # Close parent only if this is at the parent indent level (<=2 leading spaces).
+      lead = match($0, /[^[:space:]]/) - 1
+      if (lead <= 2) { in_parent=0 }
+    }
+    in_grand && in_parent && $0 ~ "^[[:space:]]+"C"[[:space:]]*:" {
+      line=$0
+      sub(/^[[:space:]]+[A-Za-z_][A-Za-z0-9_]*[[:space:]]*:[[:space:]]*/, "", line)
+      sub(/[[:space:]]+$/, "", line)
+      sub(/[[:space:]]+#.*$/, "", line)
+      if (line ~ /^".*"$/) { line=substr(line, 2, length(line)-2) }
+      else if (line ~ /^\x27.*\x27$/) { line=substr(line, 2, length(line)-2) }
+      print line
+      exit
+    }
+  ' "$file"
+}
+
 validate_yaml_basic() {
   local file="$1"
   [ -f "$file" ] || return 0
@@ -229,6 +271,7 @@ SHARED_PATH_VIA_CONFIG=""   # populated by --config only (L2 legacy alias)
 LOCAL_PATH=""
 SCHEMA_PATH=""
 FORMAT="shell"
+FIELD=""                    # E57-S1 — single-field lookup mode
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -257,6 +300,11 @@ while [ $# -gt 0 ]; do
       FORMAT="$2"; shift 2 ;;
     --format=*)
       FORMAT="${1#--format=}"; shift ;;
+    --field)
+      [ $# -ge 2 ] || die "flag --field requires a dotted-key argument"
+      FIELD="$2"; shift 2 ;;
+    --field=*)
+      FIELD="${1#--field=}"; shift ;;
     -h|--help)
       sed -n '1,87p' "$0" >&2; exit 0 ;;
     *)
@@ -416,6 +464,45 @@ v_creative_artifacts=$(merge_key creative_artifacts)
 # more flattened keys is a one-liner (future-proof).
 v_val_integration_template_output_review=$(merge_nested_key val_integration template_output_review)
 
+# E57-S1 — dev_story.tdd_review.* doubly-nested resolution.
+# Reads the user-set value (if any) from shared then local, then applies
+# the schema-declared default when neither layer set the key. Defaults:
+#   threshold: medium     (enum off|low|medium|high)
+#   phases: [red]         (array)
+#   qa_auto_in_yolo: true (bool)
+#   qa_timeout_seconds: 600 (int)
+
+merge_doubly_nested_key() {
+  # merge_doubly_nested_key <grandparent> <parent> <child>
+  local grandparent="$1" parent="$2" child="$3" v=""
+  if [ "$SHARED_EXISTS" -eq 1 ]; then
+    v=$(parse_yaml_doubly_nested_key "$SHARED_PATH" "$grandparent" "$parent" "$child")
+  fi
+  if [ "$LOCAL_EXISTS" -eq 1 ]; then
+    local lv
+    lv=$(parse_yaml_doubly_nested_key "$LOCAL_PATH" "$grandparent" "$parent" "$child")
+    [ -n "$lv" ] && v="$lv"
+  fi
+  printf '%s' "$v"
+}
+
+v_dev_story_tdd_review_threshold=$(merge_doubly_nested_key dev_story tdd_review threshold)
+v_dev_story_tdd_review_phases=$(merge_doubly_nested_key dev_story tdd_review phases)
+v_dev_story_tdd_review_qa_auto_in_yolo=$(merge_doubly_nested_key dev_story tdd_review qa_auto_in_yolo)
+v_dev_story_tdd_review_qa_timeout_seconds=$(merge_doubly_nested_key dev_story tdd_review qa_timeout_seconds)
+
+# Defaults (applied when no layer set a value).
+[ -z "$v_dev_story_tdd_review_threshold" ]          && v_dev_story_tdd_review_threshold="medium"
+[ -z "$v_dev_story_tdd_review_phases" ]             && v_dev_story_tdd_review_phases="[red]"
+[ -z "$v_dev_story_tdd_review_qa_auto_in_yolo" ]    && v_dev_story_tdd_review_qa_auto_in_yolo="true"
+[ -z "$v_dev_story_tdd_review_qa_timeout_seconds" ] && v_dev_story_tdd_review_qa_timeout_seconds="600"
+
+# Enum validation for threshold (AC3). Allowed: off|low|medium|high.
+case "$v_dev_story_tdd_review_threshold" in
+  off|low|medium|high) ;;
+  *) die "invalid value for dev_story.tdd_review.threshold: '$v_dev_story_tdd_review_threshold' (allowed: off|low|medium|high)" ;;
+esac
+
 # ---------- Apply environment overrides (env wins) ----------
 
 [ -n "${GAIA_PROJECT_ROOT:-}" ]    && v_project_root="$GAIA_PROJECT_ROOT"
@@ -464,6 +551,28 @@ v_val_integration_template_output_review=$(merge_nested_key val_integration temp
 case "$v_project_path" in
   *..*) die "path traversal rejected in project_path: $v_project_path" ;;
 esac
+
+# ---------- --field short-circuit (E57-S1) ----------
+#
+# When --field <dotted-key> is set, print ONLY that key's resolved scalar
+# value to stdout (no quoting, single line, trailing newline) and exit 0.
+# Unknown fields exit 2 with a clear stderr message.
+
+if [ -n "$FIELD" ]; then
+  case "$FIELD" in
+    dev_story.tdd_review.threshold)
+      printf '%s\n' "$v_dev_story_tdd_review_threshold" ;;
+    dev_story.tdd_review.phases)
+      printf '%s\n' "$v_dev_story_tdd_review_phases" ;;
+    dev_story.tdd_review.qa_auto_in_yolo)
+      printf '%s\n' "$v_dev_story_tdd_review_qa_auto_in_yolo" ;;
+    dev_story.tdd_review.qa_timeout_seconds)
+      printf '%s\n' "$v_dev_story_tdd_review_qa_timeout_seconds" ;;
+    *)
+      die "unknown field for --field: '$FIELD' (supported: dev_story.tdd_review.threshold|phases|qa_auto_in_yolo|qa_timeout_seconds)" ;;
+  esac
+  exit 0
+fi
 
 # ---------- Emit ----------
 

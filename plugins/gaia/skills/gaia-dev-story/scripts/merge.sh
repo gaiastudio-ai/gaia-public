@@ -25,6 +25,18 @@ SCRIPT_NAME="gaia-dev-story/merge.sh"
 log() { printf '%s: %s\n' "$SCRIPT_NAME" "$*" >&2; }
 die() { log "$*"; exit 1; }
 
+# E55-S6 — TB-10 security invariants. Sourced from the canonical lib at
+# plugins/gaia/scripts/lib/dev-story-security-invariants.sh. Hard rule:
+# YOLO mode MUST NOT bypass these assertions.
+# shellcheck source=../../../scripts/lib/dev-story-security-invariants.sh
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+INVARIANTS_LIB="$SCRIPT_DIR/../../../scripts/lib/dev-story-security-invariants.sh"
+if [ ! -f "$INVARIANTS_LIB" ]; then
+  die "security-invariant lib missing at $INVARIANTS_LIB"
+fi
+# shellcheck disable=SC1090
+source "$INVARIANTS_LIB"
+
 if [ $# -lt 2 ]; then
   die "usage: merge.sh <pr_number> <story_key> [--strategy <merge|squash|rebase>] [--delete-branch]"
 fi
@@ -73,6 +85,21 @@ if [ "$pr_state" = "MERGED" ]; then
   echo "already_merged"
   exit 0
 fi
+
+# E55-S6 — Enforce TB-10 security invariants BEFORE any gh pr merge call.
+# All three hard gates run; YOLO mode does not bypass.
+assert_branch_not_protected || die "aborting: protected-branch invariant failed"
+assert_no_secrets_staged || die "aborting: staged-secrets invariant failed"
+
+# Resolve PR target (baseRefName) from gh and verify against the canonical
+# promotion chain. If gh fails to return a target, fall back to the
+# project-config default ("staging") so the assertion still runs. Empty
+# target propagates through assert_pr_target_from_chain as a clear failure.
+PR_TARGET="$(gh pr view "$PR_NUMBER" --json baseRefName --jq '.baseRefName' 2>/dev/null || echo "")"
+if [ -z "$PR_TARGET" ]; then
+  PR_TARGET="staging"
+fi
+assert_pr_target_from_chain "$PR_TARGET" || die "aborting: pr-target invariant failed"
 
 # Build merge command
 MERGE_CMD="gh pr merge $PR_NUMBER --${STRATEGY} --body \"Story: ${STORY_KEY}\""

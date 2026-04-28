@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.129.1] — 2026-04-28
+
+### Changed
+
+- revert squash-merged PR #312 to enable release pipeline
+
 ## [1.129.0] — 2026-04-27
 
 ### Added

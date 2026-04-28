@@ -108,7 +108,8 @@ jobs:
             tests/skills/gaia-dev-story-step2b-atdd.bats \
             tests/skills/gaia-dev-story-step7b-val.bats \
             tests/skills/gaia-dev-story-figma-degrade.bats \
-            tests/skills/validate-plan-structure.bats
+            tests/skills/validate-plan-structure.bats \
+            tests/skills/conditional-check-hints.bats
 
   cluster-4-e2e:
     name: cluster-4-e2e

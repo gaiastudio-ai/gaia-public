@@ -80,6 +80,37 @@ jobs:
           path: coverage/
           if-no-files-found: ignore
 
+  skills-bats-tests:
+    # E55-S5 — wires the dev-story skill bats files into CI. Until this job
+    # landed, skill-level bats files (e.g., gaia-dev-story planning-gate
+    # regression suite) lived only on disk and never gated PRs. The first
+    # batch wired in covers the /gaia-dev-story V2 hardening regression
+    # suite (E55-S1/S2/S3/S5). Other skill bats under tests/skills/ predate
+    # this gate and have known unrelated failures (legacy lifecycle
+    # conversion fixtures); those will be wired in by a separate sweep
+    # once their failures are resolved.
+    name: skills-bats-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.2.2
+      - uses: mig4/setup-bats@af9a00deb21b5d795cabfeaa8d9060410377686d  # v1.2.0
+        with:
+          bats-version: 1.10.0
+      - name: Install jq and python3
+        run: sudo apt-get update && sudo apt-get install -y jq python3
+      - name: Run /gaia-dev-story skill bats suite
+        run: |
+          bats \
+            tests/skills/gaia-dev-story-planning-gate.bats \
+            tests/skills/gaia-dev-story-three-option-prompt.bats \
+            tests/skills/gaia-dev-story-yolo-plan-loop.bats \
+            tests/skills/gaia-dev-story-step2b-atdd.bats \
+            tests/skills/gaia-dev-story-step7b-val.bats \
+            tests/skills/gaia-dev-story-figma-degrade.bats \
+            tests/skills/validate-plan-structure.bats \
+            tests/skills/conditional-check-hints.bats
+
   cluster-4-e2e:
     name: cluster-4-e2e
     runs-on: ubuntu-latest

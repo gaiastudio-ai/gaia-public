@@ -98,18 +98,18 @@ CANONICAL_VERDICTS_REGEX='^(PASSED|FAILED|UNVERIFIED)$'
 
 # ---------- Helpers ----------
 
-die_usage() {
+_die_usage() {
   printf '%s: %s\n' "$SCRIPT_NAME" "$*" >&2
   printf 'Usage: %s --story <key> [--force]\n' "$SCRIPT_NAME" >&2
   exit 2
 }
 
-die_not_found() {
+_die_not_found() {
   printf '%s: %s\n' "$SCRIPT_NAME" "$*" >&2
   exit 1
 }
 
-die_malformed() {
+_die_malformed() {
   printf '%s: %s\n' "$SCRIPT_NAME" "$*" >&2
   exit 2
 }
@@ -147,7 +147,7 @@ parse_args() {
     case "$1" in
       --story)
         if [ $# -lt 2 ] || [ -z "${2:-}" ]; then
-          die_usage "--story requires a value"
+          _die_usage "--story requires a value"
         fi
         STORY_KEY="$2"
         shift 2
@@ -161,13 +161,13 @@ parse_args() {
         exit 0
         ;;
       *)
-        die_usage "unknown flag: $1"
+        _die_usage "unknown flag: $1"
         ;;
     esac
   done
 
   if [ -z "$STORY_KEY" ]; then
-    die_usage "--story <key> is required"
+    _die_usage "--story <key> is required"
   fi
 }
 
@@ -176,7 +176,7 @@ parse_args() {
 # Resolve review-gate.sh location: same directory as this script.
 REVIEW_GATE="${REVIEW_GATE_SCRIPT:-$SCRIPT_DIR/review-gate.sh}"
 
-emit_force_run_all() {
+_emit_force_run_all() {
   # skip=[], run=<all 6 canonical short names>
   local run_json
   run_json=$(printf '%s\n' "${CANONICAL_SHORT_NAMES[@]}" | jq -R . | jq -sc .)
@@ -188,7 +188,7 @@ main() {
 
   # ---- --force fast path ----
   if [ "$FORCE" -eq 1 ]; then
-    emit_force_run_all
+    _emit_force_run_all
     exit 0
   fi
 
@@ -212,18 +212,18 @@ main() {
     local err
     err="$(cat "$STATUS_STDERR_FILE")"
     if [[ "$err" =~ (no\ story\ file\ found|story\ not\ found) ]]; then
-      die_not_found "story not found: $STORY_KEY"
+      _die_not_found "story not found: $STORY_KEY"
     fi
     # Surface the upstream stderr for debuggability and exit 2.
     if [ -n "$err" ]; then
       printf '%s: %s\n' "$SCRIPT_NAME" "$err" >&2
     fi
-    die_malformed "malformed gate state for story $STORY_KEY (review-gate.sh status exit=$status_rc)"
+    _die_malformed "malformed gate state for story $STORY_KEY (review-gate.sh status exit=$status_rc)"
   fi
 
   # ---- Validate JSON shape ----
   if ! printf '%s' "$status_json" | jq -e '.gates' >/dev/null 2>&1; then
-    die_malformed "review-gate.sh status returned no .gates object for story $STORY_KEY"
+    _die_malformed "review-gate.sh status returned no .gates object for story $STORY_KEY"
   fi
 
   # ---- Iterate canonical gate order; partition into skip / run ----
@@ -237,11 +237,11 @@ main() {
     verdict="$(printf '%s' "$status_json" | jq -r --arg g "$gate" '.gates[$g] // empty')"
 
     if [ -z "$verdict" ]; then
-      die_malformed "gate table empty for story $STORY_KEY (missing row: $gate)"
+      _die_malformed "gate table empty for story $STORY_KEY (missing row: $gate)"
     fi
 
     if [[ ! "$verdict" =~ $CANONICAL_VERDICTS_REGEX ]]; then
-      die_malformed "malformed gate row: $gate has non-canonical verdict '$verdict'"
+      _die_malformed "malformed gate row: $gate has non-canonical verdict '$verdict'"
     fi
 
     if [ "$verdict" = "PASSED" ]; then

@@ -73,8 +73,9 @@ This skill is the native Claude Code conversion of the legacy create-story workf
 
 ### Step 5 -- Register in Sprint Status
 
-- Call `scripts/update-story-status.sh {story_key} backlog` to register the story in `sprint-status.yaml`.
+- Call `${CLAUDE_PLUGIN_ROOT}/scripts/transition-story-status.sh {story_key} --to backlog` to register the story atomically across the four canonical status surfaces (story-file frontmatter, sprint-status.yaml, epics-and-stories.md, story-index.yaml). This is the unified atomic writer introduced by E54-S3.
 - This MUST happen AFTER the story file write has succeeded (story file is source of truth).
+- Legacy callers still using `scripts/update-story-status.sh {story_key} backlog` continue to work via the deprecation wrapper (E54-S3) but emit a WARNING to stderr; new code MUST call `transition-story-status.sh` directly.
 
 ### Step 6 -- Validation (ADR-050 Shared Val + SM Fix-Loop Dispatch Pattern)
 
@@ -107,15 +108,15 @@ Scope is restricted to the single story file path and (for Component 6) the `rev
 
 **Component 4 — Re-validation.** After each fix attempt, re-invoke Val as a FRESH `context: fork` subagent. Each attempt is a new dispatch — not a continuation of the prior Val session. Use the same parameters as Component 1.
 
-**Component 5 — Status-sync after every attempt (FR-338, NFR-056).** After the fix applies (Component 3), write the frontmatter `status` field to the story file, then invoke the skill-scoped wrapper:
+**Component 5 — Status-sync after every attempt (FR-338, NFR-056).** After the fix applies (Component 3), invoke the unified atomic transition script:
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/skills/gaia-create-story/scripts/update-story-status.sh {story_key} {new_status}
+${CLAUDE_PLUGIN_ROOT}/scripts/transition-story-status.sh {story_key} --to {new_status}
 ```
 
-That wrapper delegates to the shared `${CLAUDE_PLUGIN_ROOT}/scripts/sprint-state.sh` foundation script, which ensures `sprint-status.yaml` is byte-identically in sync with the story frontmatter `status` (VLR-04).
+`transition-story-status.sh` (E54-S3) atomically updates ALL FOUR locations the status lives in — the story-file frontmatter, sprint-status.yaml, epics-and-stories.md per-story status indicator, and story-index.yaml — under a shared flock with rollback on partial failure (FR-338, NFR-056). It supersedes the legacy `update-story-status.sh` wrapper, which now logs a deprecation warning and forwards.
 
-**AC-EC3 — self-transition rejection is benign.** If the fix attempt produced no net change to the frontmatter `status` field, `sprint-state.sh` will reject the self-transition. Treat this as benign (non-blocking) — log it and proceed to re-validation. Do NOT HALT.
+**AC-EC3 — self-transition is benign.** `transition-story-status.sh` treats a self-transition (current status equal to `--to` value) as a no-op: it logs the no-op, performs no writes, and exits 0. Step 6 callers MUST treat this as benign (non-blocking) and proceed to re-validation. Do NOT HALT.
 
 **Component 6 — Attempt cap and terminal verdict.** The hard cap is 3 attempts (FR-337). Track the attempt counter; new findings introduced by an SM fix (AC-EC5) do NOT reset the counter. Identical finding IDs across two consecutive attempts (oscillation / non-convergence, AC-EC4) must be logged to Dev Agent Record as a stall signal, but the loop MUST NOT short-circuit — the cap still runs to 3.
 
@@ -148,6 +149,29 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/review-gate.sh status \
 ```
 
 Canonical vocabulary is strict: exactly `PASSED`, `FAILED`, or `UNVERIFIED`. No other variant (lowercase, "failed", "ERROR") is accepted — enforced by `review-gate.sh`.
+
+**Component 6b — Status transition on terminal verdict (E54-S3 / FR-338).** After the terminal verdict is recorded via `review-gate.sh`, transition the story status via the unified atomic writer. The canonical Step 6 ordering is:
+
+1. `review-gate.sh update --verdict <PASSED|FAILED|UNVERIFIED>` (terminal ledger write)
+2. `transition-story-status.sh {story_key} --to <target_status>` (four-file atomic status update)
+3. (Step 7) `val-sidecar-write.sh` (memory persistence)
+
+The target status per verdict:
+
+```bash
+# PASSED — flip to ready-for-dev (the story is ready for development).
+${CLAUDE_PLUGIN_ROOT}/scripts/transition-story-status.sh {story_key} --to ready-for-dev
+
+# FAILED — keep at validating (the story is parked pending /gaia-fix-story).
+${CLAUDE_PLUGIN_ROOT}/scripts/transition-story-status.sh {story_key} --to validating
+
+# UNVERIFIED — same as FAILED: keep at validating until validation can complete.
+${CLAUDE_PLUGIN_ROOT}/scripts/transition-story-status.sh {story_key} --to validating
+```
+
+`transition-story-status.sh` is idempotent (self-transitions are no-ops, see AC-EC3 above), so calling `--to validating` when the story is already at `validating` is harmless.
+
+The ordering is load-bearing: review-gate.sh records the verdict that downstream consumers query; transition-story-status.sh reflects that verdict in the canonical status; val-sidecar-write.sh (Step 7) persists the decision payload referencing both. Reversing any pair leaves a window where queryable state disagrees.
 
 **AC-EC2 — missing review-gate.sh.** If `review-gate.sh` is not present or not executable at Component 6, HALT with an actionable error that references the expected path. Do NOT silently skip the terminal verdict write.
 

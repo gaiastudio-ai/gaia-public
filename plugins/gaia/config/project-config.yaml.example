@@ -66,3 +66,22 @@ testing:
   framework: bats
   bridge_enabled: false
   coverage_threshold: 80
+
+# Dev-Story workflow knobs (E57-S1). Configures the post-Red TDD review
+# gate consumed by /gaia-dev-story. Optional — defaults shown below.
+#
+# threshold (enum off|low|medium|high; default medium):
+#   risk threshold at which the post-Red review gate prompt fires.
+#   Set to 'off' to opt out entirely.
+# phases (array; default [red]):
+#   TDD phase(s) at which the review fires.
+# qa_auto_in_yolo (bool; default true):
+#   whether YOLO mode auto-runs the QA review after the gate.
+# qa_timeout_seconds (int; default 600):
+#   per-review timeout for the QA auto-run.
+dev_story:
+  tdd_review:
+    threshold: medium
+    phases: [red]
+    qa_auto_in_yolo: true
+    qa_timeout_seconds: 600

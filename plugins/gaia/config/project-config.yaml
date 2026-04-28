@@ -14,3 +14,17 @@ checkpoint_path: /Users/jlouage/Dev/GAIA-Framework/_memory/checkpoints
 installed_path: /Users/jlouage/Dev/GAIA-Framework/_gaia
 framework_version: 1.127.2-rc.1
 date: 2026-04-15
+
+# Dev-Story workflow knobs (E57-S1). The nested tdd_review block configures
+# the post-Red TDD review gate consumed by /gaia-dev-story. Defaults:
+#   threshold: medium       # off | low | medium | high — 'off' opts out
+#   phases: [red]
+#   qa_auto_in_yolo: true
+#   qa_timeout_seconds: 600
+# Uncomment + edit to override.
+# dev_story:
+#   tdd_review:
+#     threshold: medium
+#     phases: [red]
+#     qa_auto_in_yolo: true
+#     qa_timeout_seconds: 600

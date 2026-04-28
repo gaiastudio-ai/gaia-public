@@ -161,3 +161,13 @@ fields:
     required: false
     default: null
     description: "Project-wide agent .customize.yaml overrides aggregated by agent id. Shared team config per feature brief P20-S1."
+
+  dev_story:
+    type: map
+    required: false
+    default: null
+    description: "Dev-Story workflow knobs. Holds the nested tdd_review block consumed by /gaia-dev-story (E57-S1). Schema for the nested block (resolved via resolve-config.sh --field dev_story.tdd_review.<key>):
+      - threshold (enum): off | low | medium | high — default medium. Risk threshold at which the post-Red TDD review gate prompt fires. 'off' opts out entirely.
+      - phases (array): default [red]. TDD phase(s) at which the review fires. type=array.
+      - qa_auto_in_yolo (bool): default true. Whether YOLO auto-runs the QA review after the gate.
+      - qa_timeout_seconds (int): default 600. Per-review timeout for the QA auto-run."

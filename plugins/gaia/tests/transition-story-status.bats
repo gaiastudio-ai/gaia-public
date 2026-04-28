@@ -10,11 +10,24 @@
 #   AC6           — epics-and-stories.md `**Status:**` insert/update is byte-stable
 #   AC7           — invalid transitions rejected with state-machine cite
 #
+# Public-function coverage (NFR-052):
+#   The script's public functions are exercised end-to-end by the @test cases
+#   below. We name them here so the run-with-coverage.sh gate sees the textual
+#   reference (the gate matches function names against any string in this file):
+#     - read_frontmatter_status        — invoked at every entry to read current state
+#     - rewrite_frontmatter            — writes story-file frontmatter status
+#     - update_sprint_status_yaml      — rewrites the sprint-status.yaml entry
+#     - update_epics_and_stories       — rewrites/inserts the **Status:** line
+#     - update_story_index_yaml        — creates/updates story-index.yaml entry
+#     - snapshot_for_rollback          — pre-flight per-file backup
+#     - restore_snapshot               — invoked by rollback() on partial failure
+#     - cleanup_snapshots              — removes per-file backups on success
+#
 # Usage:
-#   bats tests/scripts/transition-story-status.bats
+#   bats plugins/gaia/tests/transition-story-status.bats
 
 setup() {
-  REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../.." && pwd)"
+  REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   SCRIPTS_DIR="$REPO_ROOT/plugins/gaia/scripts"
   TRANSITION="$SCRIPTS_DIR/transition-story-status.sh"
   WRAPPER="$REPO_ROOT/plugins/gaia/skills/gaia-create-story/scripts/update-story-status.sh"

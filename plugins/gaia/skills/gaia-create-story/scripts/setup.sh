@@ -37,6 +37,24 @@ CHECKPOINT="$PLUGIN_SCRIPTS_DIR/checkpoint.sh"
 log() { printf '%s: %s\n' "$SCRIPT_NAME" "$*" >&2; }
 die() { log "$*"; exit 1; }
 
+# ---------- 0. YOLO mode detection (E54-S1, FR-340) ----------
+# Scan positional args ($1, $2) and the $ARGUMENTS env var for the literal
+# `yolo` keyword or `--yolo` flag. Export YOLO_MODE so the SKILL.md body can
+# branch on it and emit a single log line so the LLM can read the state.
+#
+# Hard rule: YOLO_MODE only suppresses interactive prompts. It MUST NOT bypass:
+#   - Step 1 existing-story-status HALT gate (AC3)
+#   - Step 6 3-attempt cap or terminal FAILED verdict (AC2 / FR-340)
+__arg1="${1:-}"
+__arg2="${2:-}"
+__args_blob=" ${__arg1} ${__arg2} ${ARGUMENTS:-} "
+if [[ "$__args_blob" == *" yolo "* ]] || [[ "$__args_blob" == *" --yolo "* ]]; then
+  export YOLO_MODE=true
+else
+  export YOLO_MODE=false
+fi
+echo "$SCRIPT_NAME: yolo_mode=${YOLO_MODE}" >&2
+
 # ---------- 1. Resolve config ----------
 [ -x "$RESOLVE_CONFIG" ] || die "resolve-config.sh not found or not executable at $RESOLVE_CONFIG"
 if ! config_output=$("$RESOLVE_CONFIG" 2>&1); then

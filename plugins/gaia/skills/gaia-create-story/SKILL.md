@@ -44,6 +44,8 @@ This skill is the native Claude Code conversion of the legacy create-story workf
   - If status is anything else: HALT -- "Story {key} is in '{status}' status. Use /gaia-fix-story {key} to edit."
 - If no story key was provided: display a prioritized list of stories without files and ask the user to select.
 
+> **YOLO hard guard (E54-S1, AC3, FR-340):** The existing-story-status HALT above runs unconditionally — including in YOLO mode. YOLO MUST NOT bypass the HALT gate. Order of evaluation: existing-story-status HALT first, YOLO branch (Step 3) second. A `status: in-progress` story HALTs before any subagent spawn even with `yolo`/`--yolo` set.
+
 ### Step 2 -- Load Context
 
 - Read story summary from `docs/planning-artifacts/epics-and-stories.md`.
@@ -52,13 +54,26 @@ This skill is the native Claude Code conversion of the legacy create-story workf
 
 ### Step 3 -- Elaborate Story
 
-Present a brief summary of what was loaded, then offer the user how to elaborate. The canonical prompt is:
+#### YOLO branch (E54-S1, FR-340)
+
+Read `YOLO_MODE` from the setup script's stdout (the `gaia-create-story/setup.sh: yolo_mode={true|false}` line).
+
+When `YOLO_MODE=true`:
+
+- **Skip the routing prompt entirely.** Do NOT display the `[u]/[a]` menu; do NOT wait for user input. Auto-select the `[a]` Auto-delegate path and proceed directly to subagent spawn.
+- **Auto-continue any post-subagent or template-output review prompts.** YOLO mode replaces every `[c]/[e]/[a]` or `[c]/[e]/[v]` interactive review prompt with an automatic continue — there must be zero user prompts between Step 4 (file write) and Step 6 (Val dispatch) (AC6).
+- **YOLO MUST NOT bypass the Step 1 existing-story-status HALT gate (AC3) nor the Step 6 3-attempt cap or terminal FAILED verdict (AC2, FR-340).** The HALT gate in Step 1 fires before the YOLO branch ever evaluates; the cap and verdict in Step 6 are unconditional.
+
+When `YOLO_MODE=false` (interactive default), proceed to the prompt below.
+
+#### Non-YOLO routing prompt
+
+Present a brief summary of what was loaded, then offer the user how to elaborate. The canonical prompt is (text below is part of the AC4 contract — do not paraphrase):
 
 ```
 How would you like to elaborate this story?
+[u] I'll answer the elaboration questions myself
 [a] Auto-delegate to PM (Derek), Architect (Theo){UX_CLAUSE}    -- recommended
-[m] Provide manual answers to a short question set
-[s] Skip elaboration (use bare epic/story summary)
 ```
 
 The `{UX_CLAUSE}` token is replaced based on the **four-rule UX detection** below:
@@ -142,12 +157,18 @@ Concretely, when `[a]` is selected:
 
 Sequential dispatch (spawn → await → spawn) is forbidden. The single-message multi-Agent-call pattern is the canonical Claude Code parallel mechanism — not a custom invention.
 
-#### Manual / skip paths
+#### `[u]` Manual elaboration path (4-question flow, AC5)
 
-- `[m]` Manual answers: walk the user through the same question scopes (PM's 3, Architect's 2, plus UX Designer's 3 if detection matched).
-- `[s]` Skip elaboration: gather no additional context; proceed to Step 4 with the bare epic/story summary.
+When the user selects `[u]`, ask exactly 4 questions in this canonical order. No additional questions, no reordering, no merging:
 
-Gather edge cases, implementation preferences, constraints, and any additional context returned by whichever path the user selected, and pass them forward to Step 4.
+1. **Edge cases.** "What edge cases should this story handle? (empty/loading/error states, boundary inputs, failure modes)"
+2. **Implementation preferences.** "Any implementation preferences or constraints? (libraries, patterns, ADRs to honor, anti-patterns to avoid)"
+3. **AC splits.** "Should any acceptance criterion be split into smaller ACs for clarity or test isolation?"
+4. **Additional context.** "Any additional context — stakeholders, integrations, or cross-team callouts — to include?"
+
+The 4 questions are exactly 4 — sized to mirror V1's `[u]` UX. Do NOT inflate the count by walking the PM/Architect/UX scopes from the `[a]` path.
+
+Gather edge cases, implementation preferences, AC splits, and additional context returned by the `[u]` flow (or by the subagents on the `[a]` path) and pass them forward to Step 4.
 
 ### Step 3b -- Edge Case Analysis (V1 pipeline restoration, E54-S4)
 
@@ -417,6 +438,8 @@ The ordering is load-bearing: review-gate.sh records the verdict that downstream
 **AC-EC6 — Val timeout / model unavailable.** If Val's `context: fork` invocation times out, crashes, or returns no response, HALT with the canonical message "Val validation could not complete: {reason}" and record the terminal verdict as UNVERIFIED via `review-gate.sh`. Never silently PASSED.
 
 **AC-EC8 / FR-340 — YOLO does not bypass the cap.** YOLO-mode invocations run the same 3-attempt loop with the same terminal verdict rules. YOLO MUST NOT override the cap and MUST NOT override a terminal FAILED verdict. On a YOLO-mode FAILED, HALT with guidance pointing to `/gaia-fix-story {story_key}`.
+
+**E54-S1 / AC6 — YOLO auto-triggers Val dispatch.** When `YOLO_MODE=true`, Step 6 dispatches Val (Component 1 above) immediately after Step 4 file write — no user prompt, no confirmation. The auto-continue applies to the dispatch trigger only; the 3-attempt cap, severity classification, terminal verdict, and HALT-on-FAILED rules are unchanged. There must be zero user prompts between Step 4 (file write) and Step 6 Val dispatch in YOLO mode.
 
 **Token budget (NFR-055).** Log per-attempt Val token usage to Dev Agent Record. Total loop overhead MUST NOT exceed 3x a single-pass Val budget.
 

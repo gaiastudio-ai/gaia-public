@@ -26,6 +26,18 @@ SCRIPT_NAME="gaia-dev-story/pr-create.sh"
 log() { printf '%s: %s\n' "$SCRIPT_NAME" "$*" >&2; }
 die() { log "$*"; exit 1; }
 
+# E55-S6 — TB-10 security invariants. Sourced from the canonical lib at
+# plugins/gaia/scripts/lib/dev-story-security-invariants.sh. Hard rule:
+# YOLO mode MUST NOT bypass these assertions.
+# shellcheck source=../../../scripts/lib/dev-story-security-invariants.sh
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+INVARIANTS_LIB="$SCRIPT_DIR/../../../scripts/lib/dev-story-security-invariants.sh"
+if [ ! -f "$INVARIANTS_LIB" ]; then
+  die "security-invariant lib missing at $INVARIANTS_LIB"
+fi
+# shellcheck disable=SC1090
+source "$INVARIANTS_LIB"
+
 if [ $# -lt 2 ]; then
   die "usage: pr-create.sh <story_key> <title> [--base <branch>]"
 fi
@@ -62,6 +74,11 @@ if [ -n "$existing_pr" ] && [ "$existing_pr" != "null" ]; then
   echo "existing:${pr_number}:${pr_url}"
   exit 0
 fi
+
+# E55-S6 — Enforce TB-10 security invariants BEFORE any push or PR creation.
+# These are hard gates; YOLO mode does not bypass.
+assert_branch_not_protected || die "aborting: protected-branch invariant failed"
+assert_no_secrets_staged || die "aborting: staged-secrets invariant failed"
 
 # Build PR body
 PR_BODY="## ${STORY_KEY}

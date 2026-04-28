@@ -79,10 +79,38 @@ If `is_yolo` returns non-zero (non-YOLO branch -- default):
   - Only an explicit `approve` response from the user advances to Step 5. Any other response (including silence) keeps the workflow halted.
   - Emit a single-line gate log to stderr (NFR-DSH-5): `step4_gate: yolo=false verdict=halted` on entry, then `step4_gate: yolo=false verdict=passed` once the user responds with approve.
 
-If `is_yolo` returns zero (YOLO branch -- E55-S1 placeholder, full loop lands in E55-S2):
+If `is_yolo` returns zero (YOLO branch):
   <!-- E55-S2: YOLO Val auto-validation loop (added by E55-S2) -->
-  - For E55-S1 this branch is a no-op pass-through to Step 5. The YOLO Val auto-validation loop semantics (`(critical|warning|info, max_iter=3)` per ADR-073) land in E55-S2.
-  - Emit a single-line gate log to stderr (NFR-DSH-5): `step4_gate: yolo=true verdict=passed`.
+  - The rendered plan auto-routes to Val for up to 3 iterations of CRITICAL+WARNING auto-fix per ADR-073. The YOLO branch MUST NOT issue any user-prompt tool call; the next tool invocation MUST be the `gaia-val-validate` skill on the rendered plan with `context: fork`. Auto-fix is inline using this skill's own `Edit`/`Write` tools (NFR-046 single-spawn-level) — no nested subagent spawn inside the loop.
+  - **T-37 path-traversal mitigation (AC5):** BEFORE constructing the audit-file path, validate `story_key` against the regex `^E[0-9]+-S[0-9]+$`. On mismatch, abort the YOLO branch with a clear error and emit no writes — never sanitize-and-continue. Reference shell idiom: `printf '%s\n' "$story_key" | grep -Eq '^E[0-9]+-S[0-9]+$'`.
+  - **Audit file (AC2):** persist findings to `_memory/checkpoints/{story_key}-yolo-plan-findings.md` on every iteration. Append per iteration — never overwrite, never truncate. Two consecutive YOLO runs on the same story append a fresh set of `## Iteration {N} — {timestamp}` sections under the existing ones; entries from prior runs MUST be preserved verbatim. Each section body is the structured findings JSON or YAML returned by Val.
+  - **Checkpoint persistence (AC4):** record the YOLO flag, the current iteration count, and the `last-findings-hash` (sha256 of the latest findings JSON) via `${CLAUDE_PLUGIN_ROOT}/scripts/append-val-iteration.sh` (which delegates to `write-checkpoint.sh`). Comparing `last-findings-hash` across iterations identifies oscillation; log stalls to the Dev Agent Record but DO NOT short-circuit the loop — the 3-iteration cap is the hard backstop.
+  - **ADR-073 canonical pseudocode (DoD documentation requirement):**
+
+```
+iteration = 0
+while iteration < 3:
+  findings = val.validate(plan)            # gaia-val-validate, severity in {CRITICAL, WARNING, INFO}
+  critical = filter(findings, severity="CRITICAL")
+  warning  = filter(findings, severity="WARNING")
+  audit_append(iteration, findings)        # _memory/checkpoints/{story_key}-yolo-plan-findings.md
+  checkpoint_record(yolo=true, iteration, sha256(findings))
+  if not critical and not warning:         # INFO-only or empty -> break (AC3)
+    break
+  apply_fixes(critical + warning)          # inline Edit/Write — no subagent spawn
+  iteration += 1
+if iteration == 3 and (critical or warning):
+  HALT with remaining findings + audit-file path -> /gaia-fix-story  # AC2 cap (FR-340)
+else:
+  proceed to Step 5
+```
+
+  - **Halt-on-exhaust behavior (AC2):** if the loop exhausts the 3-iteration cap with remaining CRITICAL or WARNING findings, HALT with an actionable message that names the remaining findings and points to `_memory/checkpoints/{story_key}-yolo-plan-findings.md`. Direct the user to `/gaia-fix-story` or to re-run with the audit file as context. YOLO MUST NOT bypass the cap (FR-340).
+  - **INFO-only break (AC3):** if Val returns INFO-only findings (or no findings) on any iteration, break the loop and proceed to Step 5 immediately — INFO findings are advisory and never gating.
+  - **Resume semantics (AC4):** when `/gaia-resume` re-enters this branch, read the checkpoint to recover yolo flag + iteration count + last-findings-hash, then re-enter the loop at the recorded iteration. If the next iteration's findings hash matches the recorded one, log the stall and continue.
+  - **No inline YOLO detection (AC6):** YOLO detection has already happened at the gate dispatch above. This branch body MUST NOT redefine or re-implement YOLO detection — single-source-of-truth per ADR-057 / ADR-073. The branch is selected by the surrounding gate; the body simply consumes the verdict.
+  - **Soft dependency on E41-S5 (`yolo_steps:` wiring):** if E41-S5 has landed, the per-step YOLO list selects this branch via the wired entry point; if not, this branch is reached via the script-call fallback at the gate dispatch above — never inline.
+  - Emit a single-line gate log to stderr per iteration (NFR-DSH-5): `step4_gate: yolo=true iteration={N} outcome={clean|info_only|findings_present}` (the `outcome` enum mirrors `append-val-iteration.sh --revalidation-outcome`). On loop exit emit a terminal verdict: `step4_gate: yolo=true verdict=passed` when the loop broke on clean / info_only, or `step4_gate: yolo=true verdict=halted` when the 3-iteration cap was reached with remaining CRITICAL or WARNING findings.
 
 Backward-compatibility note (NFR-DSH-3): a resumed in-progress story with no Step 4 gate-clearance record on the checkpoint is treated as "halt not yet presented" and re-issues the halt -- it does NOT silently advance to Step 5.
 

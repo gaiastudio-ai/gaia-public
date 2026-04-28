@@ -52,9 +52,102 @@ This skill is the native Claude Code conversion of the legacy create-story workf
 
 ### Step 3 -- Elaborate Story
 
-- Present a brief summary of what was loaded.
-- Ask the user how to elaborate (manual answers or auto-delegation to PM/Architect subagents).
-- Gather edge cases, implementation preferences, constraints, and additional context.
+Present a brief summary of what was loaded, then offer the user how to elaborate. The canonical prompt is:
+
+```
+How would you like to elaborate this story?
+[a] Auto-delegate to PM (Derek), Architect (Theo){UX_CLAUSE}    -- recommended
+[m] Provide manual answers to a short question set
+[s] Skip elaboration (use bare epic/story summary)
+```
+
+The `{UX_CLAUSE}` token is replaced based on the **four-rule UX detection** below:
+
+- When any rule matches: `, and UX Designer (Christy)`
+- When no rule matches: `` (empty string — the `[a]` line **omits** the "and UX Designer" clause)
+
+Concrete examples:
+
+- UX match → `[a] Auto-delegate to PM (Derek), Architect (Theo), and UX Designer (Christy)`
+- No UX match → `[a] Auto-delegate to PM (Derek) and Architect (Theo)`
+
+#### Four-rule UX detection
+
+Run all four rules. Any rule matching → spawn UX Designer. No rule matching → omit UX Designer (backend-only path).
+
+**Rule #1 — `figma:` frontmatter block (definitive signal).** Parse the story frontmatter and check for a top-level `figma:` key. Presence is a hard match.
+
+**Rule #2 — UI/UX terms in description or AC text.** Case-insensitive substring match against the UI_TERMS list:
+
+```
+screen | page | modal | form | button | navigation | wizard | flow |
+interaction | accessibility | responsive | mobile view | design
+```
+
+Treat `flow` carefully: prefer word-boundary regex and exclude `data flow` / `control flow` to avoid false positives in backend stories.
+
+**Rule #3 — Epic UX classification.** The epic this story belongs to has a UX-tagged classification in `epics-and-stories.md` (look for an explicit `tags:` or `classification:` line on the epic).
+
+**Rule #4 — `ux-design.md` references the epic.** `docs/planning-artifacts/ux-design.md` exists AND the story's epic key is referenced inside that file. If the file is missing (the common case for early-stage projects), rule #4 must **skip cleanly** — no error, no halt — and rules 1-3 still evaluate. Use a file-exists guard (`[ -f "$UX_DESIGN_MD" ]`).
+
+**Detection pseudocode** (telemetry-friendly; runs all rules for observability):
+
+```
+ux_match = false
+rule_fired = []
+if frontmatter has 'figma:' key:                       ux_match=true; rule_fired += "rule1"
+if description or any AC contains UI_TERMS (case-insensitive): ux_match=true; rule_fired += "rule2"
+if epic in epics-and-stories.md has UX classification: ux_match=true; rule_fired += "rule3"
+if file_exists(ux-design.md) and grep -q "$EPIC_KEY" ux-design.md: ux_match=true; rule_fired += "rule4"
+log "ux_detection: match=${ux_match} rules=${rule_fired[*]}"
+```
+
+A story matching multiple rules still results in **a single UX Designer spawn** — priority order matters for telemetry only. Always log which rule(s) fired.
+
+#### Subagent contracts
+
+When the user picks `[a]`, dispatch the selected subagents with the contracts below.
+
+**PM (Derek) — `gaia:pm`.** Always spawned on `[a]`.
+- Loads: `docs/planning-artifacts/epics-and-stories.md`, `docs/planning-artifacts/prd.md`, `docs/planning-artifacts/ux-design.md` (when present).
+- Answers 3 questions: (Q1) edge cases from a product/stakeholder lens; (Q2) AC prioritization (must-have vs nice-to-have); (Q3) stakeholder notes / cross-team callouts.
+
+**Architect (Theo) — `gaia:architect`.** Always spawned on `[a]`.
+- Loads: `docs/planning-artifacts/architecture.md`, `docs/planning-artifacts/test-plan.md`, `docs/planning-artifacts/epics-and-stories.md`.
+- Answers 2 questions: (Q1) implementation constraints (ADRs, patterns, tech choices); (Q2) technical dependencies (other modules, services, libraries).
+
+**UX Designer (Christy) — `gaia:ux-designer`.** Spawned on `[a]` ONLY when the four-rule UX detection matches. NOT spawned for backend-only stories.
+- Loads: `docs/planning-artifacts/ux-design.md` (when present), `docs/planning-artifacts/epics-and-stories.md`, the story frontmatter (including any `figma:` block).
+- Answers exactly 3 questions: (Q1) UX edge cases — empty, loading, error, no-data, offline states; (Q2) accessibility — keyboard navigation, screen-reader support, color contrast, ARIA semantics; (Q3) interaction patterns — which design-system components/patterns to reuse vs build custom.
+
+PM still loads `ux-design.md` even when UX Designer is also spawned — this is intentional. PM brings stakeholder context; UX Designer brings design-system expertise. The question scopes do not overlap.
+
+#### Parallel spawn protocol — single message, multiple Agent calls
+
+```
++-----------------------------------------------------------+
+| HARD CONSTRAINT                                            |
+| All selected subagents MUST be spawned in a SINGLE message |
+| containing multiple Agent tool calls — true parallel,      |
+| NOT sequential. This is the canonical Claude Code parallel |
+| pattern. Do NOT spawn one, await its return, then spawn    |
+| the next — that is sequential and violates AC6.            |
++-----------------------------------------------------------+
+```
+
+Concretely, when `[a]` is selected:
+
+- Backend-only story (no UX match): emit ONE assistant message containing TWO Agent tool calls — PM and Architect — invoked in parallel.
+- UX-scoped story (any rule matches): emit ONE assistant message containing THREE Agent tool calls — PM, Architect, and UX Designer — invoked in parallel.
+
+Sequential dispatch (spawn → await → spawn) is forbidden. The single-message multi-Agent-call pattern is the canonical Claude Code parallel mechanism — not a custom invention.
+
+#### Manual / skip paths
+
+- `[m]` Manual answers: walk the user through the same question scopes (PM's 3, Architect's 2, plus UX Designer's 3 if detection matched).
+- `[s]` Skip elaboration: gather no additional context; proceed to Step 4 with the bare epic/story summary.
+
+Gather edge cases, implementation preferences, constraints, and any additional context returned by whichever path the user selected, and pass them forward to Step 4.
 
 ### Step 4 -- Generate Story File
 

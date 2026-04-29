@@ -1,0 +1,204 @@
+#!/usr/bin/env bash
+# validate-canonical-filename.sh — gaia-create-story Step 6 deterministic
+#                                  filename-drift check (E63-S4 / Work Item 6.10)
+#
+# Purpose:
+#   Verify a story file's basename equals `{key}-{slugify(title)}.md` by
+#   reading frontmatter (`key`, `title`) and slugifying the title via the
+#   sibling `slugify.sh` (E63-S1). Surfaces filename drift deterministically
+#   BEFORE Val dispatch in Step 6 of /gaia-create-story, saving Val tokens
+#   on the trivial mismatch class.
+#
+# Consumers:
+#   - /gaia-create-story Step 6 — pre-Val deterministic sweep
+#   - E63-S5 validate-frontmatter.sh — folds this check in per source spec
+#     6.10 integration note (rather than duplicating slug-comparison logic).
+#
+# Contract source:
+#   - docs/planning-artifacts/feature-create-story-hardening.md#Work-Item-6.10
+#   - docs/planning-artifacts/architecture.md §Decision Log — ADR-074
+#     (deterministic-script lift)
+#   - Sibling: gaia-public/plugins/gaia/skills/gaia-create-story/scripts/slugify.sh
+#
+# Algorithm (in order):
+#   1. Parse CLI: `--file <path>` (single required flag).
+#   2. Resolve sibling `slugify.sh` via `$(dirname BASH_SOURCE)/slugify.sh`.
+#      Error if missing or non-executable.
+#   3. Verify the target file is readable.
+#   4. Extract YAML frontmatter (block between the first two `---` lines).
+#      Error 1 if no frontmatter is present.
+#   5. Parse `key` and `title` from frontmatter (quote-tolerant: handles
+#      `"x"`, `'x'`, and bare `x`). Error 1 if either is missing.
+#   6. Compute `expected_basename = ${key}-$(slugify --title ${title}).md`.
+#   7. Compare to the actual basename. Exit 0 on match.
+#   8. On mismatch, emit one stderr line and exit 2.
+#
+# Exit codes:
+#   0 — basename matches the canonical form
+#   1 — usage error, missing file, missing frontmatter, missing required
+#       field, or sibling-script resolution failure
+#   2 — filename drift (canonical "validation found issue" code)
+#
+# Stderr discipline:
+#   Emit ONE single-line message and exit. The caller decides whether to
+#   aggregate findings.
+#
+# Locale invariance:
+#   `LC_ALL=C` is set so awk/grep/sed character classes are byte-level and
+#   identical on macOS BSD and Linux GNU.
+
+set -euo pipefail
+LC_ALL=C
+export LC_ALL
+
+SCRIPT_NAME="validate-canonical-filename.sh"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SLUGIFY="${SCRIPT_DIR}/slugify.sh"
+
+usage() {
+  cat >&2 <<'USAGE'
+Usage: validate-canonical-filename.sh --file <story-file>
+
+  --file <path>  Path to a story file. Required.
+
+Verifies that basename(<story-file>) equals "{key}-{slug(title)}.md", where
+key and title are parsed from YAML frontmatter and slug is computed by the
+sibling slugify.sh script.
+
+Exit codes:
+  0 — basename matches
+  1 — usage error, missing file, missing frontmatter / required field,
+      or sibling slugify.sh missing
+  2 — filename drift (basename does not match the canonical form)
+USAGE
+}
+
+log() { printf '%s: %s\n' "$SCRIPT_NAME" "$*" >&2; }
+die_usage() { log "$*"; usage; exit 1; }
+die_input() { log "$*"; exit 1; }
+die_drift() { log "$*"; exit 2; }
+
+# ---------- CLI parsing ----------
+
+file=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --file)
+      [ $# -ge 2 ] || die_usage "--file requires a value"
+      file="$2"; shift 2 ;;
+    -h|--help)
+      usage; exit 0 ;;
+    *)
+      die_usage "unknown argument: $1" ;;
+  esac
+done
+
+[ -n "$file" ] || die_usage "--file is required"
+[ -r "$file" ] || die_input "file not readable: $file"
+
+# ---------- Sibling slugify.sh resolution ----------
+
+if [ ! -f "$SLUGIFY" ]; then
+  die_input "sibling script slugify.sh not found at: $SLUGIFY"
+fi
+if [ ! -x "$SLUGIFY" ]; then
+  die_input "sibling script slugify.sh is not executable: $SLUGIFY"
+fi
+
+# ---------- Frontmatter extraction ----------
+#
+# Extract the block between the first two `---` lines using an awk state
+# machine (not a range pattern — see gaia-shell-idioms for the awk range-bug
+# rationale). The script tolerates leading blank lines before the opening
+# fence but requires the fence to be `---` on its own line (the standard
+# YAML frontmatter convention used by every story file in this repo).
+#
+# Single-pass design: stdout carries the frontmatter body, exit status
+# carries the validity verdict (0 = closed cleanly, 4 = never opened or
+# never closed). Bash's `set -e` would otherwise kill the script on the
+# non-zero awk exit, so we capture the status via a `|| status=$?` idiom
+# before evaluating it.
+
+fm_status=0
+frontmatter="$(awk '
+  BEGIN { state = 0 }
+  {
+    if (state == 0) {
+      if ($0 == "---") { state = 1; next }
+      # Allow leading blank lines before the opening fence; any non-blank,
+      # non-fence line means the file has no frontmatter.
+      if ($0 ~ /^[[:space:]]*$/) next
+      state = 2
+      exit
+    }
+    if (state == 1) {
+      if ($0 == "---") { state = 3; exit }
+      print
+    }
+  }
+  END {
+    # state 3 = closed cleanly. state 1 = opened but never closed.
+    # state 2 = never opened. state 0 = empty file. The script surfaces
+    # everything except state 3 as "no frontmatter" — repairing malformed
+    # files is out of scope.
+    if (state == 3) exit 0
+    exit 4
+  }
+' "$file")" || fm_status=$?
+
+if [ "$fm_status" -ne 0 ]; then
+  die_input "no frontmatter found in: $file"
+fi
+
+# ---------- Field extraction (quote-tolerant) ----------
+#
+# Match `^<label>:[[:space:]]+<value>$` (allowing optional whitespace).
+# Strip a single pair of surrounding double or single quotes from the value.
+# Trim trailing whitespace.
+
+extract_field() {
+  local label="$1" raw value
+  raw="$(printf '%s\n' "$frontmatter" | awk -v lab="$label" '
+    {
+      pat = "^" lab ":[[:space:]]*"
+      if (match($0, pat)) {
+        v = substr($0, RSTART + RLENGTH)
+        # Trim trailing whitespace.
+        sub(/[[:space:]]+$/, "", v)
+        print v
+        exit
+      }
+    }
+  ')"
+  # Strip surrounding double or single quotes if present.
+  case "$raw" in
+    \"*\") value="${raw#\"}"; value="${value%\"}" ;;
+    \'*\') value="${raw#\'}"; value="${value%\'}" ;;
+    *) value="$raw" ;;
+  esac
+  printf '%s' "$value"
+}
+
+key="$(extract_field "key")"
+title="$(extract_field "title")"
+
+[ -n "$key" ]   || die_input "missing field 'key' in frontmatter of: $file"
+[ -n "$title" ] || die_input "missing field 'title' in frontmatter of: $file"
+
+# ---------- Compute expected basename ----------
+
+slug=""
+if ! slug="$("$SLUGIFY" --title "$title" 2>/dev/null)"; then
+  die_input "slugify.sh failed for title: $title"
+fi
+
+expected_basename="${key}-${slug}.md"
+actual_basename="$(basename "$file")"
+
+# ---------- Compare ----------
+
+if [ "$expected_basename" = "$actual_basename" ]; then
+  exit 0
+fi
+
+die_drift "filename drift -- expected '${expected_basename}', got '${actual_basename}'"

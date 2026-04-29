@@ -303,3 +303,115 @@ performance-review"
   fixtures_hash_after=$(find "$FIXTURES_DIR" -type f -exec shasum {} \; | sort)
   [ "$fixtures_hash_before" = "$fixtures_hash_after" ]
 }
+
+# ---------- E58-S5: dead-code regression + true orchestration harness ----------
+
+# AC1 (TC-RAR-13): the dead `echo "PASSED"` path at lines 172-176 is gone.
+# The only literal `echo "PASSED"` left in the file MUST be inside the
+# mock-mode branch of run_reviewer().
+@test "E58-S5 AC1: dead PASSED echo removed; only one mock-branch occurrence remains" {
+  local count
+  count=$(grep -cE '^[[:space:]]*echo "PASSED"$' "$SCRIPTS_DIR/review-runner.sh")
+  [ "$count" -eq 1 ]
+}
+
+# Helper: stub a sibling script ("$1") to append a tag ("$2") to a trace file.
+# The stub overrides the real script via env-var override (REVIEW_*_SCRIPT).
+seed_orchestration_trace_stubs() {
+  local stub_dir="$TEST_TMP/orch-stubs"
+  mkdir -p "$stub_dir"
+
+  # Skip-check stub: emits all-run JSON and traces "skip-check"
+  cat > "$stub_dir/review-skip-check.sh" <<MOCK
+#!/usr/bin/env bash
+echo "skip-check" >> "$TEST_TMP/orch-trace.txt"
+echo '{"skip":[],"run":["code-review","qa-tests","security-review","test-automate","test-review","review-perf"]}'
+exit 0
+MOCK
+  chmod +x "$stub_dir/review-skip-check.sh"
+
+  # Summary-gen stub
+  cat > "$stub_dir/review-summary-gen.sh" <<MOCK
+#!/usr/bin/env bash
+echo "summary-gen" >> "$TEST_TMP/orch-trace.txt"
+echo "/tmp/fake-summary.md"
+exit 0
+MOCK
+  chmod +x "$stub_dir/review-summary-gen.sh"
+
+  # Nudge stub
+  cat > "$stub_dir/review-nudge.sh" <<MOCK
+#!/usr/bin/env bash
+echo "nudge" >> "$TEST_TMP/orch-trace.txt"
+exit 0
+MOCK
+  chmod +x "$stub_dir/review-nudge.sh"
+
+  export REVIEW_SKIP_CHECK_SCRIPT="$stub_dir/review-skip-check.sh"
+  export REVIEW_SUMMARY_GEN_SCRIPT="$stub_dir/review-summary-gen.sh"
+  export REVIEW_NUDGE_SCRIPT="$stub_dir/review-nudge.sh"
+}
+
+# AC2 (TC-RAR-14): mock-mode orchestration order must be:
+#   skip-check -> 6x (judgment + gate-write) -> summary-gen -> nudge.
+@test "E58-S5 AC2: MOCK_VERDICTS orchestration order matches contract" {
+  install_fixture
+  seed_orchestration_trace_stubs
+
+  : > "$TEST_TMP/orch-trace.txt"
+  export MOCK_MODE=true
+  export MOCK_VERDICTS="PASS,PASS,PASS,PASS,PASS,PASS"
+
+  run "$SCRIPTS_DIR/review-runner.sh" "C9-FIXTURE"
+  [ "$status" -eq 0 ]
+
+  # Trace must record skip-check first, summary-gen second-to-last, nudge last.
+  local trace
+  trace=$(cat "$TEST_TMP/orch-trace.txt")
+  [ "$(echo "$trace" | head -1)" = "skip-check" ]
+  [ "$(echo "$trace" | tail -2 | head -1)" = "summary-gen" ]
+  [ "$(echo "$trace" | tail -1)" = "nudge" ]
+}
+
+# AC4 / AC-EC3 (ECI-668): a CRASH sentinel in MOCK_VERDICTS must produce a
+# FAILED gate row for the crashing slot AND let the run continue to the
+# remaining reviewers, each recording their own verdict.
+@test "E58-S5 AC4: CRASH sentinel writes FAILED row and run continues" {
+  install_fixture
+  seed_orchestration_trace_stubs
+
+  : > "$TEST_TMP/orch-trace.txt"
+  export MOCK_MODE=true
+  export MOCK_VERDICTS="PASS,CRASH,PASS,PASS,PASS,PASS"
+
+  run "$SCRIPTS_DIR/review-runner.sh" "C9-FIXTURE"
+  # Exit non-zero because at least one reviewer FAILED.
+  [ "$status" -ne 0 ]
+
+  # Reviewer #2 in canonical order is security-review (the run order matches
+  # REVIEWER_SKILLS in review-runner.sh: code-review, security-review, ...).
+  run "$SCRIPTS_DIR/review-gate.sh" status --story "C9-FIXTURE"
+  [ "$status" -eq 0 ]
+  echo "$output" | jq -e '.gates["Code Review"] == "PASSED"'
+  echo "$output" | jq -e '.gates["Security Review"] == "FAILED"'
+  echo "$output" | jq -e '.gates["QA Tests"] == "PASSED"'
+  echo "$output" | jq -e '.gates["Test Automation"] == "PASSED"'
+  echo "$output" | jq -e '.gates["Test Review"] == "PASSED"'
+  echo "$output" | jq -e '.gates["Performance Review"] == "PASSED"'
+}
+
+# AC-EC1: MOCK_MODE=true with MOCK_VERDICTS unset must error clearly with a
+# non-zero exit AND a stderr message naming MOCK_VERDICTS as required. The
+# guard runs before any per-reviewer iteration begins.
+@test "E58-S5 AC-EC1: MOCK_MODE without MOCK_VERDICTS errors with actionable stderr" {
+  install_fixture
+  seed_orchestration_trace_stubs
+
+  unset MOCK_VERDICTS
+  export MOCK_MODE=true
+
+  run "$SCRIPTS_DIR/review-runner.sh" "C9-FIXTURE"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"MOCK_VERDICTS"* ]]
+  [[ "$output" == *"required"* ]]
+}

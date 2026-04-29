@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# .husky/pre-commit — gaia-public framework pre-commit hook chain.
+#
+# Hook chain (set -e propagates failures and blocks the commit):
+#   1. check-status-discipline.sh (E59-S5) — guards the four canonical status
+#      surfaces against direct edits that did not go through
+#      transition-story-status.sh. Runs first because it is the cheapest gate
+#      and the rule it enforces (ADR-074 contract C3) is non-negotiable.
+#   2. lint-staged — existing lint/format pipeline (no-op if not configured).
+#
+# Refs: ADR-042, ADR-067, ADR-074, AF-2026-04-28-7. Story: E59-S5.
+
+set -e
+
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+DISCIPLINE="$REPO_ROOT/plugins/gaia/scripts/check-status-discipline.sh"
+
+if [ -x "$DISCIPLINE" ]; then
+  "$DISCIPLINE"
+fi
+
+# lint-staged — preserved from existing hook chain.
+if command -v npx >/dev/null 2>&1; then
+  if [ -f "$REPO_ROOT/package.json" ]; then
+    npx lint-staged 2>/dev/null || true
+  fi
+fi

@@ -245,3 +245,112 @@ MOCK
   # Story file should still say review, not done
   grep -q "status: review" "$ART/E99-S1-fake.md"
 }
+
+# ---------- E58-S5: new helper coverage (NFR-052 public-fn coverage gate) ----------
+#
+# Each new helper added by E58-S5 is exercised by an end-to-end script
+# invocation that reaches the helper's code path. The bats suite is the
+# single source of truth for the behavior; these tests name each helper
+# explicitly so the public-fn coverage gate (run-with-coverage.sh) recognizes
+# them as covered.
+
+# mock_verdict_for_index — exercised by every MOCK_VERDICTS run.
+@test "E58-S5 mock_verdict_for_index: PASS token returns PASSED verdict" {
+  seed_story "E99-S1"
+  export MOCK_MODE=true
+  export MOCK_VERDICTS="PASS,PASS,PASS,PASS,PASS,PASS"
+  run "$SCRIPT" "E99-S1"
+  [ "$status" -eq 0 ]
+  # 6 PASSED rows in the gate log
+  local count
+  count=$(grep -c "PASSED" "$GATE_LOG")
+  [ "$count" -eq 6 ]
+}
+
+# assert_mock_verdicts_when_mock_mode — guard fires before any iteration.
+@test "E58-S5 assert_mock_verdicts_when_mock_mode: missing MOCK_VERDICTS exits non-zero" {
+  seed_story "E99-S1"
+  unset MOCK_VERDICTS
+  export MOCK_MODE=true
+  run "$SCRIPT" "E99-S1"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"MOCK_VERDICTS"* ]]
+}
+
+# run_skip_check + is_skipped — when REVIEW_SKIP_CHECK_SCRIPT skips a reviewer,
+# the loop skips it and emits no gate row for that reviewer in the log.
+@test "E58-S5 run_skip_check + is_skipped: skipped reviewers are omitted from the loop" {
+  seed_story "E99-S1"
+  local stub_dir="$TEST_TMP/orch-stubs"
+  mkdir -p "$stub_dir"
+  cat > "$stub_dir/skip-check" <<MOCK
+#!/usr/bin/env bash
+echo '{"skip":["code-review"],"run":["security-review","qa-tests","test-automate","test-review","review-perf"]}'
+exit 0
+MOCK
+  chmod +x "$stub_dir/skip-check"
+  export REVIEW_SKIP_CHECK_SCRIPT="$stub_dir/skip-check"
+  export MOCK_MODE=true
+  export MOCK_VERDICTS="PASS,PASS,PASS,PASS,PASS,PASS"
+
+  run "$SCRIPT" "E99-S1"
+  [ "$status" -eq 0 ]
+  # Code Review row was skipped — only 5 gate writes.
+  local count
+  count=$(wc -l < "$GATE_LOG")
+  [ "$count" -eq 5 ]
+  ! grep -q "Code Review" "$GATE_LOG"
+}
+
+# run_summary_gen — soft-dep call site. Stub returns 0 so no warning fires.
+@test "E58-S5 run_summary_gen: stub is invoked after the per-reviewer loop" {
+  seed_story "E99-S1"
+  local stub_dir="$TEST_TMP/orch-stubs"
+  mkdir -p "$stub_dir"
+  cat > "$stub_dir/summary-gen" <<MOCK
+#!/usr/bin/env bash
+echo "summary-gen called" > "$TEST_TMP/summary-gen-trace.txt"
+exit 0
+MOCK
+  chmod +x "$stub_dir/summary-gen"
+  export REVIEW_SUMMARY_GEN_SCRIPT="$stub_dir/summary-gen"
+  export MOCK_MODE=true
+  export MOCK_VERDICTS="PASS,PASS,PASS,PASS,PASS,PASS"
+
+  run "$SCRIPT" "E99-S1"
+  [ "$status" -eq 0 ]
+  [ -f "$TEST_TMP/summary-gen-trace.txt" ]
+}
+
+# run_nudge — soft-dep call site. Stub returns 0 so no warning fires.
+@test "E58-S5 run_nudge: stub is invoked after summary-gen" {
+  seed_story "E99-S1"
+  local stub_dir="$TEST_TMP/orch-stubs"
+  mkdir -p "$stub_dir"
+  cat > "$stub_dir/nudge" <<MOCK
+#!/usr/bin/env bash
+echo "nudge called" > "$TEST_TMP/nudge-trace.txt"
+exit 0
+MOCK
+  chmod +x "$stub_dir/nudge"
+  export REVIEW_NUDGE_SCRIPT="$stub_dir/nudge"
+  export MOCK_MODE=true
+  export MOCK_VERDICTS="PASS,PASS,PASS,PASS,PASS,PASS"
+
+  run "$SCRIPT" "E99-S1"
+  [ "$status" -eq 0 ]
+  [ -f "$TEST_TMP/nudge-trace.txt" ]
+}
+
+# resolve_soft_dep_script — exercised twice above (run_summary_gen + run_nudge);
+# this test names the helper explicitly to satisfy the coverage gate.
+@test "E58-S5 resolve_soft_dep_script: returns empty for unconfigured soft-dep" {
+  seed_story "E99-S1"
+  unset REVIEW_SUMMARY_GEN_SCRIPT REVIEW_NUDGE_SCRIPT REVIEW_RUNNER_USE_SUMMARY_GEN REVIEW_RUNNER_USE_NUDGE
+  export MOCK_MODE=true
+  export MOCK_VERDICTS="PASS,PASS,PASS,PASS,PASS,PASS"
+  run "$SCRIPT" "E99-S1"
+  # Without override AND without opt-in, soft-dep calls are silent no-ops.
+  [ "$status" -eq 0 ]
+  ! grep -q "WARNING" <<< "$output"
+}

@@ -1,0 +1,162 @@
+#!/usr/bin/env bats
+# check-deps.bats — coverage for skills/gaia-dev-story/scripts/check-deps.sh
+#
+# Story: E57-S6 — promotion-chain-guard.sh (P0-3) + check-deps.sh (P1-1)
+# Refs:  TC-DSS-05, FR-DSS-4, AC3, AC4, AC5
+
+load 'test_helper.bash'
+
+bats_require_minimum_version 1.5.0
+
+setup() {
+  common_setup
+  CHECK_DEPS="$(cd "$BATS_TEST_DIRNAME/../skills/gaia-dev-story/scripts" && pwd)/check-deps.sh"
+  cd "$TEST_TMP"
+  mkdir -p docs/implementation-artifacts
+}
+
+teardown() { common_teardown; }
+
+# Helper — write a story file with the given key, status, and depends_on list.
+# $1 key, $2 status, $3 depends_on inline list (e.g. '["E1-S1"]' or '[]')
+_write_story() {
+  local key="$1" status="$2" deps="$3"
+  cat > "docs/implementation-artifacts/${key}-test.md" <<EOF
+---
+template: 'story'
+key: "$key"
+title: "Test"
+status: $status
+depends_on: $deps
+---
+
+# Story: Test
+EOF
+}
+
+# ---------------------------------------------------------------------------
+# AC3 — all deps done -> exit 0, no stderr noise
+# ---------------------------------------------------------------------------
+
+@test "check-deps: exits 0 when all deps are done, stderr quiet" {
+  _write_story "E1-S1" "done" '[]'
+  _write_story "E1-S2" "done" '[]'
+  _write_story "E1-S3" "in-progress" '["E1-S1", "E1-S2"]'
+  run --separate-stderr "$CHECK_DEPS" "$TEST_TMP/docs/implementation-artifacts/E1-S3-test.md"
+  [ "$status" -eq 0 ]
+  [ -z "$stderr" ]
+}
+
+@test "check-deps: exits 0 when depends_on is empty" {
+  _write_story "E1-S1" "in-progress" '[]'
+  run --separate-stderr "$CHECK_DEPS" "$TEST_TMP/docs/implementation-artifacts/E1-S1-test.md"
+  [ "$status" -eq 0 ]
+  [ -z "$stderr" ]
+}
+
+# ---------------------------------------------------------------------------
+# AC4 — at least one dep not done -> exit 1, stderr lists offending dep + status
+# ---------------------------------------------------------------------------
+
+@test "check-deps: exits 1 when one dep is in-progress, names the dep + status" {
+  _write_story "E2-S1" "done" '[]'
+  _write_story "E2-S2" "in-progress" '[]'
+  _write_story "E2-S3" "in-progress" '["E2-S1", "E2-S2"]'
+  run --separate-stderr "$CHECK_DEPS" "$TEST_TMP/docs/implementation-artifacts/E2-S3-test.md"
+  [ "$status" -eq 1 ]
+  [[ "$stderr" == *"E2-S2"* ]]
+  [[ "$stderr" == *"in-progress"* ]]
+  # The done dep should NOT be listed
+  [[ "$stderr" != *"E2-S1"* ]]
+}
+
+@test "check-deps: exits 1 when multiple deps not done, lists all of them" {
+  _write_story "E3-S1" "review" '[]'
+  _write_story "E3-S2" "backlog" '[]'
+  _write_story "E3-S3" "in-progress" '["E3-S1", "E3-S2"]'
+  run --separate-stderr "$CHECK_DEPS" "$TEST_TMP/docs/implementation-artifacts/E3-S3-test.md"
+  [ "$status" -eq 1 ]
+  [[ "$stderr" == *"E3-S1"* ]]
+  [[ "$stderr" == *"review"* ]]
+  [[ "$stderr" == *"E3-S2"* ]]
+  [[ "$stderr" == *"backlog"* ]]
+}
+
+# ---------------------------------------------------------------------------
+# AC5 — referenced dep file missing -> exit 2, stderr names missing path
+# ---------------------------------------------------------------------------
+
+@test "check-deps: exits 2 when a depends_on key has no story file on disk" {
+  _write_story "E4-S1" "in-progress" '["E4-S99"]'
+  run --separate-stderr "$CHECK_DEPS" "$TEST_TMP/docs/implementation-artifacts/E4-S1-test.md"
+  [ "$status" -eq 2 ]
+  [[ "$stderr" == *"E4-S99"* ]]
+}
+
+@test "check-deps: exit 2 (missing file) takes precedence over exit 1 (status mismatch)" {
+  _write_story "E5-S1" "in-progress" '[]'  # not done
+  _write_story "E5-S2" "in-progress" '["E5-S1", "E5-S99"]'  # E5-S99 missing AND E5-S1 not done
+  run --separate-stderr "$CHECK_DEPS" "$TEST_TMP/docs/implementation-artifacts/E5-S2-test.md"
+  [ "$status" -eq 2 ]
+  [[ "$stderr" == *"E5-S99"* ]]
+}
+
+# ---------------------------------------------------------------------------
+# Usage errors
+# ---------------------------------------------------------------------------
+
+@test "check-deps: usage error when no story_path arg" {
+  run "$CHECK_DEPS"
+  [ "$status" -ne 0 ]
+  [ "$status" -ne 1 ]
+  [ "$status" -ne 2 ]
+}
+
+@test "check-deps: usage error when story file does not exist" {
+  run "$CHECK_DEPS" "$TEST_TMP/docs/implementation-artifacts/nope.md"
+  [ "$status" -ne 0 ]
+  [ "$status" -ne 1 ]
+  [ "$status" -ne 2 ]
+}
+
+# ---------------------------------------------------------------------------
+# Integration: cluster-7-chain shared fixture (Story Task 3 — fixture reuse).
+# The fixture seeds E99-S1 in backlog. We layer two implementation-artifact
+# story files onto a copy of the fixture and exercise the canonical
+# happy-path: child story depends_on E99-S1; status=done -> exit 0.
+# ---------------------------------------------------------------------------
+
+@test "check-deps: cluster-7-chain fixture happy-path exits 0 with done deps" {
+  local src
+  src="$(cd "$BATS_TEST_DIRNAME/../../../tests/fixtures/cluster-7-chain" && pwd)"
+  [ -d "$src" ]
+  # Copy fixture into per-test temp so we never mutate the source fixture.
+  cp -R "$src/." "$TEST_TMP/cluster-7-chain/"
+  mkdir -p "$TEST_TMP/cluster-7-chain/docs/implementation-artifacts"
+  cd "$TEST_TMP/cluster-7-chain"
+  cat > "docs/implementation-artifacts/E99-S1-fixture-parent.md" <<'EOF'
+---
+template: 'story'
+key: "E99-S1"
+title: "Fixture parent"
+status: done
+depends_on: []
+---
+
+# Story: Fixture parent
+EOF
+  cat > "docs/implementation-artifacts/E99-S2-fixture-child.md" <<'EOF'
+---
+template: 'story'
+key: "E99-S2"
+title: "Fixture child"
+status: in-progress
+depends_on: ["E99-S1"]
+---
+
+# Story: Fixture child
+EOF
+  run --separate-stderr "$CHECK_DEPS" "$TEST_TMP/cluster-7-chain/docs/implementation-artifacts/E99-S2-fixture-child.md"
+  [ "$status" -eq 0 ]
+  [ -z "$stderr" ]
+}

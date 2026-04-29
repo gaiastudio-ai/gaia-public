@@ -152,7 +152,7 @@ Based on dashboard findings, present specific next-step commands:
 - If INFRASTRUCTURE debt dominates: `Run /gaia-ci-setup to close CI/CD gaps`.
 - If items were auto-escalated: `Review escalated items — aging has upgraded their priority`.
 
-For each FIX NOW + OVERDUE item, append to `docs/implementation-artifacts/action-items.yaml` (if not already tracked) with fields:
+For each FIX NOW + OVERDUE item, append to `docs/planning-artifacts/action-items.yaml` (canonical location per architecture §10.28.6 / ADR-052; reconciled in E36-S4) (if not already tracked) with fields:
 `type: "implementation"`, `priority: "high"`, `status: "open"`, `source_workflow: "tech-debt-review"`, `source_sprint: {sprint_id}`, `title: "{debt item description}"`, `related_stories: [{target story if exists}]`. Check existing action items by title similarity to avoid duplicates.
 
 ### Step 7 — Save to Val Memory

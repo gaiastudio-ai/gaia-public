@@ -319,6 +319,15 @@ while [ $# -gt 0 ]; do
       # for the resolved sizing_map block (project > global precedence per
       # ADR-074 contract C1 / ADR-044 §10.26.3).
       POSITIONAL_QUERY="sizing_map"; shift ;;
+    planning_artifacts|implementation_artifacts|test_artifacts|creative_artifacts)
+      # E60-S2 — positional flat-key query for the four artifact-path
+      # keys added by E60-S1. Emits ONLY the resolved scalar to stdout
+      # with exit 0 (per Work Item 2 AC2 / story Test Scenarios #1–#5).
+      # Project-config.yaml override beats the framework default per
+      # ADR-044 §10.26.3 (project > global). Mirrors the sizing_map
+      # positional-query pattern but returns a single value (flat key,
+      # not a block).
+      POSITIONAL_QUERY="$1"; shift ;;
     *)
       die "unknown argument: $1" ;;
   esac
@@ -639,6 +648,13 @@ if [ -n "$POSITIONAL_QUERY" ]; then
       printf 'L=%s\n' "$v_sizing_map_L"
       printf 'XL=%s\n' "$v_sizing_map_XL"
       ;;
+    # E60-S2 — flat artifact-path keys emit ONLY the resolved scalar
+    # (single line, trailing newline). Order matches the canonical
+    # E60-S1 schema block: planning, implementation, test, creative.
+    planning_artifacts)       printf '%s\n' "$v_planning_artifacts" ;;
+    implementation_artifacts) printf '%s\n' "$v_implementation_artifacts" ;;
+    test_artifacts)           printf '%s\n' "$v_test_artifacts" ;;
+    creative_artifacts)       printf '%s\n' "$v_creative_artifacts" ;;
     *)
       die "unknown positional query: '$POSITIONAL_QUERY'" ;;
   esac

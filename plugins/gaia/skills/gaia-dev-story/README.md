@@ -44,7 +44,7 @@ To add PostToolUse hooks to another skill:
 | `setup.sh` | Config resolution, gate validation, checkpoint load |
 | `finalize.sh` | Terminal checkpoint write, lifecycle event |
 | `load-story.sh` | Story file lookup via sprint-state.sh |
-| `update-story-status.sh` | Story status transitions |
+| `transition-story-status.sh` | Story status transitions (atomic four-surface writer) |
 | `git-branch.sh` | Feature branch creation with collision detection |
 | `checkpoint.sh` | PostToolUse hook target (wraps shared checkpoint.sh) |
 | `sprint-state.sh` | Story state machine transitions |

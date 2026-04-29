@@ -112,8 +112,8 @@ EOF
   [ "$status" -eq 0 ]
 }
 
-@test "VLR-04: Step 6 documents sprint-status.yaml sync via sprint-state.sh after each attempt" {
-  run grep -qE "sprint-state\.sh|update-story-status\.sh" "$SKILL_DIR/SKILL.md"
+@test "VLR-04: Step 6 documents sprint-status.yaml sync via transition-story-status.sh after each attempt" {
+  run grep -qE "transition-story-status\.sh" "$SKILL_DIR/SKILL.md"
   [ "$status" -eq 0 ]
 }
 

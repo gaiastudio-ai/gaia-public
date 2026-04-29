@@ -81,7 +81,7 @@ users with stale plugins do not break mid-upgrade. It will be removed in v1.132.
 
 ### Step 2 -- Update Status
 
-- For FRESH mode: run `scripts/update-story-status.sh {story_key} in-progress`.
+- For FRESH mode: run `scripts/transition-story-status.sh {story_key} --to in-progress`.
 - For REWORK/RESUME: skip -- story is already in-progress.
 
 <!-- E55-S5: step 2b atdd gate begin -->
@@ -365,7 +365,7 @@ users with stale plugins do not break mid-upgrade. It will be removed in v1.132.
 - Run `scripts/git-branch.sh` to verify branch state.
 - Stage and commit with conventional commit format.
 - Run `${CLAUDE_PLUGIN_ROOT}/scripts/git-push.sh` to push the current branch to `origin`. The shared helper (a) refuses to push from `main` / `staging` (delegating to `lib/dev-story-security-invariants.sh::assert_branch_not_protected` from E55-S6 when present), (b) retries ONCE on transient network errors (e.g., `Could not resolve host`, `Operation timed out`) with a 5-second backoff, and (c) fails LOUDLY on auth / permission errors with no retry. DO NOT inline `git push` here — the helper is the single source of truth.
-- Run `scripts/update-story-status.sh {story_key} review` after all gates pass.
+- Run `scripts/transition-story-status.sh {story_key} --to review` after all gates pass.
 <!-- E55-S8: step 10 git-push wire end -->
 
 ### Step 11 -- Create PR
@@ -426,7 +426,7 @@ users with stale plugins do not break mid-upgrade. It will be removed in v1.132.
 ### Step 15 -- Update Review Gate
 
 - Run `${CLAUDE_PLUGIN_ROOT}/skills/gaia-dev-story/scripts/init-review-gate.sh {story_file}` to seed (or replace) the Review Gate table with the canonical 6-row UNVERIFIED block. The helper is idempotent — re-running on a story file that already has the block yields a byte-identical result.
-- Update story status to `review` via `scripts/update-story-status.sh {story_key} review`.
+- Update story status to `review` via `scripts/transition-story-status.sh {story_key} --to review`.
 <!-- E55-S8: step 15 init-review-gate wire end -->
 
 <!-- E55-S8: step 16 begin -->

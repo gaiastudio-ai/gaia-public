@@ -11,16 +11,25 @@ allowed-tools: [Read, Write, Edit, Bash]
 
 ## Mission
 
-You are creating a detailed story file for the specified story key. The story definition is extracted from `docs/planning-artifacts/epics-and-stories.md` and elaborated with architecture context, acceptance criteria in Given/When/Then format, tasks/subtasks, test scenarios, and dependencies. The story file is written to `docs/implementation-artifacts/{story_key}-{slug}.md` using the canonical filename convention.
+You are creating a detailed story file for the specified story key. The story definition is extracted from `{planning_artifacts}/epics-and-stories.md` and elaborated with architecture context, acceptance criteria in Given/When/Then format, tasks/subtasks, test scenarios, and dependencies. The story file is written to `{implementation_artifacts}/{story_key}-{slug}.md` using the canonical filename convention.
+
+The four artifact-directory placeholders — `{planning_artifacts}`, `{implementation_artifacts}`, `{test_artifacts}`, `{creative_artifacts}` — are resolved at skill-load time via the project-overridable resolver. Mirror the canonical pattern from `gaia-sprint-plan` (`!scripts/resolve-config.sh sizing_map`):
+
+- `!scripts/resolve-config.sh planning_artifacts`
+- `!scripts/resolve-config.sh implementation_artifacts`
+- `!scripts/resolve-config.sh test_artifacts`
+- `!scripts/resolve-config.sh creative_artifacts`
+
+Each invocation merges the team-shared `config/project-config.yaml` over the framework default per ADR-044 §10.26.3 (project > global precedence). When a project does not declare an override, the resolver returns `{project_root}/docs/{key}` (the legacy layout) so behavior is identical to pre-migration. **HALT on resolver non-zero exit (no silent fallback)** — a resolver failure means the configuration surface is broken and the skill MUST surface it rather than silently degrade to a hardcoded path. This is the same no-silent-fallback contract that ADR-074 contract C1 enforces for `sizing_map`.
 
 This skill is the native Claude Code conversion of the legacy create-story workflow (brief Cluster 7, story E28-S52). The step ordering, prompts, and output path are preserved from the legacy instructions.
 
 ## Critical Rules
 
-- An epics-and-stories document MUST exist at `docs/planning-artifacts/epics-and-stories.md` before starting. If missing, fail fast with "epics-and-stories.md not found at docs/planning-artifacts/epics-and-stories.md -- run /gaia-create-epics first."
+- An epics-and-stories document MUST exist at `{planning_artifacts}/epics-and-stories.md` before starting (path resolved via `!scripts/resolve-config.sh planning_artifacts`). If missing, fail fast with "epics-and-stories.md not found at {planning_artifacts}/epics-and-stories.md -- run /gaia-create-epics first."
 - Story files MUST include complete YAML frontmatter with ALL 15 required fields: key, title, epic, status, priority, size, points, risk, sprint_id, depends_on, blocks, traces_to, date, author, priority_flag. Optional fields: origin, origin_ref, figma.
 - All acceptance criteria MUST use Given/When/Then format: "Given {context}, when {action}, then {expected result}".
-- The story file MUST be written to `docs/implementation-artifacts/{story_key}-{slug}.md` using the canonical `{story_key}-{story_title_slug}.md` filename convention.
+- The story file MUST be written to `{implementation_artifacts}/{story_key}-{slug}.md` using the canonical `{story_key}-{story_title_slug}.md` filename convention. The `{implementation_artifacts}` placeholder is resolved via `!scripts/resolve-config.sh implementation_artifacts`.
 - Slug generation: lowercase the title, replace non-alphanumeric characters with hyphens, collapse consecutive hyphens, trim leading/trailing hyphens.
 - The story template is bundled at `${CLAUDE_PLUGIN_ROOT}/skills/gaia-create-story/story-template.md`. Do NOT take a runtime dependency on the `_gaia/` framework tree.
 - After writing the story file, call `scripts/transition-story-status.sh {story_key} --to backlog` to register the story atomically with `status=backlog` across the four canonical surfaces (story-file frontmatter, `sprint-status.yaml`, `epics-and-stories.md`, `story-index.yaml`).
@@ -37,8 +46,8 @@ This skill is the native Claude Code conversion of the legacy create-story workf
 ### Step 1 -- Select Story
 
 - If a story key was provided as an argument (e.g., `/gaia-create-story E1-S2`), use it directly.
-- Read `docs/planning-artifacts/epics-and-stories.md` and locate the story by key.
-- Scan `docs/implementation-artifacts/` for existing story files matching `{story_key}-*.md`.
+- Read `{planning_artifacts}/epics-and-stories.md` and locate the story by key.
+- Scan `{implementation_artifacts}/` for existing story files matching `{story_key}-*.md`.
 - If a story file already exists:
   - Read its YAML frontmatter status field.
   - If status is `backlog`: warn "Story file exists with status backlog. Proceeding will regenerate it." Allow continue.
@@ -49,9 +58,9 @@ This skill is the native Claude Code conversion of the legacy create-story workf
 
 ### Step 2 -- Load Context
 
-- Read story summary from `docs/planning-artifacts/epics-and-stories.md`.
-- Read `docs/planning-artifacts/architecture.md` for technical context (ADRs live inline in the Decision Log table).
-- Read `docs/planning-artifacts/ux-design.md` if available for UI context.
+- Read story summary from `{planning_artifacts}/epics-and-stories.md`.
+- Read `{planning_artifacts}/architecture.md` for technical context (ADRs live inline in the Decision Log table).
+- Read `{planning_artifacts}/ux-design.md` if available for UI context.
 
 ### Step 3 -- Elaborate Story
 
@@ -104,7 +113,7 @@ Treat `flow` carefully: prefer word-boundary regex and exclude `data flow` / `co
 
 **Rule #3 — Epic UX classification.** The epic this story belongs to has a UX-tagged classification in `epics-and-stories.md` (look for an explicit `tags:` or `classification:` line on the epic).
 
-**Rule #4 — `ux-design.md` references the epic.** `docs/planning-artifacts/ux-design.md` exists AND the story's epic key is referenced inside that file. If the file is missing (the common case for early-stage projects), rule #4 must **skip cleanly** — no error, no halt — and rules 1-3 still evaluate. Use a file-exists guard (`[ -f "$UX_DESIGN_MD" ]`).
+**Rule #4 — `ux-design.md` references the epic.** `{planning_artifacts}/ux-design.md` exists AND the story's epic key is referenced inside that file. If the file is missing (the common case for early-stage projects), rule #4 must **skip cleanly** — no error, no halt — and rules 1-3 still evaluate. Use a file-exists guard (`[ -f "$UX_DESIGN_MD" ]`).
 
 **Detection pseudocode** (telemetry-friendly; runs all rules for observability):
 
@@ -125,15 +134,15 @@ A story matching multiple rules still results in **a single UX Designer spawn** 
 When the user picks `[a]`, dispatch the selected subagents with the contracts below.
 
 **PM (Derek) — `gaia:pm`.** Always spawned on `[a]`.
-- Loads: `docs/planning-artifacts/epics-and-stories.md`, `docs/planning-artifacts/prd.md`, `docs/planning-artifacts/ux-design.md` (when present).
+- Loads: `{planning_artifacts}/epics-and-stories.md`, `{planning_artifacts}/prd.md`, `{planning_artifacts}/ux-design.md` (when present).
 - Answers 3 questions: (Q1) edge cases from a product/stakeholder lens; (Q2) AC prioritization (must-have vs nice-to-have); (Q3) stakeholder notes / cross-team callouts.
 
 **Architect (Theo) — `gaia:architect`.** Always spawned on `[a]`.
-- Loads: `docs/planning-artifacts/architecture.md`, `docs/planning-artifacts/test-plan.md`, `docs/planning-artifacts/epics-and-stories.md`.
+- Loads: `{planning_artifacts}/architecture.md`, `{planning_artifacts}/test-plan.md`, `{planning_artifacts}/epics-and-stories.md`.
 - Answers 2 questions: (Q1) implementation constraints (ADRs, patterns, tech choices); (Q2) technical dependencies (other modules, services, libraries).
 
 **UX Designer (Christy) — `gaia:ux-designer`.** Spawned on `[a]` ONLY when the four-rule UX detection matches. NOT spawned for backend-only stories.
-- Loads: `docs/planning-artifacts/ux-design.md` (when present), `docs/planning-artifacts/epics-and-stories.md`, the story frontmatter (including any `figma:` block).
+- Loads: `{planning_artifacts}/ux-design.md` (when present), `{planning_artifacts}/epics-and-stories.md`, the story frontmatter (including any `figma:` block).
 - Answers exactly 3 questions: (Q1) UX edge cases — empty, loading, error, no-data, offline states; (Q2) accessibility — keyboard navigation, screen-reader support, color contrast, ARIA semantics; (Q3) interaction patterns — which design-system components/patterns to reuse vs build custom.
 
 PM still loads `ux-design.md` even when UX Designer is also spawned — this is intentional. PM brings stakeholder context; UX Designer brings design-system expertise. The question scopes do not overlap.
@@ -281,14 +290,16 @@ Rationale: primary ACs are contractual user/PM/Architect output. Drift — wheth
 
 ### Step 3d -- Append Edge Cases to Test Plan (V1 pipeline restoration, E54-S4)
 
-This step appends one test-plan row per edge case to the story's section in `docs/planning-artifacts/test-plan.md`. Re-runs are idempotent — duplicate rows are deduplicated by `(story_key, scenario)` pair.
+This step appends one test-plan row per edge case to the story's section in `{planning_artifacts}/test-plan.md`. Re-runs are idempotent — duplicate rows are deduplicated by `(story_key, scenario)` pair.
 
 **Traces to:** FR-230 (V1 test-plan append).
 
-**Target file.** `docs/planning-artifacts/test-plan.md`. If the file does not exist, this step is **non-blocking**:
+**Target file.** `{planning_artifacts}/test-plan.md` (resolved via `!scripts/resolve-config.sh planning_artifacts`). If the file does not exist, this step is **non-blocking**:
 
 ```
-if [ ! -f "docs/planning-artifacts/test-plan.md" ]; then
+PLANNING_ARTIFACTS=$(./scripts/resolve-config.sh planning_artifacts) || HALT
+TEST_PLAN_PATH="${PLANNING_ARTIFACTS}/test-plan.md"
+if [ ! -f "${TEST_PLAN_PATH}" ]; then
   log "warning: test-plan.md missing — skipping Step 3d test-plan append (non-blocking)"
   return
 fi
@@ -331,11 +342,12 @@ Columns: `TC ID | Scenario | Type | Severity | Story Key`. The literal `edge-cas
 - Write acceptance criteria in Given/When/Then format.
 - Write tasks/subtasks breakdown.
 - Write test scenarios table.
-- Write the story file to `docs/implementation-artifacts/{story_key}-{slug}.md`.
-- **Deterministic skeleton via `scaffold-story.sh` (E63-S9 / Work Item 6.4).** After computing the slug via `slugify.sh` (E63-S1) and the frontmatter YAML via `generate-frontmatter.sh` (E63-S3), invoke `!scripts/scaffold-story.sh --template ${CLAUDE_PLUGIN_ROOT}/skills/gaia-create-story/story-template.md --output docs/implementation-artifacts/{story_key}-{slug}.md --frontmatter <yaml>` to render the deterministic skeleton — frontmatter token replacement, Review Gate, Definition of Done, Findings, Estimate, and Dev Agent Record sections are populated by the script. The script forces `status: backlog` per ADR-074 contract C3 and emits the seven content section names on stdout in declaration order: `User Story`, `Acceptance Criteria`, `Tasks / Subtasks`, `Dev Notes`, `Technical Notes`, `Dependencies`, `Test Scenarios`. Read the stdout list and fill each `{CONTENT_PLACEHOLDER}` with judgment-bearing content via Edit calls. This is the staged form for E63-S11's thin-orchestrator rewrite — the existing prose above (slug derivation, sizing-map resolution, frontmatter population) remains the source of truth for the upstream computations the script consumes.
+- Resolve the output directory via `!scripts/resolve-config.sh implementation_artifacts` once per Step 4 invocation. HALT on resolver non-zero exit (no silent fallback). Normalize the resolved value: strip surrounding whitespace, drop a leading `./`, and collapse a trailing `/` so the join `${IMPLEMENTATION_ARTIFACTS}/{story_key}-{slug}.md` is deterministic. `mkdir -p` the resolved directory before any Write call so a non-existent override directory does not raise `ENOENT`. Quote every interpolation of the resolved value to neutralize the shell-metacharacter angle from EC-10.
+- Write the story file to `${IMPLEMENTATION_ARTIFACTS}/{story_key}-{slug}.md`.
+- **Deterministic skeleton via `scaffold-story.sh` (E63-S9 / Work Item 6.4).** After computing the slug via `slugify.sh` (E63-S1) and the frontmatter YAML via `generate-frontmatter.sh` (E63-S3), invoke `!scripts/scaffold-story.sh --template ${CLAUDE_PLUGIN_ROOT}/skills/gaia-create-story/story-template.md --output "${IMPLEMENTATION_ARTIFACTS}/{story_key}-{slug}.md" --frontmatter <yaml>` to render the deterministic skeleton — frontmatter token replacement, Review Gate, Definition of Done, Findings, Estimate, and Dev Agent Record sections are populated by the script. The script forces `status: backlog` per ADR-074 contract C3 and emits the seven content section names on stdout in declaration order: `User Story`, `Acceptance Criteria`, `Tasks / Subtasks`, `Dev Notes`, `Technical Notes`, `Dependencies`, `Test Scenarios`. Read the stdout list and fill each `{CONTENT_PLACEHOLDER}` with judgment-bearing content via Edit calls. This is the staged form for E63-S11's thin-orchestrator rewrite — the existing prose above (slug derivation, sizing-map resolution, frontmatter population) remains the source of truth for the upstream computations the script consumes.
 
 > After artifact write: run open-question detection snippet
-> `!${CLAUDE_PLUGIN_ROOT}/scripts/detect-open-questions.sh docs/implementation-artifacts/${STORY_KEY}-${SLUG}.md`
+> `!${CLAUDE_PLUGIN_ROOT}/scripts/detect-open-questions.sh "${IMPLEMENTATION_ARTIFACTS}/${STORY_KEY}-${SLUG}.md"`
 
 ### Step 5 -- Register in Sprint Status
 

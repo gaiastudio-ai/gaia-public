@@ -71,7 +71,27 @@ while IFS= read -r line; do
 done <<<"$config_output"
 
 # ---------- 2. Validate gate (epics-and-stories.md required) ----------
-EPICS_PATH="${PLANNING_ARTIFACTS:-docs/planning-artifacts}/epics-and-stories.md"
+#
+# Resolve planning_artifacts via resolve-config.sh (ADR-044, ADR-074 contract
+# C1, E60-S3). Project overrides flow through the resolver; the resolver
+# returns the {project_root}/docs/{planning-key} default when no override is
+# present. HALT on resolver non-zero exit — the skill MUST NOT silently fall
+# back to a hardcoded path. Normalize whitespace and a trailing slash on the
+# resolved value so the path join is deterministic across project layouts.
+if pa_resolved=$("$RESOLVE_CONFIG" planning_artifacts 2>&1); then
+  # Strip leading/trailing whitespace and a single trailing slash.
+  pa_resolved=${pa_resolved#"${pa_resolved%%[![:space:]]*}"}
+  pa_resolved=${pa_resolved%"${pa_resolved##*[![:space:]]}"}
+  pa_resolved=${pa_resolved%/}
+  # Drop a leading `./` for callers that pass relative form.
+  pa_resolved=${pa_resolved#./}
+  PLANNING_ARTIFACTS="${PLANNING_ARTIFACTS:-$pa_resolved}"
+else
+  log "resolve-config.sh planning_artifacts failed:"
+  printf '%s\n' "$pa_resolved" >&2
+  die "HALT: resolver failed for planning_artifacts (exit non-zero) — refusing silent fallback"
+fi
+EPICS_PATH="${PLANNING_ARTIFACTS}/epics-and-stories.md"
 
 if [ -x "$VALIDATE_GATE" ]; then
   if ! "$VALIDATE_GATE" epics_and_stories_exists 2>&1; then

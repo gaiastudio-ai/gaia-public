@@ -100,9 +100,14 @@ install_fixture() {
   for name in all-passed any-failed any-unverified; do
     install_fixture "$name"
 
-    # Capture the gate-check exit code.
+    # Capture the gate-check exit code. Wrap in set +e / set -e so that the
+    # any-failed fixture's exit-1 (BLOCKED) and any-unverified fixture's exit-2
+    # (PENDING) do not trigger bats's strict-mode test failure on the unredirected
+    # call. The exit code itself is the contract surface under test here.
+    set +e
     "$REVIEW_GATE_SH" review-gate-check --story "$name" >/dev/null 2>&1
     local gate_exit=$?
+    set -e
 
     # Capture nudge output and parse FAILED / UNVERIFIED counts.
     local nudge_out failed_count unverified_count

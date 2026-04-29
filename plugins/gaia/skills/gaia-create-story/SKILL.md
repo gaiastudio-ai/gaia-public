@@ -242,9 +242,9 @@ Under no circumstance should an edge-case skill failure block story creation.
 
 ### Step 3c -- Append Edge Cases to Acceptance Criteria (V1 pipeline restoration, E54-S4)
 
-This step appends edge-case-derived acceptance criteria rows to the story's AC list. It enforces a count-drift safety check that aborts the append if the primary AC list is corrupted during the operation.
+This step appends edge-case-derived acceptance criteria rows to the story's AC list. It enforces a SHA-256 hash-based immutability check on every primary AC line that aborts the append (and atomically reverts the file) if any primary AC line drifts during the operation.
 
-**Traces to:** FR-229 (V1 ACs append).
+**Traces to:** FR-229 (V1 ACs append), ADR-074 contract C2 (AC immutability hash check), ADR-042 (Scripts-over-LLM), AF-2026-04-28-7 Work Items 4 + 6.7 (script migration).
 
 **Format (FR-229).** For each entry in `edge_case_results`, emit one AC row using:
 
@@ -256,23 +256,25 @@ This step appends edge-case-derived acceptance criteria rows to the story's AC l
 
 **Append position.** Append edge-case ACs **after the last primary AC**. Primary ACs (those produced in Step 3 by elaboration) are **immutable** — Step 3c MUST NOT modify, reorder, or delete any primary AC. Edge-case ACs always trail the primary block.
 
-**Primary AC count drift safety check (the AC4-of-this-story safety check, distinct from this story's AC4 size gate).** Snapshot the primary AC count before the append, perform the append, then recount:
+**Primary AC immutability hash check (ADR-074 C2).** The append is delegated to `append-edge-case-acs.sh` (E63-S7), which computes a SHA-256 over every primary AC line BEFORE the append, performs the append, recomputes the hashes, and compares element-wise. Any mismatch — a single mutated character in any primary AC line — triggers an atomic revert (the file is restored byte-identical to its pre-append state via a `mktemp` snapshot) and a non-zero exit. This is the strictest possible immutability check and replaces the V2 count-drift check (which only detected count changes, missing in-place mutations).
+
+Invoke the script — do NOT perform the append in prose:
 
 ```
-primary_count_before = count(ACs not matching /^AC-EC/)
-for each ec in edge_case_results:
-  append "- [ ] AC-EC${i}: Given ${ec.input}, when ${ec.scenario}, then ${ec.expected}"
-primary_count_after = count(ACs not matching /^AC-EC/)
-if primary_count_before != primary_count_after:
-  rollback append      # restore the AC list to its pre-append state
-  log warning "edge_case_ac_append: aborted reason=primary_ac_count_drift"
-  edge_case_ac_appended = false
-  # leave AC list unchanged; proceed to Step 3d
-else:
-  edge_case_ac_appended = true
+!scripts/append-edge-case-acs.sh \
+  --file <story-file> \
+  --edge-cases '<json-array-of-edge-case-results>'
 ```
 
-Rationale: primary ACs are contractual user/PM/Architect output. Drift indicates a parsing/regex bug in the appender, and the safest action is to abort the append rather than corrupt the AC list. Story creation continues with the unchanged primary ACs.
+Where `<json-array-of-edge-case-results>` is the `edge_case_results` list from Step 3b serialized as JSON (each entry: `{id, scenario, input, expected, category, severity?}`).
+
+The script is idempotent: re-runs with overlapping `scenario` strings dedupe by exact `scenario` substring match against existing AC-EC entries, so a second invocation with the same input is a no-op (stdout reports `0` new entries appended).
+
+The script's stdout (on success) is the integer count of AC-EC entries appended (post-dedup). Capture this as `edge_case_ac_appended_count` for the Step 3c gate log. On non-zero exit, the file has already been reverted; treat as `edge_case_ac_appended = false` and proceed to Step 3d with the unchanged primary ACs (story creation MUST NOT halt — edge-case append is best-effort per the V1 contract).
+
+If the target file does not exist, the script writes a WARNING to stderr and exits 0 (non-blocking, mirrors Step 3d's missing-test-plan posture).
+
+Rationale: primary ACs are contractual user/PM/Architect output. Drift — whether from a parsing bug, a regex misfire, or any other corruption — indicates the appender misbehaved, and the safest action is to revert atomically rather than leave the AC list half-mutated. Moving the algorithm from prose to a deterministic bash script (per ADR-042) eliminates LLM-side drift and reclaims ~400 tokens of Step 3c budget for E63-S11.
 
 **YOLO compatibility (AC6).** Step 3c is fully non-interactive.
 

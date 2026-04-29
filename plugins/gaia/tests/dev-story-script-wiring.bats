@@ -185,3 +185,76 @@ teardown() { common_teardown; }
     echo "$block" | grep -Fq 'v1.132.0'
   done
 }
+
+# ---------------------------------------------------------------------------
+# AC5 (TC-DSS-10) — Absence-assertion regression contract.
+#
+# The wiring blocks above prove the new scripts are PRESENT. AC5 also requires
+# that the legacy LLM narrative is ABSENT outside the marker-fenced regions.
+# A regression that re-introduces inline frontmatter parsing or inline PR-body
+# construction (alongside, or in place of, the new script invocations) MUST
+# cause this test to FAIL naming the offending step.
+#
+# Strategy: strip the three E57-S8 wiring blocks (begin..end inclusive) from
+# SKILL.md, then grep the residue for legacy patterns. The Narrative Fallback
+# subsections live INSIDE the wiring blocks, so they are not flagged.
+# ---------------------------------------------------------------------------
+
+# Emit SKILL.md with all three E57-S8 wiring blocks removed (begin..end inclusive).
+_skill_md_minus_wiring_blocks() {
+  awk '
+    /<!-- E57-S8: step1 script-wiring begin -->/  { skip=1 }
+    /<!-- E57-S8: step10 script-wiring begin -->/ { skip=1 }
+    /<!-- E57-S8: step11 script-wiring begin -->/ { skip=1 }
+    skip == 0 { print }
+    /<!-- E57-S8: step1 script-wiring end -->/    { skip=0; next }
+    /<!-- E57-S8: step10 script-wiring end -->/   { skip=0; next }
+    /<!-- E57-S8: step11 script-wiring end -->/   { skip=0; next }
+  ' "$SKILL_MD"
+}
+
+@test "AC5 absence: Step 1 — no inline frontmatter parsing outside wiring block" {
+  residue="$(_skill_md_minus_wiring_blocks)"
+  # Legacy inline narrative: 'Read the story file: extract' / 'Detect execution mode' / 'FRESH (new implementation)'.
+  # Any of these outside the wiring block means a regression has re-introduced
+  # the inline LLM frontmatter-parsing path that script-wiring replaced.
+  if echo "$residue" | grep -nE 'Read the story file: extract|Detect execution mode|FRESH \(new implementation\)|REWORK \(fix review|RESUME \(continue from'; then
+    echo "REGRESSION: Step 1 inline LLM frontmatter parsing re-introduced outside <!-- E57-S8: step1 script-wiring --> block." >&2
+    echo "story-parse.sh + detect-mode.sh are the single source of truth (FR-DSS-1, FR-DSS-2)." >&2
+    return 1
+  fi
+}
+
+@test "AC5 absence: Step 10 — no inline commit-subject construction outside wiring block" {
+  residue="$(_skill_md_minus_wiring_blocks)"
+  # Legacy inline narrative: 'Conventional Commit' subject composition guidance, or
+  # an inline 'git commit -m' usage that hand-crafts the subject. commit-msg.sh
+  # is the single source of truth (FR-DSS-5, FR-DSS-6).
+  if echo "$residue" | grep -nE 'Compose .*Conventional Commit subject|hand-craft.*commit subject|git commit -m "[^"]*\$\{?story_key\}?'; then
+    echo "REGRESSION: Step 10 inline commit-subject composition re-introduced outside <!-- E57-S8: step10 script-wiring --> block." >&2
+    echo "commit-msg.sh is the single source of truth (FR-DSS-5, FR-DSS-6, NFR-DSS-1)." >&2
+    return 1
+  fi
+}
+
+@test "AC5 absence: Step 11 — no inline PR-body construction outside wiring block" {
+  residue="$(_skill_md_minus_wiring_blocks)"
+  # Legacy inline narrative: heredoc-built PR body fed straight to gh, or
+  # 'pr-create.sh ... --body "$(cat <<' inline-body construction. pr-body.sh is
+  # the single source of truth (FR-DSS-5, FR-DSS-6).
+  if echo "$residue" | grep -nE 'gh pr create .*--body "\$\(cat <<|pr-create\.sh.*--body "\$\(cat <<|Compose the PR body inline|hand-craft the PR body'; then
+    echo "REGRESSION: Step 11 inline PR-body construction re-introduced outside <!-- E57-S8: step11 script-wiring --> block." >&2
+    echo "pr-body.sh is the single source of truth (FR-DSS-5, FR-DSS-6)." >&2
+    return 1
+  fi
+}
+
+@test "AC5 absence: residue still names every wired step (sanity — strip didn't eat the world)" {
+  residue="$(_skill_md_minus_wiring_blocks)"
+  # Sanity guard: if the awk strip ever over-deletes (e.g. a regex change drops
+  # too much), this test fails loudly rather than silently passing the absence
+  # checks above on an empty residue.
+  echo "$residue" | grep -Fq '### Step 1 -- Load Story'
+  echo "$residue" | grep -Fq '### Step 10 -- Commit and Push'
+  echo "$residue" | grep -Fq '### Step 11 -- Create PR'
+}

@@ -79,12 +79,6 @@ This fallback is retained for ONE minor version (v1.131.x → v1.132.0) so brown
 users with stale plugins do not break mid-upgrade. It will be removed in v1.132.0.
 <!-- E57-S8: step1 script-wiring end -->
 
-- Read the story file: extract key, status, acceptance criteria, subtasks, dependencies, risk level.
-- Detect execution mode:
-  - Status `ready-for-dev` -> FRESH (new implementation)
-  - Status `in-progress` with FAILED reviews -> REWORK (fix review issues)
-  - Status `in-progress` otherwise -> RESUME (continue from checkpoint)
-
 ### Step 2 -- Update Status
 
 - For FRESH mode: run `scripts/update-story-status.sh {story_key} in-progress`.
@@ -404,8 +398,7 @@ This fallback is retained for ONE minor version (v1.131.x → v1.132.0) so brown
 users with stale plugins do not break mid-upgrade. It will be removed in v1.132.0.
 <!-- E57-S8: step11 script-wiring end -->
 
-- Run `scripts/pr-create.sh {story_key} {title}` to create a pull request.
-- The script targets the first promotion chain environment.
+- `pr-create.sh` targets the first promotion chain environment as resolved by `promotion-chain-guard.sh` in Step 10.
 
 ### Step 12 -- Wait for CI
 

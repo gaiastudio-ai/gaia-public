@@ -55,34 +55,17 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 DOD_CHECK="$SCRIPT_DIR/dod-check.sh"
 
-# --- Frontmatter extraction (mirrors story-parse.sh idiom) ---------------
+# --- Frontmatter extraction (shared via frontmatter-lib.sh, E64-S1 AC3) --
 
-FRONTMATTER="$(awk '
-  BEGIN { state = 0 }
-  state == 0 && $0 == "---" { state = 1; next }
-  state == 1 && $0 == "---" { state = 2; exit }
-  state == 1 { print }
-  END { if (state != 2) exit 1 }
-' "$STORY_PATH_INPUT")" || die_parse "malformed frontmatter (unbalanced '---' markers): $STORY_PATH_INPUT"
+# shellcheck source=./frontmatter-lib.sh
+# shellcheck disable=SC1091
+. "$SCRIPT_DIR/frontmatter-lib.sh"
+
+FRONTMATTER="$(fm_slice "$STORY_PATH_INPUT")" || die_parse "malformed frontmatter (unbalanced '---' markers): $STORY_PATH_INPUT"
 
 get_field() {
-  key="$1"
-  printf '%s\n' "$FRONTMATTER" | awk -v key="$key" '
-    {
-      if (match($0, "^[[:space:]]*" key "[[:space:]]*:[[:space:]]*")) {
-        rest = substr($0, RSTART + RLENGTH)
-        sub(/[[:space:]]+$/, "", rest)
-        n = length(rest)
-        if (n >= 2 && substr(rest, 1, 1) == "\"" && substr(rest, n, 1) == "\"") {
-          print substr(rest, 2, n - 2); exit
-        }
-        if (n >= 2 && substr(rest, 1, 1) == "'"'"'" && substr(rest, n, 1) == "'"'"'") {
-          print substr(rest, 2, n - 2); exit
-        }
-        print rest; exit
-      }
-    }
-  '
+  local key="$1"
+  printf '%s\n' "$FRONTMATTER" | fm_get_field "$key"
 }
 
 STORY_KEY_VAL="$(get_field key)"

@@ -54,52 +54,52 @@ EOF
 # AC2 / TC-DSS-07 — Type mapping
 # ---------------------------------------------------------------------------
 
-@test "commit-msg: type=feature -> feat(<key>): <title>" {
+@test "commit-msg: type=feature -> feat(<key>): wire <title>" {
   path="$(_write_story "E57-S7" "feature" "Add login flow")"
   run "$COMMIT_MSG" "$path"
   [ "$status" -eq 0 ]
   subject=$(echo "$output" | head -1)
-  [ "$subject" = "feat(E57-S7): Add login flow" ]
+  [ "$subject" = "feat(E57-S7): wire Add login flow" ]
 }
 
-@test "commit-msg: type=bug -> fix(<key>): <title>" {
-  path="$(_write_story "E1-S1" "bug" "Fix crash on save")"
+@test "commit-msg: type=bug -> fix(<key>): fix <title>" {
+  path="$(_write_story "E1-S1" "bug" "Crash on save")"
   run "$COMMIT_MSG" "$path"
   [ "$status" -eq 0 ]
   subject=$(echo "$output" | head -1)
-  [ "$subject" = "fix(E1-S1): Fix crash on save" ]
+  [ "$subject" = "fix(E1-S1): fix Crash on save" ]
 }
 
-@test "commit-msg: type=refactor -> refactor(<key>): <title>" {
+@test "commit-msg: type=refactor -> refactor(<key>): refactor <title>" {
   path="$(_write_story "E1-S2" "refactor" "Extract helper")"
   run "$COMMIT_MSG" "$path"
   [ "$status" -eq 0 ]
   subject=$(echo "$output" | head -1)
-  [ "$subject" = "refactor(E1-S2): Extract helper" ]
+  [ "$subject" = "refactor(E1-S2): refactor Extract helper" ]
 }
 
-@test "commit-msg: type=chore -> chore(<key>): <title>" {
-  path="$(_write_story "E1-S3" "chore" "Update deps")"
+@test "commit-msg: type=chore -> chore(<key>): update <title>" {
+  path="$(_write_story "E1-S3" "chore" "Deps")"
   run "$COMMIT_MSG" "$path"
   [ "$status" -eq 0 ]
   subject=$(echo "$output" | head -1)
-  [ "$subject" = "chore(E1-S3): Update deps" ]
+  [ "$subject" = "chore(E1-S3): update Deps" ]
 }
 
-@test "commit-msg: type unrecognized -> default feat(...)" {
+@test "commit-msg: type unrecognized -> default feat with wire verb" {
   path="$(_write_story "E1-S4" "weird" "Something")"
   run "$COMMIT_MSG" "$path"
   [ "$status" -eq 0 ]
   subject=$(echo "$output" | head -1)
-  [ "$subject" = "feat(E1-S4): Something" ]
+  [ "$subject" = "feat(E1-S4): wire Something" ]
 }
 
-@test "commit-msg: type missing -> default feat(...)" {
+@test "commit-msg: type missing -> default feat with wire verb" {
   path="$(_write_story "E1-S5" "" "No type field")"
   run "$COMMIT_MSG" "$path"
   [ "$status" -eq 0 ]
   subject=$(echo "$output" | head -1)
-  [ "$subject" = "feat(E1-S5): No type field" ]
+  [ "$subject" = "feat(E1-S5): wire No type field" ]
 }
 
 # ---------------------------------------------------------------------------
@@ -202,4 +202,91 @@ EOF
 
 @test "commit-msg: source contains no bare 'eval'" {
   ! grep -nE "\beval\b" "$COMMIT_MSG"
+}
+
+# ---------------------------------------------------------------------------
+# E64-S1 / AC4 / TC-E64-9 — commitlint-safe subjects for ALL-CAPS titles
+# ---------------------------------------------------------------------------
+#
+# commitlint @commitlint/config-conventional defaults reject subjects that
+# start with an upper-case / pascal-case word. Story titles often start with
+# an ALL-CAPS token (e.g., "SKILL.md gate wiring", "API client") because
+# they reference framework identifiers verbatim. The fix prepends a
+# lowercase verb derived from the type field so the SUBJECT (the part after
+# `<type>(<key>): `) starts with a lowercase letter.
+
+@test "commit-msg: ALL-CAPS title gets a lowercase verb prefix" {
+  path="$(_write_story "E64-S1" "feature" "SKILL.md gate wiring")"
+  run "$COMMIT_MSG" "$path"
+  [ "$status" -eq 0 ]
+  subject=$(echo "$output" | head -1)
+  # Subject body (after `feat(KEY): `) must start with a lowercase letter
+  echo "$subject" | grep -qE '^feat\(E64-S1\): [a-z][a-z]+ SKILL\.md'
+}
+
+@test "commit-msg: PascalCase-token title gets a lowercase verb prefix" {
+  path="$(_write_story "E64-S2" "feature" "ServiceWorker registration cleanup")"
+  run "$COMMIT_MSG" "$path"
+  [ "$status" -eq 0 ]
+  subject=$(echo "$output" | head -1)
+  echo "$subject" | grep -qE '^feat\(E64-S2\): [a-z]+'
+}
+
+@test "commit-msg: API-titled story gets a lowercase verb prefix" {
+  path="$(_write_story "E64-S3" "feature" "API client retry policy")"
+  run "$COMMIT_MSG" "$path"
+  [ "$status" -eq 0 ]
+  subject=$(echo "$output" | head -1)
+  echo "$subject" | grep -qE '^feat\(E64-S3\): [a-z]+'
+}
+
+@test "commit-msg: title already starting with lowercase verb is left untouched" {
+  # If the title already starts with a lowercase verb, no prefix is needed.
+  path="$(_write_story "E64-S4" "feature" "wire SKILL.md gate")"
+  run "$COMMIT_MSG" "$path"
+  [ "$status" -eq 0 ]
+  subject=$(echo "$output" | head -1)
+  # Body should still start with "wire" — no double prefix
+  echo "$subject" | grep -qE '^feat\(E64-S4\): wire SKILL\.md'
+  # No double "wire wire"
+  ! echo "$subject" | grep -qE 'wire wire'
+}
+
+@test "commit-msg: type=bug ALL-CAPS title prepends 'fix' verb" {
+  path="$(_write_story "E64-S5" "bug" "URL encoding regression")"
+  run "$COMMIT_MSG" "$path"
+  [ "$status" -eq 0 ]
+  subject=$(echo "$output" | head -1)
+  echo "$subject" | grep -qE '^fix\(E64-S5\): fix URL'
+}
+
+@test "commit-msg: type=chore ALL-CAPS title prepends 'update' verb" {
+  path="$(_write_story "E64-S6" "chore" "DEPS bump")"
+  run "$COMMIT_MSG" "$path"
+  [ "$status" -eq 0 ]
+  subject=$(echo "$output" | head -1)
+  echo "$subject" | grep -qE '^chore\(E64-S6\): update DEPS'
+}
+
+# ---------------------------------------------------------------------------
+# E64-S1 / Subtask 4.4 / TC-E64-10 — commitlint subject-case e2e
+# ---------------------------------------------------------------------------
+#
+# When commitlint is available locally (e.g., installed via `npm i -g
+# @commitlint/cli @commitlint/config-conventional` or wired into the host
+# project), feed the generated subject through `commitlint --extends
+# @commitlint/config-conventional` and assert exit 0. Skipped on systems
+# where commitlint is not installed — the unit-level subject-case checks
+# above cover the logic deterministically.
+
+@test "commit-msg: ALL-CAPS-titled subject passes commitlint when available" {
+  if ! command -v commitlint >/dev/null 2>&1; then
+    skip "commitlint not installed on PATH"
+  fi
+  if ! node -e "require.resolve('@commitlint/config-conventional')" >/dev/null 2>&1; then
+    skip "@commitlint/config-conventional not resolvable"
+  fi
+  path="$(_write_story "E64-S99" "feature" "SKILL.md gate wiring")"
+  subject="$("$COMMIT_MSG" "$path")"
+  echo "$subject" | commitlint --extends @commitlint/config-conventional
 }

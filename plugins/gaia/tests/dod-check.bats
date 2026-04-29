@@ -72,12 +72,23 @@ STUB
 
 @test "dod-check: tests fail -> tests row FAILED, exit non-zero" {
   _stub "build" 0 "build ok"
-  _stub "test"  1 "tests broke"
   _stub "lint"  0 "lint ok"
+  rm -f "$STUB_BIN/test"
+  # Project-config explicit test_cmd that fails; precedence (a) per AC-EC1.
+  cat > "$STUB_BIN/failing-test-runner" <<'STUB'
+#!/usr/bin/env bash
+echo "tests broke"
+exit 1
+STUB
+  chmod +x "$STUB_BIN/failing-test-runner"
+  mkdir -p config
+  cat > config/project-config.yaml <<EOF
+test_cmd: failing-test-runner
+EOF
   run "$DOD_CHECK"
   [ "$status" -ne 0 ]
   [[ "$output" == *"item: tests"* ]]
-  [[ "$output" == *"status: FAILED"* ]]
+  [[ "$output" == *"item: tests, status: FAILED"* ]]
 }
 
 # ---------------------------------------------------------------------------
@@ -110,4 +121,171 @@ STUB
   run "$DOD_CHECK"
   [ "$status" -eq "$first_status" ]
   [ "$output" = "$first_output" ]
+}
+
+# ---------------------------------------------------------------------------
+# E64-S1 / AC1 / TC-E64-1 — skip /bin/test on macOS
+# ---------------------------------------------------------------------------
+
+@test "dod-check: tests row skips system /bin/test (no project test_cmd)" {
+  # No project signals — no test_cmd in project-config, no package.json,
+  # no tests/*.bats, no project-local test wrapper. The script must NOT
+  # resolve to /bin/test or /usr/bin/test and must not emit FAILED for tests.
+  _stub "build" 0 "build ok"
+  _stub "lint"  0 "lint ok"
+  # Make sure no `test` stub is in our STUB_BIN, so PATH falls back to system.
+  rm -f "$STUB_BIN/test"
+  run "$DOD_CHECK"
+  # AC-EC2 — must emit SKIPPED (or PASSED with skipped reason), never FAILED
+  [[ "$output" != *"item: tests, status: FAILED"* ]]
+  # Check that the tests row is present
+  [[ "$output" == *"item: tests"* ]]
+}
+
+# ---------------------------------------------------------------------------
+# E64-S1 / AC1 / TC-E64-2 — honor project-config.yaml test_cmd
+# ---------------------------------------------------------------------------
+
+@test "dod-check: tests row honors project-config.yaml test_cmd: when set" {
+  _stub "build" 0 "build ok"
+  _stub "lint"  0 "lint ok"
+  rm -f "$STUB_BIN/test"
+  # Put a custom test runner stub
+  cat > "$STUB_BIN/my-test-runner" <<'STUB'
+#!/usr/bin/env bash
+echo "my-test-runner ran"
+exit 0
+STUB
+  chmod +x "$STUB_BIN/my-test-runner"
+  mkdir -p config
+  cat > config/project-config.yaml <<EOF
+test_cmd: my-test-runner
+EOF
+  run "$DOD_CHECK"
+  [[ "$output" == *"item: tests, status: PASSED"* ]]
+  # Output must reflect that my-test-runner was invoked, not the system test.
+  [[ "$output" == *"my-test-runner"* ]]
+}
+
+# ---------------------------------------------------------------------------
+# E64-S1 / AC1 / TC-E64-3 — honor package.json scripts.test
+# ---------------------------------------------------------------------------
+
+@test "dod-check: tests row falls back to package.json scripts.test" {
+  _stub "build" 0 "build ok"
+  _stub "lint"  0 "lint ok"
+  rm -f "$STUB_BIN/test"
+  # Provide a `npm` stub that recognizes `npm test` and exits 0
+  cat > "$STUB_BIN/npm" <<'STUB'
+#!/usr/bin/env bash
+if [ "${1:-}" = "test" ]; then
+  echo "npm test ran"
+  exit 0
+fi
+exit 1
+STUB
+  chmod +x "$STUB_BIN/npm"
+  cat > package.json <<'JSON'
+{
+  "name": "stub",
+  "scripts": {
+    "test": "echo 'pkg test ran' && true"
+  }
+}
+JSON
+  run "$DOD_CHECK"
+  [[ "$output" == *"item: tests, status: PASSED"* ]]
+  [[ "$output" == *"npm test"* ]] || [[ "$output" == *"pkg test"* ]]
+}
+
+# ---------------------------------------------------------------------------
+# E64-S1 / AC1 / TC-E64-4 — honor bats discovery
+# ---------------------------------------------------------------------------
+
+@test "dod-check: tests row falls back to bats discovery on tests/*.bats" {
+  _stub "build" 0 "build ok"
+  _stub "lint"  0 "lint ok"
+  rm -f "$STUB_BIN/test"
+  # Add a bats stub on PATH that exits 0
+  cat > "$STUB_BIN/bats" <<'STUB'
+#!/usr/bin/env bash
+echo "bats discovery ran with: $*"
+exit 0
+STUB
+  chmod +x "$STUB_BIN/bats"
+  mkdir -p tests
+  printf '@test "x" { :; }\n' > tests/sample.bats
+  run "$DOD_CHECK"
+  [[ "$output" == *"item: tests, status: PASSED"* ]]
+  [[ "$output" == *"bats discovery ran"* ]]
+}
+
+# ---------------------------------------------------------------------------
+# E64-S1 / AC-EC2 — no test signals at all → SKIPPED
+# ---------------------------------------------------------------------------
+
+@test "dod-check: tests row marked SKIPPED when no test signal exists" {
+  _stub "build" 0 "build ok"
+  _stub "lint"  0 "lint ok"
+  rm -f "$STUB_BIN/test"
+  run "$DOD_CHECK"
+  [[ "$output" == *"item: tests, status: SKIPPED"* ]]
+  [[ "$output" == *"no test runner detected"* ]]
+}
+
+# ---------------------------------------------------------------------------
+# E64-S1 / AC2 / TC-E64-5 — subtask scan ignores DoD-section unchecked items
+# ---------------------------------------------------------------------------
+
+@test "dod-check: subtask scan ignores unchecked items outside Tasks/Subtasks" {
+  _stub "build" 0 "build ok"
+  _stub "test"  0 "tests ok"
+  _stub "lint"  0 "lint ok"
+  cat > story.md <<'EOF'
+---
+key: "E64-S1"
+status: in-progress
+---
+
+## Tasks / Subtasks
+
+- [x] Task 1
+- [x] Task 2
+
+## Acceptance Criteria
+
+- [ ] AC1 (still unchecked at dev time — that's fine)
+
+## Definition of Done
+
+- [ ] PR merged to staging
+- [ ] CI green on all required checks
+EOF
+  STORY_FILE="$TEST_TMP/story.md" run "$DOD_CHECK"
+  # Subtask row must be PASSED — Tasks/Subtasks is fully checked, the
+  # unchecked items in DoD and AC sections are intentionally excluded.
+  [[ "$output" == *"item: subtasks, status: PASSED"* ]]
+}
+
+@test "dod-check: subtask scan FAILS when Tasks/Subtasks has unchecked items" {
+  _stub "build" 0 "build ok"
+  _stub "test"  0 "tests ok"
+  _stub "lint"  0 "lint ok"
+  cat > story.md <<'EOF'
+---
+key: "E64-S1"
+status: in-progress
+---
+
+## Tasks / Subtasks
+
+- [x] Task 1
+- [ ] Task 2 unfinished
+
+## Definition of Done
+
+- [x] All tests pass
+EOF
+  STORY_FILE="$TEST_TMP/story.md" run "$DOD_CHECK"
+  [[ "$output" == *"item: subtasks, status: FAILED"* ]]
 }

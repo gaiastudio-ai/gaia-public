@@ -93,26 +93,25 @@ teardown() {
   grep -q "set -euo pipefail" "$SKILL_DIR/scripts/finalize.sh"
 }
 
-# ---------- AC3: Story lifecycle scripts (load-story.sh / update-story-status.sh) ----------
+# ---------- AC3: Story lifecycle scripts (load-story.sh / transition-story-status.sh) ----------
+# Note: update-story-status.sh deprecation wrapper deleted in E59-S3.
+# Status transitions now route through transition-story-status.sh directly.
 
 @test "AC3: scripts/load-story.sh exists" {
   [ -f "$SKILL_DIR/scripts/load-story.sh" ]
-}
-
-@test "AC3: scripts/update-story-status.sh exists" {
-  [ -f "$SKILL_DIR/scripts/update-story-status.sh" ]
 }
 
 @test "AC3: load-story.sh references sprint-state.sh" {
   grep -q "sprint-state.sh" "$SKILL_DIR/scripts/load-story.sh"
 }
 
-@test "AC3: update-story-status.sh references sprint-state.sh" {
-  grep -q "sprint-state.sh" "$SKILL_DIR/scripts/update-story-status.sh"
+@test "AC3: SKILL.md references transition-story-status.sh directly" {
+  grep -q "transition-story-status.sh" "$SKILL_DIR/SKILL.md"
 }
 
-@test "AC3: update-story-status.sh supports backlog state" {
-  grep -q "backlog" "$SKILL_DIR/scripts/update-story-status.sh"
+@test "AC3: SKILL.md has zero update-story-status.sh references (post E59-S3)" {
+  run grep -c "update-story-status.sh" "$SKILL_DIR/SKILL.md"
+  [ "$output" = "0" ]
 }
 
 # ---------- AC4: Canonical filename convention ----------

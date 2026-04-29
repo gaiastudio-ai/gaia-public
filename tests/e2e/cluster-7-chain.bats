@@ -260,7 +260,7 @@ run_finalize() {
   [ -f "$SKILLS_DIR/gaia-dev-story/scripts/setup.sh" ]
   [ -f "$SKILLS_DIR/gaia-dev-story/scripts/finalize.sh" ]
   [ -f "$SKILLS_DIR/gaia-dev-story/scripts/load-story.sh" ]
-  [ -f "$SKILLS_DIR/gaia-dev-story/scripts/update-story-status.sh" ]
+  # update-story-status.sh deprecation wrapper deleted in E59-S3 — transitions now route through plugins/gaia/scripts/transition-story-status.sh directly.
   [ -f "$SKILLS_DIR/gaia-dev-story/scripts/checkpoint.sh" ]
   [ -f "$SKILLS_DIR/gaia-dev-story/scripts/git-branch.sh" ]
   [ -f "$SKILLS_DIR/gaia-dev-story/scripts/pr-create.sh" ]
@@ -295,21 +295,19 @@ run_finalize() {
   echo "$output" | grep -q "backlog"
 }
 
-@test "AC1b: dev-story update-story-status.sh transitions fixture story" {
-  # First get to ready-for-dev via valid adjacency path
-  bash "$SCRIPTS_DIR/sprint-state.sh" transition --story "$STORY_KEY" --to validating
-  bash "$SCRIPTS_DIR/sprint-state.sh" transition --story "$STORY_KEY" --to ready-for-dev
-  # Now test the dev-story-specific wrapper
-  run bash "$SKILLS_DIR/gaia-dev-story/scripts/update-story-status.sh" "$STORY_KEY" in-progress
-  [ "$status" -eq 0 ]
-  # Verify the story is now in-progress
-  run bash "$SCRIPTS_DIR/sprint-state.sh" get --story "$STORY_KEY"
-  echo "$output" | grep -q "in-progress"
+@test "AC1b: dev-story SKILL.md references transition-story-status.sh directly (post E59-S3)" {
+  grep -q "transition-story-status.sh" "$SKILLS_DIR/gaia-dev-story/SKILL.md"
 }
 
-@test "AC1b: dev-story update-story-status.sh rejects invalid transition" {
-  # Story starts at backlog — direct transition to done should fail
-  run bash "$SKILLS_DIR/gaia-dev-story/scripts/update-story-status.sh" "$STORY_KEY" done
+@test "AC1b: dev-story SKILL.md has zero update-story-status.sh references (post E59-S3)" {
+  run grep -c "update-story-status.sh" "$SKILLS_DIR/gaia-dev-story/SKILL.md"
+  [ "$output" = "0" ]
+}
+
+@test "AC1b: sprint-state.sh transition rejects invalid transition (backlog->done)" {
+  # Replaces the deleted wrapper-based negative test. The underlying sprint-state.sh
+  # rejects backlog->done; transition-story-status.sh delegates to the same state machine.
+  run bash "$SCRIPTS_DIR/sprint-state.sh" transition --story "$STORY_KEY" --to done
   [ "$status" -ne 0 ]
 }
 

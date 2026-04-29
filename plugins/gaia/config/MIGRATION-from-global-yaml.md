@@ -64,7 +64,7 @@ The shared default (`framework_version`, `date`) passes through unchanged; the o
 | 12 | `implementation_artifacts` | deprecated | Same as above — canonical path is hard-wired. |
 | 13 | `test_artifacts` | deprecated | Same as above. |
 | 14 | `creative_artifacts` | deprecated | Same as above. |
-| 15 | `sizing_map` | stays-in-global | Framework-wide Fibonacci sizing map — shared by all projects. |
+| 15 | `sizing_map` | project-overridable | Story-size to points mapping. `project > global` precedence per ADR-044 §10.26.3 / ADR-074 contract C1: when `project-config.yaml` defines `sizing_map:`, those values override the framework defaults (S=2, M=5, L=8, XL=13); when absent, `resolve-config.sh sizing_map` emits the framework defaults. Absence is the documented new-project behavior. |
 | 16 | `problem_solving` | stays-in-global | Framework-wide knob (context budget); not per-project. |
 | 17 | `installed_path` | stays-in-global | Machine-local absolute path to `_gaia/` — encodes operator filesystem and cannot be meaningfully shared. Declared in schema so CI fixtures can set it deterministically; in practice the machine-local value always wins. |
 | 18 | `config_path` | deprecated | Derivable from `installed_path`; no explicit consumer. |
@@ -88,10 +88,12 @@ The shared default (`framework_version`, `date`) passes through unchanged; the o
 
 ## Disposition summary
 
-- **moved-to-project-config:** 11 fields
-- **stays-in-global:** 9 fields
+- **moved-to-project-config:** 12 fields
+- **stays-in-global:** 8 fields
 - **deprecated:** 7 fields
 - **new (no predecessor):** 6 fields
+
+> Disposition note (E61-S1 / ADR-074 contract C1): `sizing_map` was reclassified from `stays-in-global` to `moved-to-project-config` (a.k.a. project-overridable). The block follows the `project > global` precedence rule per ADR-044 §10.26.3; absence in `project-config.yaml` falls back to the framework defaults (S=2, M=5, L=8, XL=13) emitted by `resolve-config.sh sizing_map`.
 
 Total legacy fields accounted for: 23 (every top-level key currently in `_gaia/_config/global.yaml`).
 

@@ -10,7 +10,7 @@
 #   exit 2 — gate table empty / malformed / write failure
 #
 # Refs: FR-RAR-2, AF-2026-04-28-7, NFR-RAR-1
-# Schema source: V1 instructions.xml lines 80-135 (immutable).
+# Schema source: V1 V1 reference schema lines 80-135 (immutable).
 
 load 'test_helper.bash'
 

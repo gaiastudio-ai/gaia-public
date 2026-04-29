@@ -2,7 +2,7 @@
 # review-summary-gen.sh — Deterministic V1-locked review-summary writer (E58-S2)
 #
 # Reads the current Review Gate table for a story (via review-gate.sh status)
-# and writes the V1 instructions.xml schema (lines 80-135) to
+# and writes the V1 V1 reference schema schema (lines 80-135) to
 # `${IMPLEMENTATION_ARTIFACTS}/{key}-review-summary.md` (or to the path supplied
 # via --output). The schema is frozen — YAML frontmatter + 6 reviewer sections
 # in canonical order + final aggregate Gate Status table — and re-runs are
@@ -10,7 +10,7 @@
 #
 # Refs: FR-RAR-2, AF-2026-04-28-7, NFR-RAR-1
 # Brief: docs/planning-artifacts/epics-and-stories.md §E58
-# Schema source: V1 instructions.xml lines 80-135 (immutable).
+# Schema source: V1 V1 reference schema lines 80-135 (immutable).
 #
 # Invocation contract (stable for E58-S5 / E58-S6 wiring):
 #
@@ -82,7 +82,7 @@ CANONICAL_SHORT_NAMES=(
   "review-perf"
 )
 
-# Per-reviewer report relpath template (V1 instructions.xml lines 73-78).
+# Per-reviewer report relpath template (V1 V1 reference schema lines 73-78).
 # Index-aligned with CANONICAL_GATES / CANONICAL_SHORT_NAMES.
 CANONICAL_REPORT_RELPATHS=(
   "docs/implementation-artifacts/{key}-code-review.md"

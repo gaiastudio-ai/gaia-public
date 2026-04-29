@@ -21,7 +21,7 @@ memory_path: /tmp/gaia-fx/_memory
 checkpoint_path: /tmp/gaia-fx/_memory/checkpoints
 installed_path: /tmp/gaia-fx/_gaia
 framework_version: 1.127.2-rc.1
-date: 2026-04-15
+date: 1970-01-01
 YAML
 }
 
@@ -39,7 +39,7 @@ YAML
   [[ "$output" == *"project_path='/tmp/gaia-fx/app'"* ]]
   [[ "$output" == *"memory_path='/tmp/gaia-fx/_memory'"* ]]
   [[ "$output" == *"framework_version='1.127.2-rc.1'"* ]]
-  [[ "$output" == *"date='2026-04-15'"* ]]
+  [[ "$output" == *"date='1970-01-01'"* ]]
 }
 
 @test "resolve-config.sh: --format json emits quoted JSON object" {
@@ -59,7 +59,7 @@ memory_path: /tmp/gaia-fx/_memory
 checkpoint_path: /tmp/gaia-fx/_memory/checkpoints
 installed_path: /tmp/gaia-fx/_gaia
 framework_version: 1.0.0
-date: 2026-04-15
+date: 1970-01-01
 YAML
   CLAUDE_SKILL_DIR="$bad" run "$SCRIPT"
   [ "$status" -eq 2 ]
@@ -113,7 +113,7 @@ memory_path: /tmp/ok/_memory
 checkpoint_path: /tmp/ok/_memory/checkpoints
 installed_path: /tmp/ok/_gaia
 framework_version: 1.0.0
-date: 2026-04-15
+date: 1970-01-01
 YAML
   CLAUDE_SKILL_DIR="$bad" run "$SCRIPT"
   [ "$status" -eq 2 ]
@@ -141,7 +141,7 @@ memory_path: /tmp/gaia-$tag/_memory
 checkpoint_path: /tmp/gaia-$tag/_memory/checkpoints
 installed_path: /tmp/gaia-$tag/_gaia
 framework_version: 1.127.2-rc.1
-date: 2026-04-15
+date: 1970-01-01
 YAML
 }
 
@@ -243,7 +243,7 @@ memory_path: /tmp/my project/_memory
 checkpoint_path: /tmp/my project/_memory/checkpoints
 installed_path: /tmp/my project/_gaia
 framework_version: 1.0.0
-date: 2026-04-15
+date: 1970-01-01
 YAML
   local out
   out="$(CLAUDE_SKILL_DIR="$dir" "$SCRIPT")"

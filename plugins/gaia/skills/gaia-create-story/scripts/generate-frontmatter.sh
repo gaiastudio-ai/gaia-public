@@ -1,0 +1,368 @@
+#!/usr/bin/env bash
+# generate-frontmatter.sh — gaia-create-story Step 4 deterministic frontmatter
+#                          emitter (E63-S3 / Work Item 6.1)
+#
+# Purpose:
+#   Emit the canonical 15-field YAML frontmatter for a story by parsing
+#   `epics-and-stories.md` (title, epic, priority, size, risk, depends_on,
+#   blocks, traces_to), mapping `size` -> `points` via
+#   `resolve-config.sh sizing_map`, and setting the remaining fields
+#   (`status: backlog`, `sprint_id: null`, `priority_flag: null`,
+#   `origin`/`origin_ref`, `date`, `author`).
+#
+# Consumers:
+#   - E63-S5  validate-frontmatter.sh  — validates this script's output schema
+#   - E63-S11 SKILL.md thin-orchestrator rewrite — invokes this script inline
+#
+# Contract source:
+#   - ADR-074 contract C1 — project-overridable `sizing_map`
+#   - ADR-044 §10.26.3   — config-split precedence (project > global)
+#   - ADR-042            — Scripts-over-LLM rationale
+#   - docs/planning-artifacts/feature-create-story-hardening.md#Work-Item-6.1
+#
+# Algorithm (in order):
+#   1. Parse CLI flags: --story-key, --epics-file, --project-config (required);
+#      --origin, --origin-ref (optional).
+#   2. Locate the target story block in the epics-file using awk: from the
+#      `### Story <key>:` heading through the next `---` HR or the next
+#      `### Story ` heading. Reject zero or multiple matches.
+#   3. Extract the eight epic-derived fields from the block's bullet lines.
+#      Title comes from the heading; the rest come from `- **Label:** value`
+#      bullets. Depends on / Blocks / Traces to default to `[]` when absent
+#      or set to em-dash / empty.
+#   4. Validate required fields (title, epic, priority, size, risk). On any
+#      missing field, write `missing field 'X' for story <key>` to stderr
+#      and exit 1 with empty stdout.
+#   5. Resolve `points` via `resolve-config.sh sizing_map --shared <project-
+#      config>`. Look up the story's size in the resolved S=…/M=…/L=…/XL=…
+#      block. HALT on resolver non-zero or unknown size.
+#   6. Resolve `author`: `git config user.name` -> `resolve-config.sh author`
+#      -> hard fallback `"gaia-create-story"`.
+#   7. Buffer the YAML output into a shell variable; flush only on success.
+#      This guarantees AC4 — no partial frontmatter on stderr exit.
+#
+# Exit codes:
+#   0 — success
+#   1 — malformed input (missing required field, story not found, unknown
+#       size, resolver failure)
+#   2 — usage error (missing required flag, unknown flag)
+#
+# Locale invariance:
+#   `LC_ALL=C` is set so awk pattern matching, sort/grep character classes,
+#   and tr/sed semantics behave identically on macOS BSD and Linux GNU.
+
+set -euo pipefail
+LC_ALL=C
+export LC_ALL
+
+SCRIPT_NAME="generate-frontmatter.sh"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+usage() {
+  cat >&2 <<'USAGE'
+Usage: generate-frontmatter.sh \
+         --story-key <KEY> \
+         --epics-file <path> \
+         --project-config <path> \
+         [--origin <s>] \
+         [--origin-ref <s>]
+
+  --story-key <KEY>          Story key (e.g., E1-S2). Required.
+  --epics-file <path>        Path to epics-and-stories.md. Required.
+  --project-config <path>    Path to project-config.yaml (passed to
+                             resolve-config.sh --shared). Required.
+  --origin <s>               Optional origin id (e.g., AF-2026-04-28-7).
+                             Emitted as `null` when omitted.
+  --origin-ref <s>           Optional origin reference (e.g., "Work Item 6.1").
+                             Emitted as `null` when omitted.
+
+Output (stdout): YAML frontmatter block delimited by `---` lines, in the
+canonical 15-field order matching story-template.md.
+
+Exit codes: 0 success | 1 malformed input | 2 usage error.
+USAGE
+}
+
+log() { printf '%s: %s\n' "$SCRIPT_NAME" "$*" >&2; }
+die_usage() { log "$*"; usage; exit 2; }
+die_input() { log "$*"; exit 1; }
+
+# ---------- CLI parsing ----------
+
+story_key=""
+epics_file=""
+project_config=""
+origin=""
+origin_ref=""
+origin_set=0
+origin_ref_set=0
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --story-key)
+      [ $# -ge 2 ] || die_usage "--story-key requires a value"
+      story_key="$2"; shift 2 ;;
+    --epics-file)
+      [ $# -ge 2 ] || die_usage "--epics-file requires a value"
+      epics_file="$2"; shift 2 ;;
+    --project-config)
+      [ $# -ge 2 ] || die_usage "--project-config requires a value"
+      project_config="$2"; shift 2 ;;
+    --origin)
+      [ $# -ge 2 ] || die_usage "--origin requires a value"
+      origin="$2"; origin_set=1; shift 2 ;;
+    --origin-ref)
+      [ $# -ge 2 ] || die_usage "--origin-ref requires a value"
+      origin_ref="$2"; origin_ref_set=1; shift 2 ;;
+    -h|--help)
+      usage; exit 0 ;;
+    *)
+      die_usage "unknown argument: $1" ;;
+  esac
+done
+
+[ -n "$story_key" ]      || die_usage "--story-key is required"
+[ -n "$epics_file" ]     || die_usage "--epics-file is required"
+[ -n "$project_config" ] || die_usage "--project-config is required"
+
+[ -r "$epics_file" ]     || die_input "epics-file not readable: $epics_file"
+[ -r "$project_config" ] || die_input "project-config not readable: $project_config"
+
+# ---------- Locate the target story block ----------
+#
+# awk state-machine (per gaia-shell-idioms): toggle in_block when the heading
+# line matches; emit lines until the terminating boundary (next `### Story `
+# heading or HR `---` on its own line). Avoids the awk range-bug.
+
+block="$(awk -v key="$story_key" '
+  BEGIN { in_block = 0; matched = 0 }
+  {
+    line = $0
+    # Heading detection: `### Story <key>:` exactly, with the boundary being
+    # either end-of-line or whitespace.
+    if (match(line, "^### Story " key ":($|[[:space:]])")) {
+      if (in_block) {
+        # We were already inside a different block of the same key — multi-
+        # match condition. Flag it and bail.
+        print "__GENFM_MULTIPLE_MATCHES__"
+        exit 0
+      }
+      in_block = 1
+      matched = 1
+      print line
+      next
+    }
+    if (in_block) {
+      # Termination: HR `---` on its own line OR next `### Story ` heading.
+      if (line == "---" || line ~ /^### Story /) {
+        in_block = 0
+        next
+      }
+      print line
+    }
+  }
+  END {
+    if (!matched) {
+      print "__GENFM_NO_MATCH__"
+    }
+  }
+' "$epics_file")"
+
+case "$block" in
+  *"__GENFM_NO_MATCH__"*)
+    die_input "story key not found in epics-file: $story_key"
+    ;;
+  *"__GENFM_MULTIPLE_MATCHES__"*)
+    die_input "multiple matches for story key in epics-file: $story_key"
+    ;;
+esac
+
+# ---------- Field extraction helpers ----------
+
+# extract_bullet <label>: emit the trimmed value of `- **<label>:** <value>`.
+# Empty when not present.
+extract_bullet() {
+  local label="$1"
+  printf '%s\n' "$block" | awk -v lab="$label" '
+    {
+      # Match `- **<label>:** <value>` with optional surrounding whitespace.
+      pat = "^[[:space:]]*-[[:space:]]+\\*\\*" lab ":\\*\\*[[:space:]]*"
+      if (match($0, pat)) {
+        v = substr($0, RSTART + RLENGTH)
+        # Trim trailing whitespace.
+        sub(/[[:space:]]+$/, "", v)
+        print v
+        exit
+      }
+    }
+  '
+}
+
+# extract_array <label>: emit a YAML flow sequence like `["A", "B"]`. When the
+# label is absent or its value is empty / em-dash, emit `[]`.
+extract_array() {
+  local label="$1" val
+  val="$(extract_bullet "$label")"
+  # Strip a parenthesized comment like ` (consumes ...)` from depends_on.
+  val="${val%% (*}"
+  # Trim whitespace.
+  val="$(printf '%s' "$val" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
+  if [ -z "$val" ] || [ "$val" = "—" ] || [ "$val" = "-" ] || [ "$val" = "None" ] || [ "$val" = "none" ]; then
+    printf '[]'
+    return
+  fi
+  # Split on commas, trim each, emit `["a", "b"]`.
+  printf '%s\n' "$val" | awk '
+    {
+      n = split($0, parts, /,/)
+      out = "["
+      first = 1
+      for (i = 1; i <= n; i++) {
+        item = parts[i]
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", item)
+        if (item == "") continue
+        if (!first) out = out ", "
+        out = out "\"" item "\""
+        first = 0
+      }
+      out = out "]"
+      print out
+    }
+  '
+}
+
+# Title: from `### Story <key>: <title>` heading. Empty when truncated.
+title=""
+title="$(printf '%s\n' "$block" | awk -v key="$story_key" '
+  {
+    pat = "^### Story " key ":[[:space:]]*"
+    if (match($0, pat)) {
+      t = substr($0, RSTART + RLENGTH)
+      sub(/[[:space:]]+$/, "", t)
+      print t
+      exit
+    }
+  }
+')"
+
+# Epic: from `**Epic:**` bullet — strip everything after the em-dash to keep
+# only the key portion (e.g., `E99 — Frontmatter generation fixtures` -> `E99`).
+epic_raw="$(extract_bullet "Epic")"
+epic="${epic_raw%% —*}"
+epic="${epic%% --*}"
+epic="$(printf '%s' "$epic" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
+
+priority="$(extract_bullet "Priority")"
+
+# Size: strip the parenthesized points hint (e.g., `M (3 pts)` -> `M`).
+size_raw="$(extract_bullet "Size")"
+size="${size_raw%% *}"
+
+risk="$(extract_bullet "Risk")"
+
+depends_on_yaml="$(extract_array "Depends on")"
+blocks_yaml="$(extract_array "Blocks")"
+traces_to_yaml="$(extract_array "Traces to")"
+
+# ---------- Validate required fields ----------
+
+[ -n "$title" ]    || die_input "missing field 'title' for story $story_key"
+[ -n "$epic" ]     || die_input "missing field 'epic' for story $story_key"
+[ -n "$priority" ] || die_input "missing field 'priority' for story $story_key"
+[ -n "$size" ]     || die_input "missing field 'size' for story $story_key"
+[ -n "$risk" ]     || die_input "missing field 'risk' for story $story_key"
+
+# Validate size is one of the canonical four-tuple.
+case "$size" in
+  S|M|L|XL) ;;
+  *) die_input "unknown size '$size' for story $story_key (expected S/M/L/XL)" ;;
+esac
+
+# ---------- Resolve points via resolve-config.sh sizing_map ----------
+
+resolver=""
+# Prefer co-located shared scripts dir (gaia-public/plugins/gaia/scripts/) by
+# walking up from this script's directory.
+candidate="$(cd "$SCRIPT_DIR/../../../scripts" 2>/dev/null && pwd || true)/resolve-config.sh"
+if [ -x "$candidate" ]; then
+  resolver="$candidate"
+else
+  # Fall back to PATH discovery.
+  resolver="$(command -v resolve-config.sh 2>/dev/null || true)"
+fi
+[ -n "$resolver" ] && [ -x "$resolver" ] || \
+  die_input "resolve-config.sh not found (looked at $candidate and PATH)"
+
+sizing_map_output=""
+if ! sizing_map_output="$("$resolver" --shared "$project_config" sizing_map 2>&1)"; then
+  log "resolve-config.sh sizing_map failed: $sizing_map_output"
+  exit 1
+fi
+
+points=""
+points="$(printf '%s\n' "$sizing_map_output" | awk -F= -v k="$size" '$1==k{print $2; exit}')"
+[ -n "$points" ] || die_input "resolve-config.sh sizing_map missing key for size '$size'"
+
+# ---------- Resolve author ----------
+
+author=""
+if author="$(git config user.name 2>/dev/null)" && [ -n "$author" ]; then
+  :
+else
+  # Try resolve-config.sh author (positional query); ignore failure.
+  author="$("$resolver" --shared "$project_config" author 2>/dev/null || true)"
+  if [ -z "$author" ]; then
+    author="gaia-create-story"
+  fi
+fi
+
+# ---------- Date ----------
+
+date_today="$(date +%Y-%m-%d)"
+
+# ---------- Origin / origin_ref formatting ----------
+
+if [ "$origin_set" -eq 1 ]; then
+  origin_yaml="\"$origin\""
+else
+  origin_yaml="null"
+fi
+if [ "$origin_ref_set" -eq 1 ]; then
+  origin_ref_yaml="\"$origin_ref\""
+else
+  origin_ref_yaml="null"
+fi
+
+# ---------- Buffer + emit YAML frontmatter ----------
+#
+# Field order matches story-template.md lines 1-22 (template/version/used_by
+# header, then 15 fields). We emit `figma:` only when invoked with future
+# Figma flags; this story does not introduce them.
+
+output="$(cat <<EOF
+---
+template: 'story'
+version: 1.4.0
+used_by: ['create-story']
+key: "$story_key"
+title: "$title"
+epic: "$epic"
+status: backlog
+priority: "$priority"
+size: "$size"
+points: $points
+risk: "$risk"
+sprint_id: null
+priority_flag: null
+origin: $origin_yaml
+origin_ref: $origin_ref_yaml
+depends_on: $depends_on_yaml
+blocks: $blocks_yaml
+traces_to: $traces_to_yaml
+date: "$date_today"
+author: "$author"
+---
+EOF
+)"
+
+printf '%s\n' "$output"

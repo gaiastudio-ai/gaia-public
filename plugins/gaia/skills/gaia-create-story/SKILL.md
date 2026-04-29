@@ -331,6 +331,7 @@ Columns: `TC ID | Scenario | Type | Severity | Story Key`. The literal `edge-cas
 - Write tasks/subtasks breakdown.
 - Write test scenarios table.
 - Write the story file to `docs/implementation-artifacts/{story_key}-{slug}.md`.
+- **Deterministic skeleton via `scaffold-story.sh` (E63-S9 / Work Item 6.4).** After computing the slug via `slugify.sh` (E63-S1) and the frontmatter YAML via `generate-frontmatter.sh` (E63-S3), invoke `!scripts/scaffold-story.sh --template ${CLAUDE_PLUGIN_ROOT}/skills/gaia-create-story/story-template.md --output docs/implementation-artifacts/{story_key}-{slug}.md --frontmatter <yaml>` to render the deterministic skeleton — frontmatter token replacement, Review Gate, Definition of Done, Findings, Estimate, and Dev Agent Record sections are populated by the script. The script forces `status: backlog` per ADR-074 contract C3 and emits the seven content section names on stdout in declaration order: `User Story`, `Acceptance Criteria`, `Tasks / Subtasks`, `Dev Notes`, `Technical Notes`, `Dependencies`, `Test Scenarios`. Read the stdout list and fill each `{CONTENT_PLACEHOLDER}` with judgment-bearing content via Edit calls. This is the staged form for E63-S11's thin-orchestrator rewrite — the existing prose above (slug derivation, sizing-map resolution, frontmatter population) remains the source of truth for the upstream computations the script consumes.
 
 > After artifact write: run open-question detection snippet
 > `!${CLAUDE_PLUGIN_ROOT}/scripts/detect-open-questions.sh docs/implementation-artifacts/${STORY_KEY}-${SLUG}.md`

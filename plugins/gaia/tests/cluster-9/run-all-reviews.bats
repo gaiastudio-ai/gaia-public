@@ -415,3 +415,102 @@ MOCK
   [[ "$output" == *"MOCK_VERDICTS"* ]]
   [[ "$output" == *"required"* ]]
 }
+
+# ---------- E58-S6: SKILL.md thin-orchestrator + parity trace ----------
+
+# Path to the skill file (resolved once per test from SCRIPTS_DIR layout).
+SKILL_FILE="$(cd "${BATS_TEST_DIRNAME}/../../skills/gaia-run-all-reviews" && pwd)/SKILL.md"
+# Path to the parity trace.
+PARITY_TRACE="$(cd "${BATS_TEST_DIRNAME}/../../test/fixtures/parity-baseline/traces" && pwd)/run-all-reviews.jsonl"
+
+# AC1 (TC-RAR-15, ECI-670): SKILL.md frontmatter must declare the new
+# argument-hint with [--force] and keep allowed-tools at [Read, Grep, Glob, Bash].
+@test "E58-S6 AC1: SKILL.md argument-hint includes [--force] and allowed-tools unchanged" {
+  [ -f "$SKILL_FILE" ]
+
+  # Extract frontmatter (between leading --- and the next ---)
+  local fm
+  fm=$(awk '/^---$/{c++; next} c==1' "$SKILL_FILE")
+
+  # argument-hint check (exact string match)
+  echo "$fm" | grep -Fq 'argument-hint: "[story-key] [--force]"'
+  # allowed-tools unchanged
+  echo "$fm" | grep -Fq 'allowed-tools: [Read, Grep, Glob, Bash]'
+}
+
+# AC2 (TC-RAR-15): SKILL.md Step 2 must reference review-skip-check.sh and
+# scope per-reviewer LLM judgment to the `run` slice of its JSON output.
+@test "E58-S6 AC2: SKILL.md Step 2 invokes review-skip-check.sh and iterates the run slice" {
+  grep -Fq 'review-skip-check.sh' "$SKILL_FILE"
+  # Must mention the JSON {skip,run} partition contract
+  grep -Eq '\{skip[^}]*run' "$SKILL_FILE"
+}
+
+# AC3 (TC-RAR-15, ECI-670): SKILL.md must document that --force is forwarded
+# to review-skip-check.sh so all 6 LLM judgments fire.
+@test "E58-S6 AC3: SKILL.md documents --force passthrough to review-skip-check.sh" {
+  # The --force flag must be referenced in Step 2 / orchestrator wiring.
+  grep -Fq -- '--force' "$SKILL_FILE"
+}
+
+# AC4 (TC-RAR-16): SKILL.md must document SKIPPED reporting for already-PASSED
+# reviewers in the final summary block.
+@test "E58-S6 AC4: SKILL.md documents SKIPPED (already PASSED) summary entries" {
+  grep -Fq 'SKIPPED (already PASSED)' "$SKILL_FILE"
+}
+
+# AC4/AC5 (TC-RAR-16, NFR-RAR-1, TC-RAR-17): Step 3 must call the three
+# deterministic scripts in order: review-summary-gen.sh, review-gate.sh
+# review-gate-check, review-nudge.sh.
+@test "E58-S6 AC4+AC5: SKILL.md Step 3 calls summary-gen, review-gate-check, and nudge" {
+  grep -Fq 'review-summary-gen.sh' "$SKILL_FILE"
+  grep -Fq 'review-gate-check' "$SKILL_FILE"
+  grep -Fq 'review-nudge.sh' "$SKILL_FILE"
+
+  # Order check: in Step 3, the three deterministic helper scripts must
+  # be invoked in canonical order. Anchor on `bash scripts/...` invocation
+  # lines (the imperative call sites) rather than prose mentions, since
+  # the Mission/Critical-Rules prose may list multiple scripts on a single
+  # line. The Step-3 procedure must call summary-gen first, then
+  # review-gate-check, then review-nudge.
+  local ln_summary ln_check ln_nudge
+  ln_summary=$(grep -nE 'bash scripts/review-summary-gen\.sh' "$SKILL_FILE" | head -1 | cut -d: -f1)
+  ln_check=$(grep -nE 'bash scripts/review-gate\.sh review-gate-check' "$SKILL_FILE" | head -1 | cut -d: -f1)
+  ln_nudge=$(grep -nE 'bash scripts/review-nudge\.sh' "$SKILL_FILE" | head -1 | cut -d: -f1)
+  [ -n "$ln_summary" ] && [ -n "$ln_check" ] && [ -n "$ln_nudge" ]
+  [ "$ln_summary" -lt "$ln_check" ]
+  [ "$ln_check" -lt "$ln_nudge" ]
+}
+
+# AC6: Parity trace must reflect the new step boundaries:
+# validate-input -> skip-check -> per-reviewer -> summary-gen ->
+# review-gate-check -> nudge.
+@test "E58-S6 AC6: parity trace reflects new step-boundary phases" {
+  [ -f "$PARITY_TRACE" ]
+
+  # Each phase name must appear at least once in the trace.
+  grep -Fq 'validate-input' "$PARITY_TRACE"
+  grep -Fq 'skip-check' "$PARITY_TRACE"
+  grep -Fq 'per-reviewer' "$PARITY_TRACE"
+  grep -Fq 'summary-gen' "$PARITY_TRACE"
+  grep -Fq 'review-gate-check' "$PARITY_TRACE"
+  grep -Fq 'nudge' "$PARITY_TRACE"
+}
+
+# AC-EC11: Parity-trace JSONL must be well-formed — every line must parse
+# as a single JSON object. The bats test fails fast with the offending line
+# number if any line is malformed.
+@test "E58-S6 AC-EC11: parity trace JSONL is well-formed (one JSON object per line)" {
+  [ -f "$PARITY_TRACE" ]
+
+  local lineno=0
+  while IFS= read -r line; do
+    lineno=$((lineno + 1))
+    # Skip empty lines (allowed at EOF)
+    [ -z "$line" ] && continue
+    if ! printf '%s' "$line" | jq -e . >/dev/null 2>&1; then
+      echo "malformed JSON on line $lineno: $line" >&2
+      return 1
+    fi
+  done < "$PARITY_TRACE"
+}

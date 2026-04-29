@@ -114,6 +114,12 @@ fields:
     default: null
     description: "Absolute (or project-root-relative) path to the docs/implementation-artifacts directory. Defaults to {project_root}/docs/implementation-artifacts when absent. Added under E28-S200 (see test_artifacts)."
 
+  creative_artifacts:
+    type: path
+    required: false
+    default: null
+    description: "Absolute (or project-root-relative) path to the docs/creative-artifacts directory. Defaults to {project_root}/docs/creative-artifacts when absent. Added under E60-S1 / ADR-074 contract C1 (mirrors test_artifacts/planning_artifacts/implementation_artifacts pattern)."
+
   val_integration:
     type: map
     required: false
@@ -161,3 +167,19 @@ fields:
     required: false
     default: null
     description: "Project-wide agent .customize.yaml overrides aggregated by agent id. Shared team config per feature brief P20-S1."
+
+  dev_story:
+    type: map
+    required: false
+    default: null
+    description: "Dev-Story workflow knobs. Holds the nested tdd_review block consumed by /gaia-dev-story (E57-S1). Schema for the nested block (resolved via resolve-config.sh --field dev_story.tdd_review.<key>):
+      - threshold (enum): off | low | medium | high — default medium. Risk threshold at which the post-Red TDD review gate prompt fires. 'off' opts out entirely.
+      - phases (array): default [red]. TDD phase(s) at which the review fires. type=array.
+      - qa_auto_in_yolo (bool): default true. Whether YOLO auto-runs the QA review after the gate.
+      - qa_timeout_seconds (int): default 600. Per-review timeout for the QA auto-run."
+
+  sizing_map:
+    type: map
+    required: false
+    default: null
+    description: "Story-size to points mapping (T-shirt → Fibonacci scale). Optional project-overridable block per ADR-074 contract C1 / ADR-044 §10.26.3. When set, project values override the framework defaults (S=2, M=5, L=8, XL=13); when absent, the resolver falls back to those defaults so absence is the documented new-project behavior. Resolved via `resolve-config.sh sizing_map`, which emits four canonical key=value lines (S=…, M=…, L=…, XL=…). Consumers: gaia-sprint-plan (today) and gaia-create-story Step 4 (E61-S2)."

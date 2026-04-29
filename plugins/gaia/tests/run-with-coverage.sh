@@ -152,7 +152,11 @@ for s in "$SCRIPTS_DIR"/*.sh; do
       # (b) migrate-config-split.sh internals — yq expression/plan helpers
       build_del_expr|build_pick_expr|classify_key|plan_split) covered+=("$f"); continue ;;
       # (b) resolve-config.sh internals — merge/parse helpers
+      # E57-S1: merge_doubly_nested_key + parse_yaml_doubly_nested_key are
+      # exercised end-to-end via resolve-config's --field flag in
+      # dev-story-tdd-review-config.bats (AC1/AC2/AC3).
       merge_key|merge_nested_key|parse_yaml_nested_key) covered+=("$f"); continue ;;
+      merge_doubly_nested_key|parse_yaml_doubly_nested_key) covered+=("$f"); continue ;;
       # (b) review-runner.sh internals — CLI arg parser, reviewer dispatch, gate writer
       parse_args|run_reviewer|write_gate) covered+=("$f"); continue ;;
       # (b) sprint-status-dashboard.sh internals — row emitter + YAML extractor

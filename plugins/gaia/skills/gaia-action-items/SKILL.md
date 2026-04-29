@@ -7,7 +7,7 @@ allowed-tools: [Read, Write, Edit]
 
 ## Mission
 
-You are processing open action items that accumulated since the last sprint — the pre-sprint triage pass. The tracker lives at `docs/implementation-artifacts/action-items.yaml` and is populated by `/gaia-retro`, `/gaia-triage-findings`, `/gaia-tech-debt-review`, and `/gaia-correct-course`. Your job is to walk through each open item, route it to the correct agent or ask the user directly, record the resolution with reasoning, and update the tracker.
+You are processing open action items that accumulated since the last sprint — the pre-sprint triage pass. The tracker lives at `docs/planning-artifacts/action-items.yaml` (canonical location per architecture §10.28.6 / ADR-052; reconciled in E36-S4) and is populated by `/gaia-retro`, `/gaia-triage-findings`, `/gaia-tech-debt-review`, and `/gaia-correct-course`. Your job is to walk through each open item, route it to the correct agent or ask the user directly, record the resolution with reasoning, and update the tracker.
 
 This skill is the native Claude Code conversion of the legacy action-items workflow at `_gaia/lifecycle/workflows/4-implementation/action-items/instructions.xml` (brief Cluster 14, story E28-S111). The legacy 131-line XML body is preserved here as explicit prose per ADR-041. No workflow engine, no engine-specific XML step tags.
 
@@ -36,7 +36,7 @@ The skill runs four steps in strict order, mirroring the legacy `action-items/in
 
 ## Step 1 — Load and Display
 
-- Read `docs/implementation-artifacts/action-items.yaml`. If the file does not exist, display `No action items tracked yet. Action items are created by /gaia-retro, /gaia-triage-findings, /gaia-tech-debt-review, and /gaia-correct-course.` and stop.
+- Read `docs/planning-artifacts/action-items.yaml`. If the file does not exist, display `No action items tracked yet. Action items are created by /gaia-retro, /gaia-triage-findings, /gaia-tech-debt-review, and /gaia-correct-course.` and stop.
 - Filter to `open` and `in-progress` items only (skip `done`, `invalid`, `deferred`).
 - Apply escalation rules:
   - Items open for **3+ sprints** → auto-escalate priority MEDIUM → HIGH.
@@ -116,7 +116,7 @@ For each open item (highest priority first, then oldest first):
 
 ## Step 3 — Update Tracker
 
-- For each processed item, update `docs/implementation-artifacts/action-items.yaml`:
+- For each processed item, update `docs/planning-artifacts/action-items.yaml`:
   - `status`: `done` | `invalid` | `deferred` | `in-progress` (based on the decision)
   - `resolution`: reasoning from the deciding agent / user (blank is invalid)
   - `resolved_date`: current date (for `done` / `invalid`)
@@ -173,7 +173,7 @@ If all resolved:
 ## References
 
 - Legacy source: `_gaia/lifecycle/workflows/4-implementation/action-items/instructions.xml` (131 lines) — parity reference for NFR-053.
-- Tracker: `docs/implementation-artifacts/action-items.yaml`.
+- Tracker: `docs/planning-artifacts/action-items.yaml` (canonical location per architecture §10.28.6 / ADR-052).
 - Triggers (populate the tracker): `/gaia-retro`, `/gaia-triage-findings`, `/gaia-tech-debt-review`, `/gaia-correct-course`.
 - Downstream consumer: `/gaia-sprint-plan`.
 - ADR-041 — Native Execution Model via Claude Code Skills + Subagents + Plugins + Hooks.

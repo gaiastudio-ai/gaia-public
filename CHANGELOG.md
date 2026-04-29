@@ -9,6 +9,73 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) for t
 
 ## [Unreleased]
 
+### v1.132.x — Dev-story tooling quirks cleanup (E64-S1)
+
+- **E64-S1**: bundle four sprint-33 dev-story tooling quirks into a single
+  cleanup pass.
+  - `dod-check.sh` no longer falls through to the system POSIX
+    `/bin/test` builtin for the `tests` row. The script now resolves a
+    project test command via deterministic precedence:
+    `config/project-config.yaml test_cmd:` → `package.json scripts.test`
+    (via `npm test`) → `bats tests/*.bats` discovery. When no signal
+    resolves, the row is reported as `SKIPPED — no test runner detected`
+    (exit 0), never `FAILED`.
+  - `dod-check.sh` subtask scan is scoped to the `## Tasks / Subtasks`
+    section. Unchecked items in `## Definition of Done` (e.g., "PR merged
+    to staging" pre-merge) and `## Acceptance Criteria` are intentionally
+    excluded from the count. Stories whose Tasks/Subtasks are all checked
+    now PASS the subtask row even when the DoD section legitimately
+    carries unchecked items at Step 9.
+  - New shared parser library
+    `skills/gaia-dev-story/scripts/frontmatter-lib.sh` with `fm_slice`
+    (extract YAML frontmatter block) and `fm_get_field` (read a single
+    field). `story-parse.sh`, `pr-body.sh`, and `commit-msg.sh` now
+    source the library instead of carrying three duplicated awk
+    implementations of the same primitive.
+  - `commit-msg.sh` emits commitlint-safe subjects by prepending a
+    lowercase verb derived from the story `type:` field (`feature` →
+    `wire`, `bug` → `fix`, `refactor` → `refactor`, `chore` → `update`).
+    Story titles that already start with a lowercase verb are passed
+    through unchanged. Effect: PRs opened from a `/gaia-dev-story` run
+    on a story whose title begins with an ALL-CAPS or PascalCase token
+    (e.g., `SKILL.md gate wiring`, `API client retry policy`) now pass
+    the `lint-pr-title` GitHub Action check without manual `gh pr edit`
+    intervention.
+
+### v1.131.x — TDD Review Gate Default
+
+- **Deprecation — `/gaia-dev-story` Steps 1, 10, 11 narrative fallback**: the
+  inline LLM narrative paths for frontmatter parsing (Step 1), commit-message
+  composition / promotion-chain inference (Step 10), and PR-body construction
+  (Step 11) are deprecated in v1.131.x and removed in v1.132.0. The canonical
+  paths now run through `story-parse.sh`, `detect-mode.sh`, `check-deps.sh`,
+  `promotion-chain-guard.sh`, `commit-msg.sh`, and `pr-body.sh`. Brownfield
+  projects on a stale plugin retain a single-minor-version fallback gated on
+  `command -v <script>`; upgrade to v1.132.0 will hard-remove the fallback.
+- **E57-S8**: wire the six new helper scripts (`story-parse.sh`,
+  `detect-mode.sh`, `check-deps.sh`, `promotion-chain-guard.sh`, `commit-msg.sh`,
+  `pr-body.sh`) into `/gaia-dev-story` SKILL.md at Steps 1, 10, and 11.
+  Narrative fallback retained for one minor version (v1.131.x → v1.132.0) so
+  brownfield projects don't break mid-upgrade. Regression bats at
+  `tests/dev-story-script-wiring.bats` enforces the wiring contract.
+- **E57-S1**: introduce the `dev_story.tdd_review` config block consumed by
+  `/gaia-dev-story`. The block ships in `project-config.schema.yaml` and
+  `project-config.yaml.example` with the following defaults:
+  - `threshold: medium` — risk threshold at which the post-Red TDD review
+    gate prompt fires. Allowed values: `off | low | medium | high`.
+  - `phases: [red]` — TDD phases at which the review fires.
+  - `qa_auto_in_yolo: true` — YOLO mode auto-runs the QA review after
+    the gate.
+  - `qa_timeout_seconds: 600` — per-review timeout for the QA auto-run.
+  - **User-visible effect:** stories with `risk: medium` or higher will
+    see a one-time prompt after the TDD Red phase asking whether to run
+    the review immediately. Existing low-risk and unset-risk stories see
+    no behavior change.
+  - **Opt-out:** set `threshold: off` in your shared `project-config.yaml`
+    to disable the gate entirely.
+  - The four resolved values round-trip via
+    `resolve-config.sh --field dev_story.tdd_review.<key>`.
+
 ### Sprint 24 (E28 — GAIA Native Conversion Program)
 
 #### Reverted

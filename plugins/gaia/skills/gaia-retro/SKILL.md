@@ -241,7 +241,7 @@ Invoke:
 ```bash
 ${CLAUDE_PLUGIN_ROOT}/skills/gaia-retro/scripts/cross-retro-detect.sh \
   --retros-dir     "${CLAUDE_PROJECT_ROOT}/docs/implementation-artifacts" \
-  --action-items   "${CLAUDE_PROJECT_ROOT}/docs/implementation-artifacts/action-items.yaml" \
+  --action-items   "${CLAUDE_PROJECT_ROOT}/docs/planning-artifacts/action-items.yaml" \
   --current-sprint "${sprint_id}"
 ```
 
@@ -262,7 +262,7 @@ All edge paths are non-blocking (per the story's "Failure posture"):
 - Mixed-case or whitespace variants → normalize to the same hash (AC-EC10).
 - 100+ prior retros → bounded per-file read (`MAX_BYTES=65536`) caps token usage (NFR-RIM-1).
 
-> **Note (E36-S2 coupling):** the increment writer is an inline, byte-compatible stand-in for the ADR-052 shared retro writer helper delivered by E36-S2. When E36-S2 lands, replace the body of `action-items-increment.sh` with a delegation to the helper — the CLI contract stays stable, so callers in this skill do not need to change.
+> **Note (ADR-052 delegation):** `action-items-increment.sh` sources the canonical shared retro writer (`gaia-public/plugins/gaia/scripts/retro-sidecar-write.sh`) for allowlist enforcement and path resolution (E36-S5 swap-in). The CLI contract is unchanged — callers in this skill do not need to be updated.
 
 ### Step 5f --- Skill Improvement Proposals (FR-RIM-6, ADR-053, architecture §10.28.7)
 

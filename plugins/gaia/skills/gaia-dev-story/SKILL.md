@@ -34,6 +34,7 @@ This skill is the native Claude Code conversion of the legacy dev-story workflow
 - When reading or running application source code, use the project path as the base directory.
 - All mechanical operations (git, checkpoint, sprint-state, sha256, PR, CI, merge) are handled by scripts -- do NOT inline shell commands in the conversation.
 - The PostToolUse hook fires `checkpoint.sh` automatically after every Edit/Write -- you do not need to manually checkpoint file mutations.
+- Story status MUST only be changed via `transition-story-status.sh`. Direct edits to `status:` fields in story frontmatter, sprint-status.yaml, epics-and-stories.md, or story-index.yaml are FORBIDDEN.
 
 ## Steps
 
@@ -41,15 +42,47 @@ This skill is the native Claude Code conversion of the legacy dev-story workflow
 
 - Parse the story key from the argument (e.g., `/gaia-dev-story E1-S2`).
 - Run `scripts/load-story.sh {story_key}` to locate and validate the story file.
-- Read the story file: extract key, status, acceptance criteria, subtasks, dependencies, risk level.
-- Detect execution mode:
-  - Status `ready-for-dev` -> FRESH (new implementation)
-  - Status `in-progress` with FAILED reviews -> REWORK (fix review issues)
-  - Status `in-progress` otherwise -> RESUME (continue from checkpoint)
+
+<!-- E57-S8: step1 script-wiring begin -->
+After `load-story.sh` resolves the absolute story path, drive frontmatter parsing,
+mode detection, and dependency-readiness through the deterministic helper scripts —
+the LLM no longer parses the YAML frontmatter or computes the FRESH/REWORK/RESUME
+verdict inline (per ADR-057, ADR-073, AF-2026-04-28-6).
+
+- Run `${CLAUDE_PLUGIN_ROOT}/skills/gaia-dev-story/scripts/story-parse.sh {story_path}`
+  and `eval` its stdout to populate the canonical 10-variable env-var contract
+  (`STORY_KEY`, `STATUS`, `RISK`, `EPIC_KEY`, `TYPE`, `DEPENDS_ON`, `SUBTASK_COUNT`,
+  `SUBTASK_CHECKED`, `AC_COUNT`, `STORY_PATH`). Exit 2 = malformed frontmatter; HALT
+  with the script's stderr.
+- Run `${CLAUDE_PLUGIN_ROOT}/skills/gaia-dev-story/scripts/detect-mode.sh {story_path}`.
+  Stdout is exactly one of `FRESH | REWORK | RESUME` — capture it as the execution
+  mode. Do NOT re-derive the mode from `$STATUS` inline; the script is the single
+  source of truth (per FR-DSS-1, FR-DSS-2).
+- Run `${CLAUDE_PLUGIN_ROOT}/skills/gaia-dev-story/scripts/check-deps.sh {story_path}`.
+  Exit 0 = all `depends_on:` stories are status `done`; exit 1 = at least one dep is
+  not done (stderr lists `<KEY>: <STATUS>`); exit 2 = at least one dep file is missing
+  on disk. HALT on exit 1 or 2 — surface stderr to the user before proceeding.
+
+**Narrative Fallback (deprecated v1.131.x → v1.132.0):**
+For brownfield projects on a stale plugin where these scripts are not yet present,
+fall back to the legacy LLM narrative path. Each fallback is gated on the absence
+of the new script:
+
+```
+if ! command -v story-parse.sh >/dev/null 2>&1; then
+  # legacy narrative: read frontmatter inline, derive mode from $STATUS
+else
+  # new script path (above)
+fi
+```
+
+This fallback is retained for ONE minor version (v1.131.x → v1.132.0) so brownfield
+users with stale plugins do not break mid-upgrade. It will be removed in v1.132.0.
+<!-- E57-S8: step1 script-wiring end -->
 
 ### Step 2 -- Update Status
 
-- For FRESH mode: run `scripts/update-story-status.sh {story_key} in-progress`.
+- For FRESH mode: run `scripts/transition-story-status.sh {story_key} --to in-progress`.
 - For REWORK/RESUME: skip -- story is already in-progress.
 
 <!-- E55-S5: step 2b atdd gate begin -->
@@ -151,12 +184,50 @@ Backward-compatibility note (NFR-DSH-3): a resumed in-progress story with no Ste
 - Run the test suite -- verify all new tests FAIL.
 - Tests MUST fail because implementation does not exist yet. If a test passes without implementation, it is vacuous and must be rewritten.
 
+### Step 5a -- TDD Review Gate (Red phase)
+
+<!-- E57-S4: step5 tdd-review-gate begin -->
+After Step 5 completes with all new tests failing, invoke the risk-gated TDD review hook. The gate is a deterministic SKIP / PROMPT / QA_AUTO decision driven by the story's `risk` frontmatter, the configured `dev_story.tdd_review.threshold` and `phases`, and YOLO mode (per ADR-067, ADR-057, ADR-073). The wiring is single-source-of-truth — never re-implement the decision matrix inline (FR-TDR-2).
+
+This gate sits OUTSIDE the Step 5 TDD body so the pause-free TDD invariant (E55-S4 / TC-DSH-12) is preserved — the body of Step 5 itself contains no `AskUserQuestion` and no `HALT` directive.
+
+- Run `${CLAUDE_PLUGIN_ROOT}/skills/gaia-dev-story/scripts/tdd-review-gate.sh {story_key} red`. The script prints exactly one of `SKIP`, `PROMPT`, `QA_AUTO` on stdout; capture it as `decision`.
+- **`SKIP`:** Continue silently to Step 6. NO `AskUserQuestion` is presented. Emit a single-line gate log to stderr (NFR-DSH-5): `step5_tdd_gate: phase=red verdict=skip`.
+- **`PROMPT`:** The next tool invocation MUST be `AskUserQuestion`. The prompt body offers exactly three labeled options — verbatim labels `review-myself`, `route-to-qa`, `proceed-anyway` (case-sensitive, hyphen-sensitive, in that exact order, no synonyms, no fourth option). The question stem names the gate trigger (story risk, configured threshold, current phase = `red`).
+  - On `review-myself`: HALT for user-driven review. Resume via `/gaia-resume` re-enters at this same gate point.
+  - On `route-to-qa`: dispatch the `tdd-reviewer` subagent (`gaia-public/plugins/gaia/agents/tdd-reviewer.md`, persona "Tex") in fork context with the Red-phase diff. Surface the verdict per ADR-063 (PASSED / FAILED / UNVERIFIED + ADR-037 findings line-by-line for WARNING-only). HALT on any `severity: CRITICAL` finding per ADR-067 — YOLO MUST NOT auto-resolve CRITICAL findings; the halt fires in BOTH YOLO and non-YOLO. Findings persist to `_memory/checkpoints/{story_key}-tdd-review-findings.md` (append-only).
+  - On `proceed-anyway`: record a timestamped decision in the dev-story checkpoint via the PostToolUse `checkpoint.sh` write hook — the entry MUST include the timestamp (UTC ISO-8601), the phase (`red`), and the free-form reason captured from the user. Continue to Step 6.
+  - Emit `step5_tdd_gate: phase=red verdict=prompt choice={review-myself|route-to-qa|proceed-anyway}` to stderr.
+- **`QA_AUTO`:** YOLO + `qa_auto_in_yolo=true` branch. Dispatch the `tdd-reviewer` subagent with the same payload as `route-to-qa` (the only difference is the user did not explicitly choose). Surface the verdict per ADR-063; HALT on CRITICAL per ADR-067 in BOTH modes. Emit `step5_tdd_gate: phase=red verdict=qa_auto`.
+
+The hook fires exactly once per Step 5. If the gate returns `SKIP`, no subagent is dispatched and no prompt is presented.
+<!-- E57-S4: step5 tdd-review-gate end -->
+
 ### Step 6 -- TDD Green Phase (Implement to Pass)
 
 - Follow the playbook's design approach reasoning.
 - For each subtask: implement minimum code to make failing tests pass.
 - Run the test suite -- verify all tests PASS.
 - Mark each completed subtask in the story file.
+
+### Step 6a -- TDD Review Gate (Green phase)
+
+<!-- E57-S4: step6 tdd-review-gate begin -->
+After Step 6 completes with all tests green, invoke the risk-gated TDD review hook. Decision matrix and dispatch contract mirror Step 5a — the only difference is `phase=green` (per ADR-067, ADR-057, ADR-073, FR-TDR-2).
+
+This gate sits OUTSIDE the Step 6 TDD body so the pause-free TDD invariant (E55-S4 / TC-DSH-12) is preserved — the body of Step 6 itself contains no `AskUserQuestion` and no `HALT` directive.
+
+- Run `${CLAUDE_PLUGIN_ROOT}/skills/gaia-dev-story/scripts/tdd-review-gate.sh {story_key} green`. Capture stdout as `decision`.
+- **`SKIP`:** Continue silently to Step 6b. NO `AskUserQuestion`. Emit `step6_tdd_gate: phase=green verdict=skip`.
+- **`PROMPT`:** Next tool invocation MUST be `AskUserQuestion` with the three verbatim labels — `review-myself`, `route-to-qa`, `proceed-anyway` (case-sensitive, hyphen-sensitive, in that order, no fourth option).
+  - On `review-myself`: HALT for user-driven review; `/gaia-resume` re-enters at this gate point.
+  - On `route-to-qa`: dispatch the `tdd-reviewer` subagent in fork context with the Green-phase diff. Surface the verdict per ADR-063 (line-by-line for WARNING-only). HALT on `severity: CRITICAL` per ADR-067 in BOTH YOLO and non-YOLO. Findings append to `_memory/checkpoints/{story_key}-tdd-review-findings.md`.
+  - On `proceed-anyway`: record a timestamped decision (UTC ISO-8601 + phase=`green` + reason) in the dev-story checkpoint via the PostToolUse `checkpoint.sh` write hook. Continue to Step 6b.
+  - Emit `step6_tdd_gate: phase=green verdict=prompt choice={review-myself|route-to-qa|proceed-anyway}`.
+- **`QA_AUTO`:** Dispatch the `tdd-reviewer` subagent with the same payload as `route-to-qa`. Surface the verdict per ADR-063; HALT on CRITICAL per ADR-067 in BOTH modes. Emit `step6_tdd_gate: phase=green verdict=qa_auto`.
+
+The hook fires exactly once per Step 6 and ALWAYS BEFORE Step 6b advisory hints.
+<!-- E57-S4: step6 tdd-review-gate end -->
 
 <!-- E55-S7: step 6b begin -->
 ### Step 6b -- Conditional Check Advisory Hints (FR-DSH-9)
@@ -179,6 +250,25 @@ After Step 6 Green completes with all tests passing, run a single advisory pass 
 - Improve code quality while keeping all tests green.
 - Extract shared utilities, decompose large functions, improve naming, remove duplication.
 - Run the test suite -- verify all tests STILL PASS.
+
+### Step 7a -- TDD Review Gate (Refactor phase)
+
+<!-- E57-S4: step7 tdd-review-gate begin -->
+After Step 7 completes with all tests still green, invoke the risk-gated TDD review hook. Decision matrix and dispatch contract mirror Steps 5a and 6a — the only difference is `phase=refactor` (per ADR-067, ADR-057, ADR-073, FR-TDR-2).
+
+This gate sits OUTSIDE the Step 7 TDD body so the pause-free TDD invariant (E55-S4 / TC-DSH-12) is preserved — the body of Step 7 itself contains no `AskUserQuestion` and no `HALT` directive.
+
+- Run `${CLAUDE_PLUGIN_ROOT}/skills/gaia-dev-story/scripts/tdd-review-gate.sh {story_key} refactor`. Capture stdout as `decision`.
+- **`SKIP`:** Continue silently to Step 7b. NO `AskUserQuestion`. Emit `step7_tdd_gate: phase=refactor verdict=skip`.
+- **`PROMPT`:** Next tool invocation MUST be `AskUserQuestion` with the three verbatim labels — `review-myself`, `route-to-qa`, `proceed-anyway` (case-sensitive, hyphen-sensitive, in that order, no fourth option).
+  - On `review-myself`: HALT for user-driven review; `/gaia-resume` re-enters at this gate point.
+  - On `route-to-qa`: dispatch the `tdd-reviewer` subagent in fork context with the Refactor-phase diff. Surface the verdict per ADR-063 (line-by-line for WARNING-only). HALT on `severity: CRITICAL` per ADR-067 in BOTH YOLO and non-YOLO. Findings append to `_memory/checkpoints/{story_key}-tdd-review-findings.md`.
+  - On `proceed-anyway`: record a timestamped decision (UTC ISO-8601 + phase=`refactor` + reason) in the dev-story checkpoint via the PostToolUse `checkpoint.sh` write hook. Continue to Step 7b.
+  - Emit `step7_tdd_gate: phase=refactor verdict=prompt choice={review-myself|route-to-qa|proceed-anyway}`.
+- **`QA_AUTO`:** Dispatch the `tdd-reviewer` subagent with the same payload as `route-to-qa`. Surface the verdict per ADR-063; HALT on CRITICAL per ADR-067 in BOTH modes. Emit `step7_tdd_gate: phase=refactor verdict=qa_auto`.
+
+The hook fires exactly once per Step 7 and ALWAYS BEFORE Step 7b Val-in-TDD pass.
+<!-- E57-S4: step7 tdd-review-gate end -->
 
 <!-- E55-S4: step 7b begin -->
 ### Step 7b -- Val-in-TDD single post-Refactor pass (ADR-073)
@@ -236,16 +326,80 @@ else:
 <!-- E55-S8: step 10 git-push wire begin -->
 ### Step 10 -- Commit and Push
 
+<!-- E57-S8: step10 script-wiring begin -->
+At the top of the CI section — before any commit / push action — the orchestrator
+MUST consult the deterministic promotion-chain guard. This replaces the LLM
+narrative that previously inferred CI configuration inline (per ADR-057, ADR-073,
+AF-2026-04-28-6, FR-DSS-3).
+
+- Run `${CLAUDE_PLUGIN_ROOT}/skills/gaia-dev-story/scripts/promotion-chain-guard.sh`.
+  Exit 0 = `PRESENT:<branch>` on stdout (the resolved first promotion-chain branch);
+  exit 1 = `ABSENT` (stderr names the missing config and points to `/gaia-ci-edit`).
+  On `ABSENT`, Steps 10–13 (push, PR, CI, merge) MUST be skipped — the story can
+  still complete locally but the promotion gates do not fire. On `PRESENT`, capture
+  the branch as `$PR_BASE` for use by `pr-create.sh --base`.
+- For commit-message construction, run
+  `${CLAUDE_PLUGIN_ROOT}/skills/gaia-dev-story/scripts/commit-msg.sh {story_path}`
+  and feed its stdout to `git commit -F -`. Do NOT compose Conventional Commit
+  subject lines inline — `commit-msg.sh` is the single source of truth (per
+  FR-DSS-5, FR-DSS-6, NFR-DSS-1). The script enforces the
+  `<type>(<story_key>): <title>` schema and the no-`Claude` / no-`AI` /
+  no-`Co-Authored-By` policy from CLAUDE.md.
+
+**Narrative Fallback (deprecated v1.131.x → v1.132.0):**
+For brownfield projects on a stale plugin where these scripts are not yet present,
+fall back to the legacy LLM narrative path:
+
+```
+if ! command -v promotion-chain-guard.sh >/dev/null 2>&1; then
+  # legacy narrative: infer CI config from project-config.yaml inline
+fi
+if ! command -v commit-msg.sh >/dev/null 2>&1; then
+  # legacy narrative: compose Conventional Commit subject inline
+fi
+```
+
+This fallback is retained for ONE minor version (v1.131.x → v1.132.0) so brownfield
+users with stale plugins do not break mid-upgrade. It will be removed in v1.132.0.
+<!-- E57-S8: step10 script-wiring end -->
+
 - Run `scripts/git-branch.sh` to verify branch state.
 - Stage and commit with conventional commit format.
 - Run `${CLAUDE_PLUGIN_ROOT}/scripts/git-push.sh` to push the current branch to `origin`. The shared helper (a) refuses to push from `main` / `staging` (delegating to `lib/dev-story-security-invariants.sh::assert_branch_not_protected` from E55-S6 when present), (b) retries ONCE on transient network errors (e.g., `Could not resolve host`, `Operation timed out`) with a 5-second backoff, and (c) fails LOUDLY on auth / permission errors with no retry. DO NOT inline `git push` here — the helper is the single source of truth.
-- Run `scripts/update-story-status.sh {story_key} review` after all gates pass.
+- Run `scripts/transition-story-status.sh {story_key} --to review` after all gates pass.
 <!-- E55-S8: step 10 git-push wire end -->
 
 ### Step 11 -- Create PR
 
-- Run `scripts/pr-create.sh {story_key} {title}` to create a pull request.
-- The script targets the first promotion chain environment.
+<!-- E57-S8: step11 script-wiring begin -->
+The PR body is sourced from `pr-body.sh` — the LLM no longer composes the body
+inline (per ADR-057, ADR-073, AF-2026-04-28-6, FR-DSS-5, FR-DSS-6).
+
+- Run `${CLAUDE_PLUGIN_ROOT}/skills/gaia-dev-story/scripts/pr-body.sh {story_path}`
+  and capture stdout as `$PR_BODY`. The script emits exactly four canonical
+  Markdown sections in order: Acceptance Criteria, Definition of Done, Diff Stat,
+  Story-link.
+- Then invoke `${CLAUDE_PLUGIN_ROOT}/skills/gaia-dev-story/scripts/pr-create.sh
+  {story_key} {title} --body-file <(printf '%s\n' "$PR_BODY")` (or pipe `$PR_BODY`
+  via the helper's body-file convention) so that `pr-create.sh` consumes the
+  pre-rendered body rather than constructing one inline. Do NOT hand-craft the PR
+  body in chat — `pr-body.sh` is the single source of truth.
+
+**Narrative Fallback (deprecated v1.131.x → v1.132.0):**
+For brownfield projects on a stale plugin where `pr-body.sh` is not yet present,
+fall back to the legacy LLM narrative path:
+
+```
+if ! command -v pr-body.sh >/dev/null 2>&1; then
+  # legacy narrative: pr-create.sh composes a default body from $STORY_KEY
+fi
+```
+
+This fallback is retained for ONE minor version (v1.131.x → v1.132.0) so brownfield
+users with stale plugins do not break mid-upgrade. It will be removed in v1.132.0.
+<!-- E57-S8: step11 script-wiring end -->
+
+- `pr-create.sh` targets the first promotion chain environment as resolved by `promotion-chain-guard.sh` in Step 10.
 
 ### Step 12 -- Wait for CI
 
@@ -273,7 +427,7 @@ else:
 ### Step 15 -- Update Review Gate
 
 - Run `${CLAUDE_PLUGIN_ROOT}/skills/gaia-dev-story/scripts/init-review-gate.sh {story_file}` to seed (or replace) the Review Gate table with the canonical 6-row UNVERIFIED block. The helper is idempotent — re-running on a story file that already has the block yields a byte-identical result.
-- Update story status to `review` via `scripts/update-story-status.sh {story_key} review`.
+- Update story status to `review` via `scripts/transition-story-status.sh {story_key} --to review`.
 <!-- E55-S8: step 15 init-review-gate wire end -->
 
 <!-- E55-S8: step 16 begin -->

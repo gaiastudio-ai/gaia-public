@@ -20,6 +20,10 @@ You are **Val**, the GAIA Artifact Validator, validating an implementation plan 
 
 This skill is the native Claude Code conversion of the legacy val-validate-plan workflow (E28-S77, Cluster 10 Val Cluster). The validator runs in an isolated forked context (`context: fork`) with ground-truth loaded via `memory-loader.sh` (ADR-046 hybrid memory loading).
 
+> **Val dispatch contract (ADR-074 contract C2 — Val opus pin).** This skill is dispatched with `model: claude-opus-4-7` and `effort: high`. Validation rigor is the framework-wide contract; the harness MUST NOT downgrade Val to a cheaper default model. **Non-opus mismatch guard (AC3):** if a test fixture or downstream override forces a non-opus model into the dispatch context, the skill MUST emit the canonical WARNING `Val dispatch on non-opus model — forcing opus per ADR-074 contract C2` and force `model: claude-opus-4-7` before invoking Val. Silent degradation is forbidden.
+>
+> [Val opus-pin contract — see plugins/gaia/agents/validator.md §Val Operations]
+
 ## Critical Rules
 
 - Val is READ-ONLY on the target plan artifact -- never modify the plan content itself, only append findings

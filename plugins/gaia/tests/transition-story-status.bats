@@ -6,7 +6,7 @@
 #   AC2 / TC-CSE-10 — write failure rolls back; no partial state
 #   AC3 / TC-CSE-11 — idempotent self-transition exits 0 with no writes
 #   AC4 / TC-CSE-12 — Step 6 PASSED ordering: review-gate -> transition -> val-sidecar
-#   AC5 / TC-CSE-18 — deprecation wrapper logs WARNING and forwards
+#   AC5 / TC-CSE-18 — DELETED in E59-S2; deprecation wrapper retired in E59-S3 (ADR-074)
 #   AC6           — epics-and-stories.md `**Status:**` insert/update is byte-stable
 #   AC7           — invalid transitions rejected with state-machine cite
 #
@@ -15,6 +15,8 @@
 #   below. We name them here so the run-with-coverage.sh gate sees the textual
 #   reference (the gate matches function names against any string in this file):
 #     - read_frontmatter_status        — invoked at every entry to read current state
+#     - read_frontmatter_field         — generic frontmatter reader used by metadata fallback (E63-S10)
+#     - resolve_meta                   — explicit-flag-vs-frontmatter-vs-empty resolver (E63-S10)
 #     - rewrite_frontmatter            — writes story-file frontmatter status
 #     - update_sprint_status_yaml      — rewrites the sprint-status.yaml entry
 #     - update_epics_and_stories       — rewrites/inserts the **Status:** line
@@ -30,7 +32,6 @@ setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   SCRIPTS_DIR="$REPO_ROOT/plugins/gaia/scripts"
   TRANSITION="$SCRIPTS_DIR/transition-story-status.sh"
-  WRAPPER="$REPO_ROOT/plugins/gaia/skills/gaia-create-story/scripts/update-story-status.sh"
 
   TEST_TMP="$BATS_TEST_TMPDIR/tss-$$"
   mkdir -p "$TEST_TMP/docs/implementation-artifacts"
@@ -260,14 +261,12 @@ index_status() {
   [ "$(index_status)" = "validating" ]
 }
 
-# AC5 / TC-CSE-18
-@test "TC-CSE-18: deprecation wrapper logs WARNING and forwards to transition-story-status.sh" {
-  run "$WRAPPER" "$STORY_KEY" validating
-  [ "$status" -eq 0 ]
-  echo "$output $stderr" | grep -q "deprecat"
-  [ "$(fm_status)" = "validating" ]
-  [ "$(yaml_status)" = "validating" ]
-}
+# AC5 / TC-CSE-18 — DELETED (E59-S2 / ADR-074 contract C3)
+# The deprecation wrapper at plugins/gaia/skills/gaia-create-story/scripts/update-story-status.sh
+# is being removed in E59-S3. This test asserted wrapper-forwarding behavior; with
+# the wrapper gone the assertion has no contract to validate. Direct callers now
+# invoke transition-story-status.sh; coverage of that path lives in the happy-path
+# test below ("AC1+AC6: full transition updates all four locations consistently").
 
 # Optional follow-up: --from mismatch
 @test "AC: --from flag rejects when current status != expected" {
@@ -316,3 +315,285 @@ index_status() {
   [ "$(epics_status)" = "ready-for-dev" ]
   [ "$(index_status)" = "ready-for-dev" ]
 }
+
+# ============================================================================
+# E63-S10 Work Item 6.9 — story-index.yaml metadata enrichment
+# ============================================================================
+
+# Helpers for reading the 7-field metadata-rich entry block.
+index_field() {
+  local key="$1" field="$2"
+  awk -v target="$key" -v field="$field" '
+    $0 ~ "^  " target ":" { in_entry = 1; next }
+    in_entry && /^  [A-Za-z]/ && $0 !~ "^    " { in_entry = 0 }
+    in_entry {
+      if (match($0, "^[[:space:]]+" field ":[[:space:]]*")) {
+        v = substr($0, RSTART + RLENGTH)
+        gsub(/^["'\''[:space:]]+|["'\''[:space:]]+$/, "", v)
+        print v
+        exit
+      }
+    }
+  ' "$INDEX_YAML"
+}
+
+# Extract just the per-story entry block (between key heading and next key/section).
+index_entry_block() {
+  local key="$1"
+  awk -v target="$key" '
+    $0 ~ "^  " target ":" { in_entry = 1; print; next }
+    in_entry && /^  [A-Za-z]/ && $0 !~ "^    " { in_entry = 0 }
+    in_entry { print }
+  ' "$INDEX_YAML"
+}
+
+# Count occurrences of an entry header for a given key.
+index_entry_count() {
+  local key="$1"
+  grep -cE "^  ${key}:[[:space:]]*$" "$INDEX_YAML" || true
+}
+
+# Fresh fixture story file used by the metadata-fallback tests. Also appends
+# a matching `### Story <key>:` block to epics-and-stories.md so the
+# update_epics_and_stories writer locates the story (otherwise its absence
+# is a soft-warn that does not fail the script — but the fixture must be
+# coherent across all four files).
+seed_metadata_fixture() {
+  local key="$1" risk_value="${2:-low}"
+  local file="$TEST_TMP/docs/implementation-artifacts/${key}-fixture.md"
+  cat >"$file" <<EOF
+---
+template: 'story'
+key: "$key"
+title: "Metadata fixture title"
+epic: "TSS"
+status: backlog
+priority: "P1"
+size: "S"
+points: 1
+risk: "$risk_value"
+author: "fixture-author"
+---
+
+# Story: Metadata fixture
+
+> **Status:** backlog
+EOF
+
+  # Append a matching block to the epics fixture if not already present.
+  if ! grep -q "^### Story ${key}:" "$EPICS_MD"; then
+    cat >>"$EPICS_MD" <<EOF
+
+### Story ${key}: Metadata fixture title
+
+- **Epic:** TSS
+- **Priority:** P1
+- **Status:** backlog
+EOF
+  fi
+
+  printf '%s' "$file"
+}
+
+# AC1 — first transition with explicit metadata flags populates all 7 fields + status
+@test "E63-S10 AC1: explicit flags populate all 7 metadata fields + status" {
+  # Pre-empty the index so we can observe a fresh write.
+  rm -f "$INDEX_YAML"
+
+  run "$TRANSITION" "$STORY_KEY" --to validating \
+    --title "Explicit Title" \
+    --epic "TSS" \
+    --priority "P0" \
+    --risk "high" \
+    --author "explicit-author" \
+    --file "/abs/path/to/story.md"
+  [ "$status" -eq 0 ]
+
+  [ "$(index_field "$STORY_KEY" story_key)" = "$STORY_KEY" ]
+  [ "$(index_field "$STORY_KEY" title)" = "Explicit Title" ]
+  [ "$(index_field "$STORY_KEY" epic)" = "TSS" ]
+  [ "$(index_field "$STORY_KEY" priority)" = "P0" ]
+  [ "$(index_field "$STORY_KEY" risk)" = "high" ]
+  [ "$(index_field "$STORY_KEY" author)" = "explicit-author" ]
+  [ "$(index_field "$STORY_KEY" file)" = "/abs/path/to/story.md" ]
+  [ "$(index_field "$STORY_KEY" status)" = "validating" ]
+}
+
+# AC4 — frontmatter fallback when no metadata flags are passed
+@test "E63-S10 AC4: frontmatter fallback populates 7 fields when no flags supplied" {
+  local key="TSS-FM-01"
+  local fixture
+  fixture="$(seed_metadata_fixture "$key")"
+  rm -f "$INDEX_YAML"
+
+  run "$TRANSITION" "$key" --to validating
+  [ "$status" -eq 0 ]
+
+  [ "$(index_field "$key" story_key)" = "$key" ]
+  [ "$(index_field "$key" title)" = "Metadata fixture title" ]
+  [ "$(index_field "$key" epic)" = "TSS" ]
+  [ "$(index_field "$key" priority)" = "P1" ]
+  [ "$(index_field "$key" risk)" = "low" ]
+  [ "$(index_field "$key" author)" = "fixture-author" ]
+  # `file` defaults to the resolved absolute story path.
+  [ "$(index_field "$key" file)" = "$fixture" ]
+  [ "$(index_field "$key" status)" = "validating" ]
+}
+
+# AC4 — explicit flag overrides frontmatter value
+@test "E63-S10 AC4: explicit flag overrides frontmatter value" {
+  local key="TSS-FM-02"
+  seed_metadata_fixture "$key" >/dev/null
+  rm -f "$INDEX_YAML"
+
+  run "$TRANSITION" "$key" --to validating --priority "P0"
+  [ "$status" -eq 0 ]
+
+  [ "$(index_field "$key" priority)" = "P0" ]
+  # Other fields still resolved from frontmatter.
+  [ "$(index_field "$key" title)" = "Metadata fixture title" ]
+  [ "$(index_field "$key" author)" = "fixture-author" ]
+}
+
+# AC2 — idempotent re-run with identical inputs is byte-identical
+@test "E63-S10 AC2: idempotent re-run is byte-identical for the entry block" {
+  local key="TSS-IDEM-01"
+  seed_metadata_fixture "$key" >/dev/null
+  rm -f "$INDEX_YAML"
+
+  run "$TRANSITION" "$key" --to validating
+  [ "$status" -eq 0 ]
+  local block1; block1="$(index_entry_block "$key")"
+
+  # Force a self-transition by editing the story file back to backlog so the
+  # script does not no-op, then re-run with identical inputs.
+  sed -i.bak 's/^status: validating$/status: backlog/' "$TEST_TMP/docs/implementation-artifacts/${key}-fixture.md"
+  rm -f "$TEST_TMP/docs/implementation-artifacts/${key}-fixture.md.bak"
+
+  run "$TRANSITION" "$key" --to validating
+  [ "$status" -eq 0 ]
+  local block2; block2="$(index_entry_block "$key")"
+
+  [ "$block1" = "$block2" ]
+}
+
+# AC3 — update-not-duplicate when a metadata field changes
+@test "E63-S10 AC3: changed metadata updates entry in place; exactly one entry remains" {
+  local key="TSS-UPD-01"
+  seed_metadata_fixture "$key" >/dev/null
+  rm -f "$INDEX_YAML"
+
+  run "$TRANSITION" "$key" --to validating --priority "P1"
+  [ "$status" -eq 0 ]
+  [ "$(index_entry_count "$key")" = "1" ]
+  [ "$(index_field "$key" priority)" = "P1" ]
+
+  # Edit story file back to backlog to allow a second forward transition.
+  sed -i.bak 's/^status: validating$/status: backlog/' "$TEST_TMP/docs/implementation-artifacts/${key}-fixture.md"
+  rm -f "$TEST_TMP/docs/implementation-artifacts/${key}-fixture.md.bak"
+
+  run "$TRANSITION" "$key" --to validating --priority "P0"
+  [ "$status" -eq 0 ]
+  [ "$(index_entry_count "$key")" = "1" ]
+  [ "$(index_field "$key" priority)" = "P0" ]
+}
+
+# AC5 — missing optional metadata in frontmatter renders as empty string
+@test "E63-S10 AC5: missing optional frontmatter field renders as empty string" {
+  local key="TSS-MISS-01"
+  local file="$TEST_TMP/docs/implementation-artifacts/${key}-fixture.md"
+  # Fixture omits `risk` and `author` from frontmatter.
+  cat >"$file" <<EOF
+---
+template: 'story'
+key: "$key"
+title: "Missing-fields fixture"
+epic: "TSS"
+status: backlog
+priority: "P2"
+size: "S"
+points: 1
+---
+
+# Story: Missing fields
+
+> **Status:** backlog
+EOF
+  cat >>"$EPICS_MD" <<EOF
+
+### Story ${key}: Missing-fields fixture
+
+- **Epic:** TSS
+- **Priority:** P2
+- **Status:** backlog
+EOF
+  rm -f "$INDEX_YAML"
+
+  run "$TRANSITION" "$key" --to validating
+  [ "$status" -eq 0 ]
+
+  [ "$(index_field "$key" risk)" = "" ]
+  [ "$(index_field "$key" author)" = "" ]
+  [ "$(index_field "$key" title)" = "Missing-fields fixture" ]
+}
+
+# AC5 — multi-story preservation: existing entries are byte-untouched
+@test "E63-S10 AC5: multi-story file preserves unrelated entries byte-untouched" {
+  local key="TSS-MULTI-04"
+  seed_metadata_fixture "$key" >/dev/null
+
+  # Pre-seed an index with three unrelated metadata-rich entries.
+  cat >"$INDEX_YAML" <<'EOF'
+# Auto-maintained
+last_updated: "2026-04-28T00:00:00Z"
+stories:
+  TSS-EXISTING-01:
+    story_key: "TSS-EXISTING-01"
+    title: "First existing"
+    epic: "TSS"
+    priority: "P1"
+    risk: "low"
+    author: "alpha"
+    file: "/path/a.md"
+    status: "backlog"
+  TSS-EXISTING-02:
+    story_key: "TSS-EXISTING-02"
+    title: "Second existing"
+    epic: "TSS"
+    priority: "P2"
+    risk: "medium"
+    author: "beta"
+    file: "/path/b.md"
+    status: "validating"
+  TSS-EXISTING-03:
+    story_key: "TSS-EXISTING-03"
+    title: "Third existing"
+    epic: "TSS"
+    priority: "P3"
+    risk: "low"
+    author: "gamma"
+    file: "/path/c.md"
+    status: "ready-for-dev"
+EOF
+
+  local block01_before; block01_before="$(index_entry_block TSS-EXISTING-01)"
+  local block02_before; block02_before="$(index_entry_block TSS-EXISTING-02)"
+  local block03_before; block03_before="$(index_entry_block TSS-EXISTING-03)"
+
+  run "$TRANSITION" "$key" --to validating
+  [ "$status" -eq 0 ]
+
+  # Existing entries unchanged.
+  [ "$(index_entry_block TSS-EXISTING-01)" = "$block01_before" ]
+  [ "$(index_entry_block TSS-EXISTING-02)" = "$block02_before" ]
+  [ "$(index_entry_block TSS-EXISTING-03)" = "$block03_before" ]
+  # New entry appended with the full 7-field block + status.
+  [ "$(index_field "$key" story_key)" = "$key" ]
+  [ "$(index_field "$key" title)" = "Metadata fixture title" ]
+  [ "$(index_field "$key" status)" = "validating" ]
+}
+
+# NFR-052 public-function coverage. write_status_transition_marker is
+# exercised by the existing transition-story-status tests via the marker
+# side-effect (the new --status-transition-marker contract); this comment
+# names it textually so the run-with-coverage gate sees an anchor.

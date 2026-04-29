@@ -20,6 +20,10 @@ You are **Val**, the GAIA Artifact Validator, validating an artifact against the
 
 This skill is the native Claude Code conversion of the legacy val-validate-artifact workflow (E28-S78, Cluster 10 Val Cluster). The validator runs in an isolated forked context (`context: fork`) with ground-truth loaded via `memory-loader.sh` (ADR-046 hybrid memory loading).
 
+> **Val dispatch contract (ADR-074 contract C2 — Val opus pin).** This skill, and every skill that delegates to it, dispatches Val with `model: claude-opus-4-7` and `effort: high`. Validation rigor is the framework-wide contract; the harness MUST NOT downgrade Val to a cheaper default model. **Non-opus mismatch guard (AC3):** if a test fixture or downstream override forces a non-opus model into the dispatch context, the skill MUST emit the canonical WARNING `Val dispatch on non-opus model — forcing opus per ADR-074 contract C2` and force `model: claude-opus-4-7` before invoking Val. Silent degradation is forbidden.
+>
+> [Val opus-pin contract — see plugins/gaia/agents/validator.md §Val Operations]
+
 ## Upstream Integration Contract
 
 > Authoritative shape for upstream skills (E44-S3..S6) wiring `/gaia-val-validate` into their auto-fix loops. See ADR-058 (architecture.md §12) and FR-357 (prd.md §4.33) for the protocol context. E44-S2 implements the 3-iteration loop that consumes this contract.
@@ -295,7 +299,7 @@ E44-S3..S6 wire this snippet into 18 upstream skills. Embed it as a numbered sub
 > § "Auto-Fix Loop Pattern". Do not duplicate the spec here; cite this anchor.
 
 1. iteration = 1.
-2. Invoke /gaia-val-validate with artifact_path={ARTIFACT_PATH}, artifact_type={ARTIFACT_TYPE}.
+2. Invoke /gaia-val-validate with artifact_path={ARTIFACT_PATH}, artifact_type={ARTIFACT_TYPE}, model: claude-opus-4-7, effort: high (ADR-074 contract C2 — Val opus pin).
 3. If findings is empty: proceed past the loop.
 4. If findings contains only INFO: log informational notes, proceed past the loop.
 5. If findings contains CRITICAL or WARNING:

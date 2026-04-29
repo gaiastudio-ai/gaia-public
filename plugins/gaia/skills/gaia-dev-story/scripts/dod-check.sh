@@ -8,11 +8,19 @@
 #
 # Output:
 #   YAML list, one row per check:
-#     - { item: <name>, status: PASSED|FAILED, output: <captured stdout/stderr> }
+#     - { item: <name>, status: PASSED|FAILED|SKIPPED, output: <captured stdout/stderr> }
 #
 # Checks (in order):
 #   1. build    — runs `build` if available; PASSED if exit 0, otherwise FAILED.
-#   2. tests    — runs `test`  if available; PASSED if exit 0, otherwise FAILED.
+#   2. tests    — resolves a project-level test command and runs it. The
+#                 deterministic precedence (E64-S1 AC1 / AC-EC1) is:
+#                   (a) project-config.yaml `test_cmd:` (explicit user choice)
+#                   (b) package.json `scripts.test` (via `npm test` if present)
+#                   (c) bats discovery — `bats tests/*.bats` if `bats` and
+#                       any `tests/*.bats` exist
+#                 If none resolve, the row is SKIPPED with reason
+#                 "no test runner detected" — never FAILED. The system POSIX
+#                 `/bin/test` binary is explicitly never used.
 #   3. lint     — runs `lint`  if available; PASSED if exit 0, otherwise FAILED.
 #   4. secrets  — scans the staged diff and staged file basenames for env-like
 #                 files / credentials / canonical secret patterns. Delegates
@@ -30,7 +38,7 @@
 #   PROJECT_PATH — optional. Project root. Defaults to current working dir.
 #
 # Exit codes:
-#   0 — all rows PASSED
+#   0 — all rows PASSED or SKIPPED
 #   1 — at least one row FAILED
 #   2 — usage error
 
@@ -84,6 +92,16 @@ _check_command() {
     _emit_row "$item" "PASSED" "skipped: no '$cmd' command on PATH"
     return 0
   fi
+  # Skip the system POSIX `test` binary (`/bin/test`, `/usr/bin/test`) —
+  # running it with no args exits 1 and is never a project test runner.
+  # Without this guard `_check_command "tests" "test"` would always FAIL
+  # on macOS / Linux dev machines that lack a project-local `test` wrapper.
+  case "$cmd_path" in
+    /bin/test|/usr/bin/test|/usr/local/bin/test)
+      _emit_row "$item" "PASSED" "skipped: '$cmd' resolves to system POSIX builtin ($cmd_path)"
+      return 0
+      ;;
+  esac
   result="$(_run_check "$cmd_path")"
   rc="$(printf '%s' "$result" | tail -1)"
   out="$(printf '%s' "$result" | sed '$d')"
@@ -92,6 +110,82 @@ _check_command() {
     return 0
   fi
   _emit_row "$item" "FAILED" "$out"
+  return 1
+}
+
+# --- Test-command resolution (E64-S1 AC1 / AC-EC1 / AC-EC2) ---------------
+#
+# Determine the project test command using a deterministic precedence:
+#   1. config/project-config.yaml `test_cmd:`         (explicit user choice)
+#   2. package.json `scripts.test`                    (resolved via `npm test`)
+#   3. bats discovery on `tests/*.bats`               (if `bats` binary on PATH)
+# When nothing resolves, return non-zero — caller emits SKIPPED.
+#
+# Outputs the resolved command on stdout (single token or quoted argv string)
+# in a form that survives `bash -c "$cmd"`.
+_resolve_test_cmd() {
+  # 1. project-config.yaml test_cmd:
+  if [ -f "config/project-config.yaml" ]; then
+    local cmd
+    # Match a top-level `test_cmd: <value>` line. Strip surrounding quotes
+    # and trailing whitespace; ignore comments after the value.
+    cmd="$(awk '
+      /^[[:space:]]*test_cmd[[:space:]]*:/ {
+        sub(/^[^:]*:[[:space:]]*/, "")
+        sub(/[[:space:]]+#.*$/, "")
+        sub(/[[:space:]]+$/, "")
+        n = length($0)
+        if (n >= 2 && substr($0, 1, 1) == "\"" && substr($0, n, 1) == "\"") {
+          print substr($0, 2, n - 2); exit
+        }
+        if (n >= 2 && substr($0, 1, 1) == "'"'"'" && substr($0, n, 1) == "'"'"'") {
+          print substr($0, 2, n - 2); exit
+        }
+        print; exit
+      }
+    ' config/project-config.yaml)"
+    if [ -n "$cmd" ]; then
+      printf '%s\n' "$cmd"
+      return 0
+    fi
+  fi
+  # 2. package.json scripts.test (only if `npm` is on PATH)
+  if [ -f "package.json" ] && command -v npm >/dev/null 2>&1; then
+    if grep -Eq '"test"[[:space:]]*:' package.json; then
+      printf 'npm test\n'
+      return 0
+    fi
+  fi
+  # 3. bats discovery on tests/*.bats
+  if command -v bats >/dev/null 2>&1; then
+    # Use a glob expansion guarded by nullglob so the test for `[ -e $file ]`
+    # works even when no match is found.
+    local first_match
+    first_match="$(find tests -maxdepth 2 -name '*.bats' -print -quit 2>/dev/null || true)"
+    if [ -n "$first_match" ]; then
+      printf 'bats tests\n'
+      return 0
+    fi
+  fi
+  return 1
+}
+
+# Run the resolved test command. Emits PASSED / FAILED / SKIPPED YAML row.
+_check_tests() {
+  local cmd out rc
+  if ! cmd="$(_resolve_test_cmd)"; then
+    _emit_row "tests" "SKIPPED" "no test runner detected"
+    return 0
+  fi
+  set +e
+  out="$(bash -c "$cmd" 2>&1)"
+  rc=$?
+  set -e
+  if [ "$rc" -eq 0 ]; then
+    _emit_row "tests" "PASSED" "$out"
+    return 0
+  fi
+  _emit_row "tests" "FAILED" "$out"
   return 1
 }
 
@@ -158,8 +252,21 @@ _check_subtasks() {
     _emit_row "subtasks" "PASSED" "skipped: STORY_FILE unset"
     return 0
   fi
+  # E64-S1 AC2: only count `- [ ]` items inside the `## Tasks / Subtasks`
+  # section. Unchecked items in the `## Definition of Done` section
+  # (e.g., "PR merged to staging" pre-merge) and the `## Acceptance
+  # Criteria` section are intentionally excluded — they are not subtasks
+  # and reflect intentional pre-merge state.
   local unchecked
-  unchecked="$(grep -cE '^[[:space:]]*- \[ \]' "$STORY_FILE" || true)"
+  unchecked="$(awk '
+    BEGIN { in_section = 0; count = 0 }
+    {
+      if ($0 == "## Tasks / Subtasks") { in_section = 1; next }
+      if (in_section && $0 ~ /^## /) { in_section = 0 }
+      if (in_section && $0 ~ /^[[:space:]]*-[[:space:]]+\[ \]/) count++
+    }
+    END { print count }
+  ' "$STORY_FILE")"
   if [ "$unchecked" -gt 0 ]; then
     _emit_row "subtasks" "FAILED" "unchecked subtask count: $unchecked"
     return 1
@@ -171,9 +278,9 @@ _check_subtasks() {
 # ---------- Main ----------
 overall=0
 _check_command "build" "build" || overall=1
-_check_command "tests" "test"  || overall=1
+_check_tests                   || overall=1
 _check_command "lint"  "lint"  || overall=1
-_check_secrets               || overall=1
-_check_subtasks              || overall=1
+_check_secrets                 || overall=1
+_check_subtasks                || overall=1
 
 exit "$overall"

@@ -51,7 +51,9 @@ and delegation model are preserved verbatim from the legacy workflow.
 
 This skill follows the framework-wide Subagent Dispatch Contract (ADR-063).
 Every Val invocation is dispatched via `context: fork` per ADR-045 with a
-read-only tool allowlist `[Read, Grep, Glob, Bash]`. After Val returns:
+read-only tool allowlist `[Read, Grep, Glob, Bash]`, pinned to
+`model: claude-opus-4-7` and `effort: high` per ADR-074 contract C2 (Val
+opus pin — validation rigor is the contract). After Val returns:
 
 1. **Parse the subagent return** using the ADR-037 structured schema:
    `{ status, summary, artifacts, findings, next }`. The `status` field is
@@ -162,10 +164,19 @@ This step is the canonical Val review gate. It restores the validation
 gate that previously ran silently inside the cascade subagents (the
 regression class closed by ADR-063).
 
-- Spawn a Val subagent via the Agent tool with `context: fork` and the
-  read-only tool allowlist `[Read, Grep, Glob, Bash]` per ADR-045. Pass
-  the intake data captured in Step 1 (feature_id, description,
-  classification, urgency, driver, CR linkage, expected cascade).
+- Spawn a Val subagent via the Agent tool with `context: fork`,
+  `model: claude-opus-4-7`, `effort: high`, and the read-only tool
+  allowlist `[Read, Grep, Glob, Bash]` per ADR-045 and ADR-074 contract C2
+  (Val opus pin). Pass the intake data captured in Step 1 (feature_id,
+  description, classification, urgency, driver, CR linkage, expected
+  cascade).
+- **Non-opus mismatch guard (ADR-074 contract C2, AC3).** If a test
+  fixture or downstream override forces a non-opus model into the dispatch
+  context, this skill MUST emit the canonical WARNING `Val dispatch on
+  non-opus model — forcing opus per ADR-074 contract C2` and force
+  `model: claude-opus-4-7` before invoking Val. Silent degradation is
+  forbidden.
+- [Val opus-pin contract — see plugins/gaia/agents/validator.md §Val Operations]
 - Val validates the intake against the codebase and ground truth and
   returns the ADR-037 structured schema:
   `{ status, summary, artifacts, findings, next }`.

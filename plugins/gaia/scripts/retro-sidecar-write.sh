@@ -34,45 +34,13 @@
 set -uo pipefail
 
 # ---------------------------------------------------------------------------
-# Argument parsing
-# ---------------------------------------------------------------------------
-ROOT=""
-SPRINT_ID=""
-TARGET=""
-PAYLOAD=""
-
-while [ $# -gt 0 ]; do
-  case "$1" in
-    --root)      ROOT="$2"; shift 2 ;;
-    --sprint-id) SPRINT_ID="$2"; shift 2 ;;
-    --target)    TARGET="$2"; shift 2 ;;
-    --payload)   PAYLOAD="$2"; shift 2 ;;
-    --help|-h)
-      sed -n '1,40p' "$0"
-      exit 0
-      ;;
-    *) printf 'status=io_error\nreason=unknown arg: %s\n' "$1" >&2; exit 1 ;;
-  esac
-done
-
-# ---------------------------------------------------------------------------
-# Required-arg validation
-# ---------------------------------------------------------------------------
-if [ -z "$ROOT" ]; then
-  ROOT="${CLAUDE_PROJECT_ROOT:-$(pwd)}"
-fi
-if [ -z "$SPRINT_ID" ]; then
-  printf 'status=missing_sprint_id\nreason=--sprint-id is required\n'
-  exit 1
-fi
-if [ -z "$TARGET" ]; then
-  printf 'status=io_error\nreason=--target is required\n' >&2
-  exit 1
-fi
-
-# ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+# E36-S5: helper functions are defined unconditionally so the shared writer
+# can be sourced as a library by delegation wrappers (e.g.,
+# action-items-increment.sh). The CLI body below only runs when this script
+# is executed directly (BASH_SOURCE[0] == $0), preserving back-compat for
+# the standalone invocation path used by /gaia-retro Steps 5, 5c, 5d, 7.
 
 # resolve_real — resolve a path to its canonical absolute form without
 # requiring the target to exist. Uses Python-style realpath semantics that
@@ -214,6 +182,49 @@ EOF
       ;;
   esac
 }
+
+# ---------------------------------------------------------------------------
+# CLI body — runs only when this script is executed directly, not sourced.
+# Delegation wrappers (E36-S5) `source` this file to reuse helpers above.
+# ---------------------------------------------------------------------------
+if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
+
+# ---------------------------------------------------------------------------
+# Argument parsing
+# ---------------------------------------------------------------------------
+ROOT=""
+SPRINT_ID=""
+TARGET=""
+PAYLOAD=""
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --root)      ROOT="$2"; shift 2 ;;
+    --sprint-id) SPRINT_ID="$2"; shift 2 ;;
+    --target)    TARGET="$2"; shift 2 ;;
+    --payload)   PAYLOAD="$2"; shift 2 ;;
+    --help|-h)
+      sed -n '1,40p' "$0"
+      exit 0
+      ;;
+    *) printf 'status=io_error\nreason=unknown arg: %s\n' "$1" >&2; exit 1 ;;
+  esac
+done
+
+# ---------------------------------------------------------------------------
+# Required-arg validation
+# ---------------------------------------------------------------------------
+if [ -z "$ROOT" ]; then
+  ROOT="${CLAUDE_PROJECT_ROOT:-$(pwd)}"
+fi
+if [ -z "$SPRINT_ID" ]; then
+  printf 'status=missing_sprint_id\nreason=--sprint-id is required\n'
+  exit 1
+fi
+if [ -z "$TARGET" ]; then
+  printf 'status=io_error\nreason=--target is required\n' >&2
+  exit 1
+fi
 
 # ---------------------------------------------------------------------------
 # 1. ALLOWLIST CHECK (NFR-RIM-2)
@@ -439,3 +450,5 @@ fi
 rm -f "$BACKUP" "$LOCKFILE"
 printf 'status=ok\ndedup_key=%s\ntarget=%s\n' "$DEDUP_KEY" "$REAL_TARGET"
 exit 0
+
+fi  # end CLI body source-guard (E36-S5)

@@ -27,6 +27,18 @@ export LC_ALL
 # and emits deterministic output on stdout:
 #   - default:        KEY='VALUE' lines, single-quoted, alpha-sorted
 #   - --format json:  a single JSON object with the same keys
+#   - --field <key>:  prints ONLY the resolved scalar for that dotted key
+#                     and exits 0. Currently scoped to E57-S1 lookup keys:
+#                       dev_story.tdd_review.threshold
+#                       dev_story.tdd_review.phases
+#                       dev_story.tdd_review.qa_auto_in_yolo
+#                       dev_story.tdd_review.qa_timeout_seconds
+#   - sizing_map:     positional block-query (E61-S1 / ADR-074 contract C1).
+#                     Emits four canonical key=value lines: S=…, M=…, L=…,
+#                     XL=… for the resolved sizing_map block (project >
+#                     global per ADR-044 §10.26.3). Falls back to the
+#                     framework defaults (S=2, M=5, L=8, XL=13) when the
+#                     project layer does not declare a sizing_map block.
 #
 # =============================================================================
 # Config Split Merge (ADR-044 / E28-S141 / E28-S142)
@@ -161,6 +173,42 @@ parse_yaml_nested_key() {
   ' "$file"
 }
 
+parse_yaml_doubly_nested_key() {
+  # parse_yaml_doubly_nested_key <file> <grandparent> <parent> <child>
+  # Prints the value of grandparent.parent.child where the YAML looks like:
+  #   grandparent:
+  #     parent:
+  #       child: value
+  # Prints empty if absent. Handles single-line comments. E57-S1.
+  local file="$1" grandparent="$2" parent="$3" child="$4"
+  [ -f "$file" ] || return 0
+  awk -v G="$grandparent" -v P="$parent" -v C="$child" '
+    BEGIN { in_grand=0; in_parent=0 }
+    # New zero-indent key — close any open grand block (and parent inside it).
+    /^[A-Za-z_][A-Za-z0-9_]*[[:space:]]*:/ {
+      if (in_grand) { in_grand=0; in_parent=0 }
+    }
+    $0 ~ "^"G"[[:space:]]*:[[:space:]]*$" { in_grand=1; in_parent=0; next }
+    in_grand && $0 ~ "^[[:space:]]+"P"[[:space:]]*:[[:space:]]*$" { in_parent=1; next }
+    # Two-space-indent (parent-level) key that is not P closes any open parent.
+    in_grand && in_parent && /^[[:space:]]{1,2}[A-Za-z_][A-Za-z0-9_]*[[:space:]]*:/ {
+      # Close parent only if this is at the parent indent level (<=2 leading spaces).
+      lead = match($0, /[^[:space:]]/) - 1
+      if (lead <= 2) { in_parent=0 }
+    }
+    in_grand && in_parent && $0 ~ "^[[:space:]]+"C"[[:space:]]*:" {
+      line=$0
+      sub(/^[[:space:]]+[A-Za-z_][A-Za-z0-9_]*[[:space:]]*:[[:space:]]*/, "", line)
+      sub(/[[:space:]]+$/, "", line)
+      sub(/[[:space:]]+#.*$/, "", line)
+      if (line ~ /^".*"$/) { line=substr(line, 2, length(line)-2) }
+      else if (line ~ /^\x27.*\x27$/) { line=substr(line, 2, length(line)-2) }
+      print line
+      exit
+    }
+  ' "$file"
+}
+
 validate_yaml_basic() {
   local file="$1"
   [ -f "$file" ] || return 0
@@ -229,6 +277,8 @@ SHARED_PATH_VIA_CONFIG=""   # populated by --config only (L2 legacy alias)
 LOCAL_PATH=""
 SCHEMA_PATH=""
 FORMAT="shell"
+FIELD=""                    # E57-S1 — single-field lookup mode
+POSITIONAL_QUERY=""         # E61-S1 — positional block-query mode (e.g. `sizing_map`)
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -257,8 +307,27 @@ while [ $# -gt 0 ]; do
       FORMAT="$2"; shift 2 ;;
     --format=*)
       FORMAT="${1#--format=}"; shift ;;
+    --field)
+      [ $# -ge 2 ] || die "flag --field requires a dotted-key argument"
+      FIELD="$2"; shift 2 ;;
+    --field=*)
+      FIELD="${1#--field=}"; shift ;;
     -h|--help)
       sed -n '1,87p' "$0" >&2; exit 0 ;;
+    sizing_map)
+      # E61-S1 — positional block-query: emit four S/M/L/XL key=value lines
+      # for the resolved sizing_map block (project > global precedence per
+      # ADR-074 contract C1 / ADR-044 §10.26.3).
+      POSITIONAL_QUERY="sizing_map"; shift ;;
+    planning_artifacts|implementation_artifacts|test_artifacts|creative_artifacts)
+      # E60-S2 — positional flat-key query for the four artifact-path
+      # keys added by E60-S1. Emits ONLY the resolved scalar to stdout
+      # with exit 0 (per Work Item 2 AC2 / story Test Scenarios #1–#5).
+      # Project-config.yaml override beats the framework default per
+      # ADR-044 §10.26.3 (project > global). Mirrors the sizing_map
+      # positional-query pattern but returns a single value (flat key,
+      # not a block).
+      POSITIONAL_QUERY="$1"; shift ;;
     *)
       die "unknown argument: $1" ;;
   esac
@@ -416,6 +485,81 @@ v_creative_artifacts=$(merge_key creative_artifacts)
 # more flattened keys is a one-liner (future-proof).
 v_val_integration_template_output_review=$(merge_nested_key val_integration template_output_review)
 
+# E61-S1 / ADR-074 contract C1 — sizing_map at the project layer with
+# project > global precedence per ADR-044 §10.26.3.
+#
+# Resolution: read each S/M/L/XL key from the shared (project-config.yaml)
+# layer only; if absent, fall back to the canonical Fibonacci defaults
+# (S=2, M=5, L=8, XL=13) that match the legacy framework global.yaml.
+#
+# The local overlay (config/global.yaml) is intentionally NOT consulted for
+# sizing_map — sizing_map is a project-level concern, not a machine-local
+# one. This is what "project > global" means in ADR-074 contract C1: the
+# project-config.yaml block supersedes the framework-shipped defaults.
+sizing_map_default_S=2
+sizing_map_default_M=5
+sizing_map_default_L=8
+sizing_map_default_XL=13
+
+v_sizing_map_S=""
+v_sizing_map_M=""
+v_sizing_map_L=""
+v_sizing_map_XL=""
+SIZING_MAP_PROJECT_SET=0
+if [ "$SHARED_EXISTS" -eq 1 ]; then
+  v_sizing_map_S=$(parse_yaml_nested_key  "$SHARED_PATH" sizing_map S)
+  v_sizing_map_M=$(parse_yaml_nested_key  "$SHARED_PATH" sizing_map M)
+  v_sizing_map_L=$(parse_yaml_nested_key  "$SHARED_PATH" sizing_map L)
+  v_sizing_map_XL=$(parse_yaml_nested_key "$SHARED_PATH" sizing_map XL)
+fi
+if [ -n "$v_sizing_map_S" ] || [ -n "$v_sizing_map_M" ] \
+   || [ -n "$v_sizing_map_L" ] || [ -n "$v_sizing_map_XL" ]; then
+  SIZING_MAP_PROJECT_SET=1
+fi
+[ -z "$v_sizing_map_S" ]  && v_sizing_map_S="$sizing_map_default_S"
+[ -z "$v_sizing_map_M" ]  && v_sizing_map_M="$sizing_map_default_M"
+[ -z "$v_sizing_map_L" ]  && v_sizing_map_L="$sizing_map_default_L"
+[ -z "$v_sizing_map_XL" ] && v_sizing_map_XL="$sizing_map_default_XL"
+
+# E57-S1 — dev_story.tdd_review.* doubly-nested resolution.
+# Reads the user-set value (if any) from shared then local, then applies
+# the schema-declared default when neither layer set the key. Defaults:
+#   threshold: medium     (enum off|low|medium|high)
+#   phases: [red]         (array)
+#   qa_auto_in_yolo: true (bool)
+#   qa_timeout_seconds: 600 (int)
+
+merge_doubly_nested_key() {
+  # merge_doubly_nested_key <grandparent> <parent> <child>
+  local grandparent="$1" parent="$2" child="$3" v=""
+  if [ "$SHARED_EXISTS" -eq 1 ]; then
+    v=$(parse_yaml_doubly_nested_key "$SHARED_PATH" "$grandparent" "$parent" "$child")
+  fi
+  if [ "$LOCAL_EXISTS" -eq 1 ]; then
+    local lv
+    lv=$(parse_yaml_doubly_nested_key "$LOCAL_PATH" "$grandparent" "$parent" "$child")
+    [ -n "$lv" ] && v="$lv"
+  fi
+  printf '%s' "$v"
+}
+
+v_dev_story_tdd_review_threshold=$(merge_doubly_nested_key dev_story tdd_review threshold)
+v_dev_story_tdd_review_phases=$(merge_doubly_nested_key dev_story tdd_review phases)
+v_dev_story_tdd_review_qa_auto_in_yolo=$(merge_doubly_nested_key dev_story tdd_review qa_auto_in_yolo)
+v_dev_story_tdd_review_qa_timeout_seconds=$(merge_doubly_nested_key dev_story tdd_review qa_timeout_seconds)
+
+# Defaults (applied when no layer set a value).
+[ -z "$v_dev_story_tdd_review_threshold" ]          && v_dev_story_tdd_review_threshold="medium"
+[ -z "$v_dev_story_tdd_review_phases" ]             && v_dev_story_tdd_review_phases="[red]"
+[ -z "$v_dev_story_tdd_review_qa_auto_in_yolo" ]    && v_dev_story_tdd_review_qa_auto_in_yolo="true"
+[ -z "$v_dev_story_tdd_review_qa_timeout_seconds" ] && v_dev_story_tdd_review_qa_timeout_seconds="600"
+
+# Enum validation for threshold (AC3). Allowed: off|low|medium|high.
+case "$v_dev_story_tdd_review_threshold" in
+  off|low|medium|high) ;;
+  *) die "invalid value for dev_story.tdd_review.threshold: '$v_dev_story_tdd_review_threshold' (allowed: off|low|medium|high)" ;;
+esac
+
 # ---------- Apply environment overrides (env wins) ----------
 
 [ -n "${GAIA_PROJECT_ROOT:-}" ]    && v_project_root="$GAIA_PROJECT_ROOT"
@@ -465,6 +609,58 @@ case "$v_project_path" in
   *..*) die "path traversal rejected in project_path: $v_project_path" ;;
 esac
 
+# ---------- --field short-circuit (E57-S1) ----------
+#
+# When --field <dotted-key> is set, print ONLY that key's resolved scalar
+# value to stdout (no quoting, single line, trailing newline) and exit 0.
+# Unknown fields exit 2 with a clear stderr message.
+
+if [ -n "$FIELD" ]; then
+  case "$FIELD" in
+    dev_story.tdd_review.threshold)
+      printf '%s\n' "$v_dev_story_tdd_review_threshold" ;;
+    dev_story.tdd_review.phases)
+      printf '%s\n' "$v_dev_story_tdd_review_phases" ;;
+    dev_story.tdd_review.qa_auto_in_yolo)
+      printf '%s\n' "$v_dev_story_tdd_review_qa_auto_in_yolo" ;;
+    dev_story.tdd_review.qa_timeout_seconds)
+      printf '%s\n' "$v_dev_story_tdd_review_qa_timeout_seconds" ;;
+    *)
+      die "unknown field for --field: '$FIELD' (supported: dev_story.tdd_review.threshold|phases|qa_auto_in_yolo|qa_timeout_seconds)" ;;
+  esac
+  exit 0
+fi
+
+# ---------- Positional block-query short-circuit (E61-S1) ----------
+#
+# `resolve-config.sh sizing_map` emits four canonical key=value lines for
+# the resolved sizing_map block (project > global precedence per ADR-074
+# contract C1 / ADR-044 §10.26.3). Output is consumed by callers like
+# `gaia-sprint-plan` and (in E61-S2) `gaia-create-story` to derive points
+# from a story size. Order S, M, L, XL is canonical for the t-shirt scale,
+# not lexicographic.
+
+if [ -n "$POSITIONAL_QUERY" ]; then
+  case "$POSITIONAL_QUERY" in
+    sizing_map)
+      printf 'S=%s\n' "$v_sizing_map_S"
+      printf 'M=%s\n' "$v_sizing_map_M"
+      printf 'L=%s\n' "$v_sizing_map_L"
+      printf 'XL=%s\n' "$v_sizing_map_XL"
+      ;;
+    # E60-S2 — flat artifact-path keys emit ONLY the resolved scalar
+    # (single line, trailing newline). Order matches the canonical
+    # E60-S1 schema block: planning, implementation, test, creative.
+    planning_artifacts)       printf '%s\n' "$v_planning_artifacts" ;;
+    implementation_artifacts) printf '%s\n' "$v_implementation_artifacts" ;;
+    test_artifacts)           printf '%s\n' "$v_test_artifacts" ;;
+    creative_artifacts)       printf '%s\n' "$v_creative_artifacts" ;;
+    *)
+      die "unknown positional query: '$POSITIONAL_QUERY'" ;;
+  esac
+  exit 0
+fi
+
 # ---------- Emit ----------
 
 emit_pair_shell() {
@@ -485,6 +681,18 @@ if [ "$FORMAT" = "shell" ]; then
   emit_pair_shell planning_artifacts       "$v_planning_artifacts"
   emit_pair_shell project_path             "$v_project_path"
   emit_pair_shell project_root             "$v_project_root"
+  # E61-S1 — sizing_map.{S,M,L,XL} emitted only when at least one sub-key
+  # was set in the shared layer. Absent sizing_map blocks → no emission, so
+  # the eval-friendly key surface stays clean for downstream consumers that
+  # do not need the sizing map. Callers that need the sizing map should use
+  # the positional `sizing_map` invocation form below (E61-S1 ADR-074 C1),
+  # which always emits the four sub-keys (with defaults when unset).
+  if [ "$SIZING_MAP_PROJECT_SET" -eq 1 ]; then
+    emit_pair_shell sizing_map.L  "$v_sizing_map_L"
+    emit_pair_shell sizing_map.M  "$v_sizing_map_M"
+    emit_pair_shell sizing_map.S  "$v_sizing_map_S"
+    emit_pair_shell sizing_map.XL "$v_sizing_map_XL"
+  fi
   emit_pair_shell test_artifacts           "$v_test_artifacts"
   if [ -n "$v_val_integration_template_output_review" ]; then
     emit_pair_shell val_integration.template_output_review \

@@ -20,6 +20,12 @@ This skill is the native Claude Code conversion of the legacy validate-framework
 - **Fail fast when manifest.yaml is missing (AC-EC3).** If `${CLAUDE_PLUGIN_ROOT}/knowledge/manifest.yaml` is absent, emit a CRITICAL finding `manifest.yaml missing — cannot validate framework` and exit non-zero. No partial report. This is the strict-mode variant of the graceful-missing-file contract documented in `plugins/gaia/scripts/lib/missing-file-fallback.sh` (E28-S162): validate-framework treats the manifest as a hard prerequisite (strict = exit non-zero with an error), whereas other callers (next-step.sh, gaia-help) treat similar retired-path files as graceful no-ops. Strictness is a per-caller policy, not a helper default.
 - **Use inline `!` bash for deterministic ops (ADR-042).** Manifest reads, directory listings, and `shasum` go through inline `!` bash. Do NOT re-implement manifest parsing in LLM prose.
 
+## Val Dispatch Contract
+
+> Any Val invocation triggered by this skill (directly or as a follow-up validation pass on findings) is dispatched with `model: claude-opus-4-7` and `effort: high` per ADR-074 contract C2 (Val opus pin). Validation rigor is the framework-wide contract; the harness MUST NOT downgrade Val to a cheaper default model. **Non-opus mismatch guard (AC3):** if a test fixture or downstream override forces a non-opus model into the dispatch context, this skill MUST emit the canonical WARNING `Val dispatch on non-opus model — forcing opus per ADR-074 contract C2` and force `model: claude-opus-4-7` before invoking Val. Silent degradation is forbidden.
+>
+> [Val opus-pin contract — see plugins/gaia/agents/validator.md §Val Operations]
+
 ## Inputs
 
 1. **Report path** — optional, via `$ARGUMENTS`. Defaults to `docs/implementation-artifacts/framework-validation-{date}.md`.

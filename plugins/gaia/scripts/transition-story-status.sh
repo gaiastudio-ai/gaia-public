@@ -14,6 +14,9 @@
 #
 # Usage:
 #   transition-story-status.sh <story_key> --to <new_status> [--from <expected_current>]
+#                                          [--title <s>]    [--epic <s>]
+#                                          [--priority <s>] [--risk <s>]
+#                                          [--author <s>]   [--file <path>]
 #   transition-story-status.sh --help
 #
 # State machine: see lib/story-state-machine.sh.
@@ -39,7 +42,20 @@
 #   STORY_INDEX_YAML          — overrides default index path
 #   STORY_STATUS_LOCK         — overrides default lock path
 #
-# Refs: AF-2026-04-28-3, FR-338, NFR-056, ADR-042.
+# story-index.yaml metadata enrichment (E63-S10 / Work Item 6.9):
+#   The script writes a 7-field metadata-rich entry to story-index.yaml plus
+#   the existing `status:` field, in this canonical order on every write:
+#     story_key, title, epic, priority, risk, author, file, status
+#   Source precedence per field: explicit CLI flag > frontmatter value > "" empty.
+#   Empty/missing optional fields render as "" (an empty quoted string) to keep
+#   YAML quoting uniform — never `null`. Idempotency is byte-stable: re-running
+#   with identical inputs yields a byte-identical entry block.
+#
+#   Consumer:        plugins/gaia/skills/gaia-create-story/SKILL.md (E63-S11)
+#   Source spec:     docs/planning-artifacts/feature-create-story-hardening.md#Work-Item-6.9
+#   Contract source: ADR-074 contract C3 — sole-writer discipline for story-index.yaml
+#
+# Refs: AF-2026-04-28-3, AF-2026-04-28-7, FR-338, NFR-056, ADR-042, ADR-074.
 
 set -euo pipefail
 LC_ALL=C
@@ -60,6 +76,9 @@ usage() {
   cat <<'USAGE'
 Usage:
   transition-story-status.sh <story_key> --to <new_status> [--from <expected_current>]
+                                         [--title <s>]    [--epic <s>]
+                                         [--priority <s>] [--risk <s>]
+                                         [--author <s>]   [--file <path>]
   transition-story-status.sh --help
 
 Atomically updates the story-file frontmatter, sprint-status.yaml,
@@ -67,6 +86,14 @@ epics-and-stories.md, and story-index.yaml under flock, rolling back on any
 partial failure.
 
 States: backlog | validating | ready-for-dev | in-progress | blocked | review | done
+
+Optional metadata flags (E63-S10 / Work Item 6.9):
+  --title --epic --priority --risk --author --file
+    Override the corresponding field written to story-index.yaml. Each flag
+    is optional; when omitted, the value falls back to the matching story
+    frontmatter field (`title`, `epic`, `priority`, `risk`, `author`). The
+    `--file` flag defaults to the resolved story file path when omitted.
+    Precedence: explicit flag > frontmatter > "" (empty quoted string).
 
 Exit codes:
   0 success / no-op    1 generic / usage    2 story file missing
@@ -87,6 +114,19 @@ STORY_KEY="$1"; shift || true
 NEW_STATUS=""
 EXPECTED_FROM=""
 
+# E63-S10 metadata enrichment flags. Each is "unset" by sentinel until proven
+# otherwise so we can distinguish "explicit empty string" from "not provided".
+# Sentinel: leading null-byte-like marker `__TSS_UNSET__` (no story field can
+# legitimately equal this string; the resolver replaces it with the frontmatter
+# fallback or the empty string).
+TSS_UNSET="__TSS_UNSET__"
+META_TITLE="$TSS_UNSET"
+META_EPIC="$TSS_UNSET"
+META_PRIORITY="$TSS_UNSET"
+META_RISK="$TSS_UNSET"
+META_AUTHOR="$TSS_UNSET"
+META_FILE="$TSS_UNSET"
+
 while [ $# -gt 0 ]; do
   case "$1" in
     --to)
@@ -95,6 +135,24 @@ while [ $# -gt 0 ]; do
     --from)
       [ $# -ge 2 ] || { err "--from requires a value"; exit 1; }
       EXPECTED_FROM="$2"; shift 2 ;;
+    --title)
+      [ $# -ge 2 ] || { err "--title requires a value"; exit 1; }
+      META_TITLE="$2"; shift 2 ;;
+    --epic)
+      [ $# -ge 2 ] || { err "--epic requires a value"; exit 1; }
+      META_EPIC="$2"; shift 2 ;;
+    --priority)
+      [ $# -ge 2 ] || { err "--priority requires a value"; exit 1; }
+      META_PRIORITY="$2"; shift 2 ;;
+    --risk)
+      [ $# -ge 2 ] || { err "--risk requires a value"; exit 1; }
+      META_RISK="$2"; shift 2 ;;
+    --author)
+      [ $# -ge 2 ] || { err "--author requires a value"; exit 1; }
+      META_AUTHOR="$2"; shift 2 ;;
+    --file)
+      [ $# -ge 2 ] || { err "--file requires a value"; exit 1; }
+      META_FILE="$2"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *)
       err "unknown argument: $1"
@@ -201,6 +259,33 @@ read_frontmatter_status() {
     exit 4
   fi
   printf '%s' "$status"
+}
+
+# Read an arbitrary scalar frontmatter field by name, returning the unquoted
+# value (or empty string if the field is absent / blank). Used by the E63-S10
+# metadata enrichment fallback path. Strips surrounding single/double quotes
+# and whitespace; does not handle multiline / list values (the canonical
+# fields used here — title, epic, priority, risk, author — are all scalars).
+read_frontmatter_field() {
+  local file="$1" field="$2" value
+  value=$(awk -v field="$field" '
+    BEGIN { in_fm = 0; seen = 0 }
+    /^---[[:space:]]*$/ {
+      if (!in_fm && !seen) { in_fm = 1; seen = 1; next }
+      if (in_fm) exit
+    }
+    in_fm {
+      pat = "^" field ":[[:space:]]*"
+      if ($0 ~ pat) {
+        v = $0
+        sub(pat, "", v)
+        gsub(/^["'\''[:space:]]+|["'\''[:space:]]+$/, "", v)
+        print v
+        exit
+      }
+    }
+  ' "$file")
+  printf '%s' "$value"
 }
 
 # Snapshot a file to "<file>.bak.<pid>" for rollback. Idempotent — re-snapshot
@@ -486,10 +571,31 @@ update_epics_and_stories() {
   trap - RETURN
 }
 
-# Update or insert the story's status entry in story-index.yaml. Creates the
-# file with a minimal skeleton if it does not exist.
+# Update or insert the story's metadata-rich entry in story-index.yaml.
+#
+# E63-S10 / Work Item 6.9 — the entry block is the canonical 8-line form, in
+# this order on every write (idempotency relies on stable ordering):
+#
+#   <key>:
+#     story_key: "<story_key>"
+#     title: "<title>"
+#     epic: "<epic>"
+#     priority: "<priority>"
+#     risk: "<risk>"
+#     author: "<author>"
+#     file: "<file>"
+#     status: "<status>"
+#
+# Empty/missing optional fields render as "" (empty quoted string) for diff
+# stability and to avoid YAML coercion surprises (`null`, `true`, etc.).
+#
+# The rewrite branch replaces the entire existing entry block (every child
+# indented line under the key) with the canonical 8-line form. This
+# uniformly handles "fields previously absent", "fields with different
+# values", and "stale fields no longer in the canonical schema".
 update_story_index_yaml() {
   local key="$1" new_status="$2"
+  local title="$3" epic="$4" priority="$5" risk="$6" author="$7" file_path="$8"
   local file="$STORY_INDEX_YAML"
 
   if [ ! -e "$file" ]; then
@@ -499,6 +605,13 @@ update_story_index_yaml() {
       printf 'last_updated: "%s"\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
       printf 'stories:\n'
       printf '  %s:\n' "$key"
+      printf '    story_key: "%s"\n' "$key"
+      printf '    title: "%s"\n' "$title"
+      printf '    epic: "%s"\n' "$epic"
+      printf '    priority: "%s"\n' "$priority"
+      printf '    risk: "%s"\n' "$risk"
+      printf '    author: "%s"\n' "$author"
+      printf '    file: "%s"\n' "$file_path"
       printf '    status: "%s"\n' "$new_status"
     } > "$file"
     return 0
@@ -509,47 +622,78 @@ update_story_index_yaml() {
   # shellcheck disable=SC2064
   trap "rm -f '$tmp'" RETURN
 
-  # Two-pass: first rewrite if the entry exists; if not, append a new entry.
-  awk -v target="$key" -v new_status="$new_status" '
-    BEGIN { in_entry = 0; rewrote = 0; in_stories = 0; found = 0 }
+  # awk rewrite-or-append:
+  #   - When in the target entry, suppress every child line (anything indented
+  #     >= 4 spaces or blank) and emit the canonical 8-line block exactly once
+  #     in place of the original header.
+  #   - When the entry is not found, append the full block at EOF under
+  #     `stories:`.
+  awk -v target="$key" \
+      -v new_status="$new_status" \
+      -v title="$title" \
+      -v epic="$epic" \
+      -v priority="$priority" \
+      -v risk="$risk" \
+      -v author="$author" \
+      -v file_path="$file_path" '
+    function emit_block(k, t, e, p, r, a, f, s) {
+      printf "  %s:\n", k
+      printf "    story_key: \"%s\"\n", k
+      printf "    title: \"%s\"\n", t
+      printf "    epic: \"%s\"\n", e
+      printf "    priority: \"%s\"\n", p
+      printf "    risk: \"%s\"\n", r
+      printf "    author: \"%s\"\n", a
+      printf "    file: \"%s\"\n", f
+      printf "    status: \"%s\"\n", s
+    }
+    BEGIN { in_entry = 0; in_stories = 0; found = 0; emitted = 0 }
     {
       raw = $0
       line = $0
       sub(/\r$/, "", line)
     }
     line ~ /^stories:[[:space:]]*$/ { in_stories = 1; print raw; next }
-    in_stories && line ~ /^[A-Za-z]/ { in_stories = 0 }
+    in_stories && line ~ /^[A-Za-z]/ {
+      # Closing the stories: mapping. If we were inside the target entry,
+      # nothing to flush — emit_block already ran on the matched header.
+      in_stories = 0
+      in_entry = 0
+    }
     # Entry header: two-space indent, key name, colon.
     in_stories && line ~ /^  [A-Za-z][A-Za-z0-9_-]*:[[:space:]]*$/ {
       k = line
       sub(/^  /, "", k)
       sub(/:[[:space:]]*$/, "", k)
-      if (k == target) { in_entry = 1; found = 1 } else { in_entry = 0 }
-      print raw
-      next
+      if (k == target) {
+        # Emit the canonical block in place of the original header; skip every
+        # subsequent child line until the next header / non-entry line.
+        in_entry = 1
+        found = 1
+        if (!emitted) {
+          emit_block(target, title, epic, priority, risk, author, file_path, new_status)
+          emitted = 1
+        }
+        next
+      } else {
+        in_entry = 0
+        print raw
+        next
+      }
     }
-    # Leaving the entry: any line at indent <= 2 that is not blank.
-    in_entry && line ~ /^[A-Za-z]/ { in_entry = 0 }
-    in_entry && line ~ /^  [A-Za-z]/ { in_entry = 0 }
-    in_entry && !rewrote && line ~ /^[[:space:]]+status:[[:space:]]*/ {
-      match(raw, /^[[:space:]]+/)
-      indent = substr(raw, RSTART, RLENGTH)
-      crlf = ""
-      if (raw ~ /\r$/) crlf = "\r"
-      printf "%sstatus: \"%s\"%s\n", indent, new_status, crlf
-      rewrote = 1
-      next
+    # Inside the matched entry — swallow every child line (4-space-or-deeper
+    # indent OR blank line). A header (2-space indent) is handled above and
+    # will end this entry naturally.
+    in_entry {
+      if (line ~ /^    / || line ~ /^[[:space:]]*$/) { next }
+      # Defensive — any non-indented line inside stories: closes the entry.
+      in_entry = 0
     }
     { print raw }
     END {
-      # If entry was found but had no status field, append one.
-      if (found && !rewrote) {
-        printf "    status: \"%s\"\n", new_status
-      }
-      # If entry not found, append a brand new minimal entry.
+      # If entry not found anywhere, append a brand-new metadata-rich block.
       if (!found) {
-        printf "  %s:\n", target
-        printf "    status: \"%s\"\n", new_status
+        emit_block(target, title, epic, priority, risk, author, file_path, new_status)
       }
     }
   ' "$file" > "$tmp" || {
@@ -572,6 +716,27 @@ update_story_index_yaml() {
 
 # Resolve the story file (exit 2/3 on missing/multiple).
 STORY_FILE="$(locate_story_file "$STORY_KEY")"
+
+# E63-S10 metadata resolution: explicit flag > frontmatter value > "" empty.
+# Only read the frontmatter when at least one field is unset (small perf win;
+# also avoids redundant disk reads when the caller supplies all six flags).
+resolve_meta() {
+  local var_value="$1" field="$2"
+  if [ "$var_value" = "$TSS_UNSET" ]; then
+    read_frontmatter_field "$STORY_FILE" "$field"
+  else
+    printf '%s' "$var_value"
+  fi
+}
+
+META_TITLE="$(resolve_meta "$META_TITLE" title)"
+META_EPIC="$(resolve_meta "$META_EPIC" epic)"
+META_PRIORITY="$(resolve_meta "$META_PRIORITY" priority)"
+META_RISK="$(resolve_meta "$META_RISK" risk)"
+META_AUTHOR="$(resolve_meta "$META_AUTHOR" author)"
+if [ "$META_FILE" = "$TSS_UNSET" ]; then
+  META_FILE="$STORY_FILE"
+fi
 
 # Acquire the cross-file lock.
 mkdir -p "$(dirname "$STORY_STATUS_LOCK")"
@@ -640,13 +805,47 @@ trap '
 rewrite_frontmatter "$STORY_FILE" "$NEW_STATUS"
 update_sprint_status_yaml "$STORY_KEY" "$NEW_STATUS"
 update_epics_and_stories "$STORY_KEY" "$NEW_STATUS"
-update_story_index_yaml "$STORY_KEY" "$NEW_STATUS"
+update_story_index_yaml "$STORY_KEY" "$NEW_STATUS" \
+  "$META_TITLE" "$META_EPIC" "$META_PRIORITY" "$META_RISK" "$META_AUTHOR" "$META_FILE"
 
 # All four files written successfully — commit.
 TSS_ROLLBACK_PENDING=0
 trap - EXIT
 
 cleanup_snapshots "$SNAP_STORY" "$SNAP_YAML" "$SNAP_EPICS" "$SNAP_INDEX"
+
+# Write status-transition marker (E59-S5 / ADR-074 contract C3).
+# The marker lets the pre-commit `check-status-discipline.sh` distinguish
+# legitimate transitions from manual `status:` edits. Marker is consumed by
+# the discipline check during the same commit cycle. Best-effort — never
+# fails the transition if the .git directory is unavailable (e.g., CI tasks
+# running outside a checkout). Marker freshness window is enforced by the
+# consumer (default 300s).
+write_status_transition_marker() {
+  local marker_dir marker_path
+  if [ -n "${STATUS_TRANSITION_MARKER:-}" ]; then
+    marker_path="$STATUS_TRANSITION_MARKER"
+    marker_dir="$(dirname "$marker_path")"
+  else
+    local git_root
+    if git_root=$(git -C "${PROJECT_PATH:-$PWD}" rev-parse --show-toplevel 2>/dev/null); then
+      marker_dir="$git_root/.git"
+    elif [ -d "${PROJECT_PATH:-$PWD}/.git" ]; then
+      marker_dir="${PROJECT_PATH:-$PWD}/.git"
+    else
+      return 0  # outside a checkout — silent best-effort
+    fi
+    marker_path="$marker_dir/gaia-status-transition.marker"
+  fi
+  mkdir -p "$marker_dir" 2>/dev/null || return 0
+  {
+    printf 'story_key=%s\n' "$STORY_KEY"
+    printf 'timestamp=%s\n' "$(date -u +%s)"
+    printf 'from=%s\n' "$CURRENT_STATUS"
+    printf 'to=%s\n' "$NEW_STATUS"
+  } > "$marker_path" 2>/dev/null || return 0
+}
+write_status_transition_marker
 
 log "$STORY_KEY transitioned $CURRENT_STATUS -> $NEW_STATUS"
 exit 0

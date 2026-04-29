@@ -150,8 +150,6 @@ The writer handles:
 - **Idempotency:** dedup key is `(finding_id, sprint_id)` -- re-running the same triage does not duplicate.
 - **Schema compliance:** entry fields match architecture §10.28.6 exactly (`id`, `sprint_id`, `text`, `classification`, `status: open`, `escalation_count: 0`, `created_at`, `theme_hash`, `finding_id`).
 
-> **TODO (E36-S2 swap-in):** When E36-S2 ships the shared action-items writer, replace the inline `action-items-write.sh` source with the E36-S2 shared writer invocation. The inline writer is byte-compatible with the E36-S2 schema, so swap-in is a pure deletion of the source line above.
-
 ### Step 4 --- Create Backlog Stories (Skill-to-Skill Delegation, FR-FITP-2)
 
 Story creation is delegated to `/gaia-create-story` via subagent spawn. This replaces all inline story-creation logic -- delegation is authoritative. The spawned `/gaia-create-story` produces the full elaboration (AC, tasks, test scenarios) and records provenance in the frontmatter.

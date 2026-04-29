@@ -303,3 +303,214 @@ performance-review"
   fixtures_hash_after=$(find "$FIXTURES_DIR" -type f -exec shasum {} \; | sort)
   [ "$fixtures_hash_before" = "$fixtures_hash_after" ]
 }
+
+# ---------- E58-S5: dead-code regression + true orchestration harness ----------
+
+# AC1 (TC-RAR-13): the dead `echo "PASSED"` path at lines 172-176 is gone.
+# The only literal `echo "PASSED"` left in the file MUST be inside the
+# mock-mode branch of run_reviewer().
+@test "E58-S5 AC1: dead PASSED echo removed; only one mock-branch occurrence remains" {
+  local count
+  count=$(grep -cE '^[[:space:]]*echo "PASSED"$' "$SCRIPTS_DIR/review-runner.sh")
+  [ "$count" -eq 1 ]
+}
+
+# Helper: stub a sibling script ("$1") to append a tag ("$2") to a trace file.
+# The stub overrides the real script via env-var override (REVIEW_*_SCRIPT).
+seed_orchestration_trace_stubs() {
+  local stub_dir="$TEST_TMP/orch-stubs"
+  mkdir -p "$stub_dir"
+
+  # Skip-check stub: emits all-run JSON and traces "skip-check"
+  cat > "$stub_dir/review-skip-check.sh" <<MOCK
+#!/usr/bin/env bash
+echo "skip-check" >> "$TEST_TMP/orch-trace.txt"
+echo '{"skip":[],"run":["code-review","qa-tests","security-review","test-automate","test-review","review-perf"]}'
+exit 0
+MOCK
+  chmod +x "$stub_dir/review-skip-check.sh"
+
+  # Summary-gen stub
+  cat > "$stub_dir/review-summary-gen.sh" <<MOCK
+#!/usr/bin/env bash
+echo "summary-gen" >> "$TEST_TMP/orch-trace.txt"
+echo "/tmp/fake-summary.md"
+exit 0
+MOCK
+  chmod +x "$stub_dir/review-summary-gen.sh"
+
+  # Nudge stub
+  cat > "$stub_dir/review-nudge.sh" <<MOCK
+#!/usr/bin/env bash
+echo "nudge" >> "$TEST_TMP/orch-trace.txt"
+exit 0
+MOCK
+  chmod +x "$stub_dir/review-nudge.sh"
+
+  export REVIEW_SKIP_CHECK_SCRIPT="$stub_dir/review-skip-check.sh"
+  export REVIEW_SUMMARY_GEN_SCRIPT="$stub_dir/review-summary-gen.sh"
+  export REVIEW_NUDGE_SCRIPT="$stub_dir/review-nudge.sh"
+}
+
+# AC2 (TC-RAR-14): mock-mode orchestration order must be:
+#   skip-check -> 6x (judgment + gate-write) -> summary-gen -> nudge.
+@test "E58-S5 AC2: MOCK_VERDICTS orchestration order matches contract" {
+  install_fixture
+  seed_orchestration_trace_stubs
+
+  : > "$TEST_TMP/orch-trace.txt"
+  export MOCK_MODE=true
+  export MOCK_VERDICTS="PASS,PASS,PASS,PASS,PASS,PASS"
+
+  run "$SCRIPTS_DIR/review-runner.sh" "C9-FIXTURE"
+  [ "$status" -eq 0 ]
+
+  # Trace must record skip-check first, summary-gen second-to-last, nudge last.
+  local trace
+  trace=$(cat "$TEST_TMP/orch-trace.txt")
+  [ "$(echo "$trace" | head -1)" = "skip-check" ]
+  [ "$(echo "$trace" | tail -2 | head -1)" = "summary-gen" ]
+  [ "$(echo "$trace" | tail -1)" = "nudge" ]
+}
+
+# AC4 / AC-EC3 (ECI-668): a CRASH sentinel in MOCK_VERDICTS must produce a
+# FAILED gate row for the crashing slot AND let the run continue to the
+# remaining reviewers, each recording their own verdict.
+@test "E58-S5 AC4: CRASH sentinel writes FAILED row and run continues" {
+  install_fixture
+  seed_orchestration_trace_stubs
+
+  : > "$TEST_TMP/orch-trace.txt"
+  export MOCK_MODE=true
+  export MOCK_VERDICTS="PASS,CRASH,PASS,PASS,PASS,PASS"
+
+  run "$SCRIPTS_DIR/review-runner.sh" "C9-FIXTURE"
+  # Exit non-zero because at least one reviewer FAILED.
+  [ "$status" -ne 0 ]
+
+  # Reviewer #2 in canonical order is security-review (the run order matches
+  # REVIEWER_SKILLS in review-runner.sh: code-review, security-review, ...).
+  run "$SCRIPTS_DIR/review-gate.sh" status --story "C9-FIXTURE"
+  [ "$status" -eq 0 ]
+  echo "$output" | jq -e '.gates["Code Review"] == "PASSED"'
+  echo "$output" | jq -e '.gates["Security Review"] == "FAILED"'
+  echo "$output" | jq -e '.gates["QA Tests"] == "PASSED"'
+  echo "$output" | jq -e '.gates["Test Automation"] == "PASSED"'
+  echo "$output" | jq -e '.gates["Test Review"] == "PASSED"'
+  echo "$output" | jq -e '.gates["Performance Review"] == "PASSED"'
+}
+
+# AC-EC1: MOCK_MODE=true with MOCK_VERDICTS unset must error clearly with a
+# non-zero exit AND a stderr message naming MOCK_VERDICTS as required. The
+# guard runs before any per-reviewer iteration begins.
+@test "E58-S5 AC-EC1: MOCK_MODE without MOCK_VERDICTS errors with actionable stderr" {
+  install_fixture
+  seed_orchestration_trace_stubs
+
+  unset MOCK_VERDICTS
+  export MOCK_MODE=true
+
+  run "$SCRIPTS_DIR/review-runner.sh" "C9-FIXTURE"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"MOCK_VERDICTS"* ]]
+  [[ "$output" == *"required"* ]]
+}
+
+# ---------- E58-S6: SKILL.md thin-orchestrator + parity trace ----------
+
+# Path to the skill file (resolved once per test from SCRIPTS_DIR layout).
+SKILL_FILE="$(cd "${BATS_TEST_DIRNAME}/../../skills/gaia-run-all-reviews" && pwd)/SKILL.md"
+# Path to the parity trace.
+PARITY_TRACE="$(cd "${BATS_TEST_DIRNAME}/../../test/fixtures/parity-baseline/traces" && pwd)/run-all-reviews.jsonl"
+
+# AC1 (TC-RAR-15, ECI-670): SKILL.md frontmatter must declare the new
+# argument-hint with [--force] and keep allowed-tools at [Read, Grep, Glob, Bash].
+@test "E58-S6 AC1: SKILL.md argument-hint includes [--force] and allowed-tools unchanged" {
+  [ -f "$SKILL_FILE" ]
+
+  # Extract frontmatter (between leading --- and the next ---)
+  local fm
+  fm=$(awk '/^---$/{c++; next} c==1' "$SKILL_FILE")
+
+  # argument-hint check (exact string match)
+  echo "$fm" | grep -Fq 'argument-hint: "[story-key] [--force]"'
+  # allowed-tools unchanged
+  echo "$fm" | grep -Fq 'allowed-tools: [Read, Grep, Glob, Bash]'
+}
+
+# AC2 (TC-RAR-15): SKILL.md Step 2 must reference review-skip-check.sh and
+# scope per-reviewer LLM judgment to the `run` slice of its JSON output.
+@test "E58-S6 AC2: SKILL.md Step 2 invokes review-skip-check.sh and iterates the run slice" {
+  grep -Fq 'review-skip-check.sh' "$SKILL_FILE"
+  # Must mention the JSON {skip,run} partition contract
+  grep -Eq '\{skip[^}]*run' "$SKILL_FILE"
+}
+
+# AC3 (TC-RAR-15, ECI-670): SKILL.md must document that --force is forwarded
+# to review-skip-check.sh so all 6 LLM judgments fire.
+@test "E58-S6 AC3: SKILL.md documents --force passthrough to review-skip-check.sh" {
+  # The --force flag must be referenced in Step 2 / orchestrator wiring.
+  grep -Fq -- '--force' "$SKILL_FILE"
+}
+
+# AC4 (TC-RAR-16): SKILL.md must document SKIPPED reporting for already-PASSED
+# reviewers in the final summary block.
+@test "E58-S6 AC4: SKILL.md documents SKIPPED (already PASSED) summary entries" {
+  grep -Fq 'SKIPPED (already PASSED)' "$SKILL_FILE"
+}
+
+# AC4/AC5 (TC-RAR-16, NFR-RAR-1, TC-RAR-17): Step 3 must call the three
+# deterministic scripts in order: review-summary-gen.sh, review-gate.sh
+# review-gate-check, review-nudge.sh.
+@test "E58-S6 AC4+AC5: SKILL.md Step 3 calls summary-gen, review-gate-check, and nudge" {
+  grep -Fq 'review-summary-gen.sh' "$SKILL_FILE"
+  grep -Fq 'review-gate-check' "$SKILL_FILE"
+  grep -Fq 'review-nudge.sh' "$SKILL_FILE"
+
+  # Order check: in Step 3, the three deterministic helper scripts must
+  # be invoked in canonical order. Anchor on `bash scripts/...` invocation
+  # lines (the imperative call sites) rather than prose mentions, since
+  # the Mission/Critical-Rules prose may list multiple scripts on a single
+  # line. The Step-3 procedure must call summary-gen first, then
+  # review-gate-check, then review-nudge.
+  local ln_summary ln_check ln_nudge
+  ln_summary=$(grep -nE 'bash scripts/review-summary-gen\.sh' "$SKILL_FILE" | head -1 | cut -d: -f1)
+  ln_check=$(grep -nE 'bash scripts/review-gate\.sh review-gate-check' "$SKILL_FILE" | head -1 | cut -d: -f1)
+  ln_nudge=$(grep -nE 'bash scripts/review-nudge\.sh' "$SKILL_FILE" | head -1 | cut -d: -f1)
+  [ -n "$ln_summary" ] && [ -n "$ln_check" ] && [ -n "$ln_nudge" ]
+  [ "$ln_summary" -lt "$ln_check" ]
+  [ "$ln_check" -lt "$ln_nudge" ]
+}
+
+# AC6: Parity trace must reflect the new step boundaries:
+# validate-input -> skip-check -> per-reviewer -> summary-gen ->
+# review-gate-check -> nudge.
+@test "E58-S6 AC6: parity trace reflects new step-boundary phases" {
+  [ -f "$PARITY_TRACE" ]
+
+  # Each phase name must appear at least once in the trace.
+  grep -Fq 'validate-input' "$PARITY_TRACE"
+  grep -Fq 'skip-check' "$PARITY_TRACE"
+  grep -Fq 'per-reviewer' "$PARITY_TRACE"
+  grep -Fq 'summary-gen' "$PARITY_TRACE"
+  grep -Fq 'review-gate-check' "$PARITY_TRACE"
+  grep -Fq 'nudge' "$PARITY_TRACE"
+}
+
+# AC-EC11: Parity-trace JSONL must be well-formed — every line must parse
+# as a single JSON object. The bats test fails fast with the offending line
+# number if any line is malformed.
+@test "E58-S6 AC-EC11: parity trace JSONL is well-formed (one JSON object per line)" {
+  [ -f "$PARITY_TRACE" ]
+
+  local lineno=0
+  while IFS= read -r line; do
+    lineno=$((lineno + 1))
+    # Skip empty lines (allowed at EOF)
+    [ -z "$line" ] && continue
+    if ! printf '%s' "$line" | jq -e . >/dev/null 2>&1; then
+      echo "malformed JSON on line $lineno: $line" >&2
+      return 1
+    fi
+  done < "$PARITY_TRACE"
+}

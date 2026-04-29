@@ -1,0 +1,332 @@
+#!/usr/bin/env bash
+# validate-frontmatter.sh — gaia-create-story Step 6 deterministic
+#                          frontmatter validator (E63-S5 / Work Item 6.5,
+#                          folds Work Item 6.10)
+#
+# Purpose:
+#   Verify a story file's YAML frontmatter satisfies the canonical 15-field
+#   schema produced by `generate-frontmatter.sh` (E63-S3): required fields
+#   present and non-empty (with `null` allowed only for the four nullable
+#   fields), enumeration constraints on `status` / `priority` / `size` /
+#   `risk`, and the canonical filename invariant `{key}-{slugify(title)}.md`.
+#   Surfaces schema-level drift deterministically BEFORE Val dispatch in
+#   Step 6 of /gaia-create-story, saving Val tokens on the trivial mismatch
+#   class and feeding the 3-attempt fix loop with structured findings (per
+#   ADR-050).
+#
+# Consumers:
+#   - E63-S11 SKILL.md thin-orchestrator rewrite — invokes this script
+#     inline at the start of Step 6 before the Val dispatch.
+#   - The 3-attempt fix loop (ADR-050) consumes this script's CRITICAL
+#     findings to re-prompt the SM auto-fixer with concrete field names.
+#
+# Folded source:
+#   - E63-S4 (validate-canonical-filename.sh) — the canonical-filename
+#     check from Work Item 6.10 is folded in here (subsumes the standalone
+#     E63-S4 sibling once E63-S11 wires this script in production).
+#
+# Contract source:
+#   - docs/planning-artifacts/feature-create-story-hardening.md#Work-Item-6.5
+#   - docs/planning-artifacts/feature-create-story-hardening.md#Work-Item-6.10
+#   - docs/planning-artifacts/architecture.md §Decision Log — ADR-074
+#     (gaia-create-story Hardening Bundle, contract C3 status-edit discipline)
+#   - docs/planning-artifacts/architecture.md §Decision Log — ADR-042
+#     (Scripts-over-LLM rationale)
+#   - docs/planning-artifacts/architecture.md §Decision Log — ADR-050
+#     (Shared Val + SM Fix-Loop Dispatch Pattern, severity vocabulary)
+#
+# Algorithm (in order):
+#   1. Parse CLI: `--file <path>` (single required flag).
+#   2. Verify the target file exists and is readable; on failure, exit 2
+#      (usage / argument error — distinguishable from CRITICAL findings).
+#   3. Extract YAML frontmatter (block between the first two `---` lines)
+#      via an awk state-machine (NOT a range pattern — see gaia-shell-idioms
+#      for the awk range-bug rationale). Reject (exit 2) if delimiters are
+#      missing or unbalanced; this is a malformed-file error, not a CRITICAL
+#      finding.
+#   4. Parse `key: value` pairs into a flat associative buffer.
+#      Quote-tolerant (handles `"x"`, `'x'`, bare `x`, and bare `null`).
+#   5. Validate presence + non-emptiness of the 15 required fields. Bare
+#      `null` is the empty-but-valid sentinel for the four nullable fields
+#      (sprint_id, priority_flag, origin, origin_ref).
+#   6. Validate enumeration constraints for `status`, `priority`, `size`,
+#      `risk`.
+#   7. Compute canonical filename via sibling `slugify.sh` and compare
+#      against `basename "$file"`. Skip when key/title were already missing.
+#   8. Buffer all findings; emit on stdout. Exit 1 when at least one
+#      CRITICAL finding was emitted; exit 0 on clean.
+#
+# Findings format (stdout, one per line):
+#   <severity>|<field>|<message>
+#   - severity: literal `CRITICAL` (uppercase; matches Step 6 dispatch
+#     vocabulary per ADR-050). `WARNING` and `INFO` are reserved for
+#     future expansion.
+#   - field:    the offending field name; `filename` for the canonical
+#     basename mismatch.
+#   - message:  human-readable explanation.
+#
+# Exit codes:
+#   0 — every check passed (silent success)
+#   1 — one or more CRITICAL findings emitted to stdout
+#   2 — usage error, missing/unreadable file, or malformed frontmatter
+#       (delimiters missing or unbalanced)
+#
+# Status-edit discipline (ADR-074 contract C3):
+#   This script reads `status:` only for enumeration validation. It NEVER
+#   writes to status surfaces (sprint-status.yaml, epics-and-stories.md,
+#   story-index.yaml) — all status mutations flow through
+#   transition-story-status.sh outside this script's scope.
+#
+# Locale invariance:
+#   `LC_ALL=C` is set so awk/grep/sed character classes and regex semantics
+#   are byte-level and identical on macOS BSD and Linux GNU userland.
+
+set -euo pipefail
+LC_ALL=C
+export LC_ALL
+
+SCRIPT_NAME="validate-frontmatter.sh"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SLUGIFY="${SCRIPT_DIR}/slugify.sh"
+
+usage() {
+  cat >&2 <<'USAGE'
+Usage: validate-frontmatter.sh --file <story-file>
+
+  --file <path>  Path to a story file. Required.
+
+Validates the YAML frontmatter of a story file against the canonical 15-field
+schema produced by generate-frontmatter.sh (E63-S3):
+
+  Required (non-nullable): key, title, epic, status, priority, size, points,
+                            risk, depends_on, blocks, traces_to, date, author
+  Required (nullable):     sprint_id, priority_flag
+
+  Enumerations:
+    status   ∈ {backlog, ready-for-dev, in-progress, review,
+                validating, done, blocked}
+    priority ∈ {P0, P1, P2}
+    size     ∈ {S, M, L, XL}
+    risk     ∈ {high, medium, low}
+
+  Canonical filename invariant: basename(<file>) == "{key}-{slug(title)}.md"
+  where slug is computed by the sibling slugify.sh.
+
+Findings (stdout, one per line): CRITICAL|<field>|<message>
+
+Exit codes:
+  0 — every check passed (silent success)
+  1 — one or more CRITICAL findings emitted to stdout
+  2 — usage error, missing/unreadable file, or malformed frontmatter
+USAGE
+}
+
+log() { printf '%s: %s\n' "$SCRIPT_NAME" "$*" >&2; }
+die_usage() { log "$*"; usage; exit 2; }
+die_input() { log "$*"; exit 2; }
+
+# ---------- CLI parsing ----------
+
+file=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --file)
+      [ $# -ge 2 ] || die_usage "--file requires a value"
+      file="$2"; shift 2 ;;
+    -h|--help)
+      usage; exit 0 ;;
+    *)
+      die_usage "unknown argument: $1" ;;
+  esac
+done
+
+[ -n "$file" ] || die_usage "--file is required"
+if [ ! -r "$file" ]; then
+  die_input "file not readable: $file"
+fi
+
+# ---------- Frontmatter extraction (awk state-machine) ----------
+#
+# Walk the file line-by-line. State 0 = looking for opening fence; allow
+# leading blank lines. State 1 = inside frontmatter; capture lines until the
+# closing fence. State 2 = closed cleanly. Any other terminal state means
+# the file is malformed (no frontmatter, or fence opened but never closed).
+
+fm_status=0
+frontmatter="$(awk '
+  BEGIN { state = 0 }
+  {
+    if (state == 0) {
+      if ($0 == "---") { state = 1; next }
+      if ($0 ~ /^[[:space:]]*$/) next
+      state = 99  # never opened
+      exit
+    }
+    if (state == 1) {
+      if ($0 == "---") { state = 2; exit }
+      print
+    }
+  }
+  END {
+    if (state == 2) exit 0
+    exit 4
+  }
+' "$file")" || fm_status=$?
+
+if [ "$fm_status" -ne 0 ]; then
+  die_input "malformed frontmatter (missing or unbalanced '---' delimiters): $file"
+fi
+
+# ---------- Field extraction (quote-tolerant) ----------
+#
+# extract_field <label>: emit the trimmed value of `<label>: <value>` from
+# the frontmatter. Strips one pair of surrounding single or double quotes.
+# Emits an empty string when the field is absent.
+
+extract_field() {
+  local label="$1" raw value
+  raw="$(printf '%s\n' "$frontmatter" | awk -v lab="$label" '
+    {
+      pat = "^" lab ":[[:space:]]*"
+      if (match($0, pat)) {
+        v = substr($0, RSTART + RLENGTH)
+        sub(/[[:space:]]+$/, "", v)
+        print v
+        exit
+      }
+    }
+  ')"
+  case "$raw" in
+    \"*\") value="${raw#\"}"; value="${value%\"}" ;;
+    \'*\') value="${raw#\'}"; value="${value%\'}" ;;
+    *)     value="$raw" ;;
+  esac
+  printf '%s' "$value"
+}
+
+# field_present <label>: 0 if the label appears at all in the frontmatter
+# (even with an empty or `null` value), 1 otherwise.
+field_present() {
+  local label="$1"
+  printf '%s\n' "$frontmatter" | awk -v lab="$label" '
+    {
+      pat = "^" lab ":"
+      if (match($0, pat)) { found = 1; exit }
+    }
+    END { exit (found ? 0 : 1) }
+  '
+}
+
+# ---------- Required-field check ----------
+#
+# The canonical 15 fields per story-template.md. Fields in NULLABLE may be
+# the bare value `null`; everything else must be non-empty and not `null`.
+
+REQUIRED_FIELDS="key title epic status priority size points risk sprint_id priority_flag depends_on blocks traces_to date author"
+NULLABLE_FIELDS=" sprint_id priority_flag origin origin_ref "
+
+is_nullable() {
+  local field="$1"
+  case "$NULLABLE_FIELDS" in
+    *" $field "*) return 0 ;;
+    *)            return 1 ;;
+  esac
+}
+
+findings=""
+
+append_finding() {
+  local severity="$1" field="$2" message="$3"
+  findings="${findings}${severity}|${field}|${message}"$'\n'
+}
+
+for field in $REQUIRED_FIELDS; do
+  if ! field_present "$field"; then
+    append_finding "CRITICAL" "$field" "missing required field"
+    continue
+  fi
+  raw_value="$(extract_field "$field")"
+  # Strip whitespace.
+  trimmed="$(printf '%s' "$raw_value" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
+  if [ -z "$trimmed" ]; then
+    if is_nullable "$field"; then
+      # Empty string for a nullable field is treated as null-equivalent.
+      continue
+    fi
+    append_finding "CRITICAL" "$field" "required field is empty"
+    continue
+  fi
+  if [ "$trimmed" = "null" ]; then
+    if is_nullable "$field"; then
+      continue
+    fi
+    append_finding "CRITICAL" "$field" "required field is null"
+    continue
+  fi
+done
+
+# ---------- Enumeration check ----------
+#
+# Validate enum-constrained fields independently of presence — if the field
+# was missing, the missing-field finding already fires above. We re-extract
+# here to inspect the actual value when it IS present.
+
+check_enum() {
+  local field="$1" canonical="$2" value
+  if ! field_present "$field"; then
+    return 0
+  fi
+  value="$(extract_field "$field")"
+  value="$(printf '%s' "$value" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
+  # Empty / null already flagged above; skip enum check on empty values.
+  if [ -z "$value" ] || [ "$value" = "null" ]; then
+    return 0
+  fi
+  case " $canonical " in
+    *" $value "*) return 0 ;;
+    *)
+      append_finding "CRITICAL" "$field" "value '$value' not in {$canonical}"
+      ;;
+  esac
+}
+
+check_enum "status"   "backlog ready-for-dev in-progress review validating done blocked"
+check_enum "priority" "P0 P1 P2"
+check_enum "size"     "S M L XL"
+check_enum "risk"     "high medium low"
+
+# ---------- Canonical filename check (folded from E63-S4 / Work Item 6.10) ----------
+#
+# Skip when key or title was already flagged missing — emitting a noisy
+# filename finding on top would clutter the SM fix-loop output.
+
+key="$(extract_field "key")"
+title="$(extract_field "title")"
+key_trim="$(printf '%s' "$key" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
+title_trim="$(printf '%s' "$title" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
+
+if [ -n "$key_trim" ] && [ -n "$title_trim" ] && [ "$key_trim" != "null" ] && [ "$title_trim" != "null" ]; then
+  if [ ! -x "$SLUGIFY" ]; then
+    log "sibling slugify.sh missing or non-executable: $SLUGIFY"
+    exit 2
+  fi
+  slug=""
+  if ! slug="$("$SLUGIFY" --title "$title_trim" 2>/dev/null)"; then
+    log "slugify.sh failed for title: $title_trim"
+    exit 2
+  fi
+  expected_basename="${key_trim}-${slug}.md"
+  actual_basename="$(basename "$file")"
+  if [ "$expected_basename" != "$actual_basename" ]; then
+    append_finding "CRITICAL" "filename" "expected '${expected_basename}', got '${actual_basename}'"
+  fi
+fi
+
+# ---------- Emit findings + exit ----------
+
+if [ -n "$findings" ]; then
+  printf '%s' "$findings"
+  exit 1
+fi
+
+exit 0

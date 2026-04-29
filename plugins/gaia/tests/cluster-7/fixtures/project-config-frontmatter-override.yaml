@@ -1,0 +1,16 @@
+# project-config-frontmatter-override.yaml — E63-S3 AC2 fixture
+#
+# Carries a non-default sizing_map override (S=1, M=3, L=5, XL=8) so a story
+# with size: M emits points: 3 (not the default 5).
+project_root: /tmp/gaia-e63-s3-override
+project_path: /tmp/gaia-e63-s3-override/app
+memory_path: /tmp/gaia-e63-s3-override/_memory
+checkpoint_path: /tmp/gaia-e63-s3-override/_memory/checkpoints
+installed_path: /tmp/gaia-e63-s3-override/_gaia
+framework_version: 1.127.2-rc.1
+date: 2026-04-28
+sizing_map:
+  S: 1
+  M: 3
+  L: 5
+  XL: 8

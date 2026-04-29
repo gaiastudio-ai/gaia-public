@@ -84,6 +84,16 @@ _check_command() {
     _emit_row "$item" "PASSED" "skipped: no '$cmd' command on PATH"
     return 0
   fi
+  # Skip the system POSIX `test` binary (`/bin/test`, `/usr/bin/test`) —
+  # running it with no args exits 1 and is never a project test runner.
+  # Without this guard `_check_command "tests" "test"` would always FAIL
+  # on macOS / Linux dev machines that lack a project-local `test` wrapper.
+  case "$cmd_path" in
+    /bin/test|/usr/bin/test|/usr/local/bin/test)
+      _emit_row "$item" "PASSED" "skipped: '$cmd' resolves to system POSIX builtin ($cmd_path)"
+      return 0
+      ;;
+  esac
   result="$(_run_check "$cmd_path")"
   rc="$(printf '%s' "$result" | tail -1)"
   out="$(printf '%s' "$result" | sed '$d')"

@@ -104,8 +104,19 @@ teardown() { common_teardown; }
   [ -x "$SKILL_DIR/scripts/load-story.sh" ]
 }
 
-@test "AC3: update-story-status.sh exists and is executable" {
-  [ -x "$SKILL_DIR/scripts/update-story-status.sh" ]
+@test "AC3: SKILL.md references transition-story-status.sh directly (post E59-S2 wrapper migration)" {
+  # Post-E59-S1 contract: gaia-dev-story SKILL.md must invoke
+  # plugins/gaia/scripts/transition-story-status.sh directly, not the
+  # update-story-status.sh deprecation wrapper. The wrapper is removed in E59-S3;
+  # this assertion guards against regressions reintroducing the wrapper path.
+  [ -f "$SKILL_DIR/SKILL.md" ]
+  run grep -c 'transition-story-status\.sh' "$SKILL_DIR/SKILL.md"
+  [ "$status" -eq 0 ]
+  [ "$output" -gt 0 ]
+  # Wrapper path must be absent — proves the assertion catches the negative case.
+  run grep -c 'update-story-status\.sh' "$SKILL_DIR/SKILL.md"
+  # grep -c returns 1 with output "0" when no match; treat that as success here.
+  [ "$output" = "0" ]
 }
 
 @test "AC3: git-branch.sh exists and is executable" {

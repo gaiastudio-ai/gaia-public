@@ -114,6 +114,12 @@ fields:
     default: null
     description: "Absolute (or project-root-relative) path to the docs/implementation-artifacts directory. Defaults to {project_root}/docs/implementation-artifacts when absent. Added under E28-S200 (see test_artifacts)."
 
+  creative_artifacts:
+    type: path
+    required: false
+    default: null
+    description: "Absolute (or project-root-relative) path to the docs/creative-artifacts directory. Defaults to {project_root}/docs/creative-artifacts when absent. Added under E60-S1 / ADR-074 contract C1 (mirrors test_artifacts/planning_artifacts/implementation_artifacts pattern)."
+
   val_integration:
     type: map
     required: false

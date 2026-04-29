@@ -176,6 +176,7 @@ regression class closed by ADR-063).
   non-opus model — forcing opus per ADR-074 contract C2` and force
   `model: claude-opus-4-7` before invoking Val. Silent degradation is
   forbidden.
+- [Val opus-pin contract — see plugins/gaia/agents/validator.md §Val Operations]
 - Val validates the intake against the codebase and ground truth and
   returns the ADR-037 structured schema:
   `{ status, summary, artifacts, findings, next }`.

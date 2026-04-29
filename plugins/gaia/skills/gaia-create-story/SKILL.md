@@ -355,6 +355,8 @@ This step implements the six-component dispatch pattern from ADR-050. It replace
 
 **Non-opus mismatch guard (ADR-074 contract C2, AC3).** If a test fixture or downstream override forces a non-opus model into the dispatch context, the skill MUST emit the canonical WARNING `Val dispatch on non-opus model — forcing opus per ADR-074 contract C2` and force `model: claude-opus-4-7` before invoking Val. Silent degradation is forbidden — validation rigor is the contract.
 
+[Val opus-pin contract — see plugins/gaia/agents/validator.md §Val Operations]
+
 Val returns a structured 8-part response. The eight parts are: `frontmatter`, `completeness`, `clarity`, `semantics`, `dependencies`, `factual`, `origin`, `review_gate_vocabulary`. Each part carries a `findings` array (possibly empty); each finding carries a severity classification (`CRITICAL`, `WARNING`, or `INFO`) and the structured fields needed to locate and fix it.
 
 **Malformed 8-part response (AC-EC1):** if Val returns a response missing one of the 8 named parts, log a WARNING, treat the missing part as UNVERIFIED, and proceed deterministically — never silently pass. If more than one part is missing, HALT with guidance to re-invoke Val once; if the re-invocation is also malformed, record the terminal verdict as UNVERIFIED via `review-gate.sh`.

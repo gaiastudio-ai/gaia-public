@@ -147,8 +147,6 @@ The writer handles:
 - **Idempotency:** dedup key is `(story_key, sprint_id, classification=process)` -- re-running the same drop/defer does not duplicate.
 - **Schema compliance:** entry fields match architecture §10.28.6 exactly (`id`, `sprint_id`, `text`, `classification`, `status: open`, `escalation_count: 0`, `created_at`, `theme_hash`, `story_key`).
 
-> **TODO (E36-S2 swap-in):** When E36-S2 ships the shared action-items writer, replace the inline `action-items-write.sh` source with the E36-S2 shared writer invocation. The inline writer is byte-compatible with the E36-S2 schema, so swap-in is a pure deletion of the source line above.
-
 ### Step 6 --- Log Course Correction
 
 Format the change summary with a standard header in the sprint plan:

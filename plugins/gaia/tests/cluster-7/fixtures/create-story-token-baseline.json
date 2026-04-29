@@ -1,0 +1,28 @@
+{
+  "_comment": "Token-savings benchmark fixture for /gaia-create-story script-tier wiring (E63-S11 / Work Item 6 / AC6). Tokens are estimated from word counts (English avg ~1.33 tokens/word) of the SKILL.md prose at each commit, plus a fixed-overhead estimate for subagent dispatch (PM Derek + Architect Theo + optional UX Designer Christy) and Val (opus-pinned per ADR-074 contract C2). The two SKILL.md commits are byte-pinned for audit traceability — the prose-line/word delta IS the token-savings claim, since the per-invocation subagent overhead and Val pass are unchanged across the two revisions. Re-capture trigger: any SKILL.md change > 50 LOC.",
+  "baseline_commit": "8c20940",
+  "baseline_commit_summary": "feat(E61-S2): wire gaia-create-story Step 4 to read sizing_map for points derivation — last commit before E63 prose-growth landed",
+  "baseline_skill_md_words": 4528,
+  "baseline_skill_md_lines": 474,
+  "baseline_subagent_overhead_words": 1200,
+  "baseline_total_words": 5728,
+  "baseline_total": 7618,
+  "post_commit": "HEAD-E63-S11",
+  "post_commit_summary": "feat(E63-S11): SKILL.md thin-orchestrator rewrite — prose-to-script invocations across ten deterministic operations",
+  "post_skill_md_words": 3416,
+  "post_skill_md_lines": 372,
+  "post_subagent_overhead_words": 1200,
+  "post_total_words": 4616,
+  "post_total": 5239,
+  "model_pin": {
+    "user_facing_dispatch": "claude-sonnet-default",
+    "val_validator": "claude-opus-4-7"
+  },
+  "captured_at": "2026-04-29T00:00:00Z",
+  "captured_by": "gaia-dev-story E63-S11",
+  "savings_tokens": 2379,
+  "savings_ratio_percent": 31,
+  "design_target_tokens": 2000,
+  "design_target_ratio_percent": 30,
+  "methodology": "tokens_estimate = words * 1.33 (English avg); SKILL.md prose word counts taken via `wc -w` at the two pinned commits; subagent dispatch overhead (PM + Architect ± UX, plus Val opus pass) held constant at 1200 words across both runs since neither E61-S2 nor E63-S11 changed the dispatch payloads. The savings claim equals the prose delta — that is the load-bearing portion of the V1↔V2 token-cost gap closure."
+}

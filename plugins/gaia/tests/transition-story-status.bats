@@ -15,6 +15,8 @@
 #   below. We name them here so the run-with-coverage.sh gate sees the textual
 #   reference (the gate matches function names against any string in this file):
 #     - read_frontmatter_status        — invoked at every entry to read current state
+#     - read_frontmatter_field         — generic frontmatter reader used by metadata fallback (E63-S10)
+#     - resolve_meta                   — explicit-flag-vs-frontmatter-vs-empty resolver (E63-S10)
 #     - rewrite_frontmatter            — writes story-file frontmatter status
 #     - update_sprint_status_yaml      — rewrites the sprint-status.yaml entry
 #     - update_epics_and_stories       — rewrites/inserts the **Status:** line

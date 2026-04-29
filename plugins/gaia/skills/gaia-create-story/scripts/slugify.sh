@@ -1,0 +1,90 @@
+#!/usr/bin/env bash
+# slugify.sh — gaia-create-story Step 4 deterministic slug generator (E63-S1 / Work Item 6.3)
+#
+# Purpose:
+#   Convert a story title into a byte-deterministic filename slug. This script
+#   is the dependency root for the E63 script tier — generate-frontmatter.sh
+#   (E63-S3), validate-canonical-filename.sh (E63-S4), and scaffold-story.sh
+#   (E63-S9) all consume the contract produced here.
+#
+# Algorithm (in order):
+#   1. Read input from --title <string> or stdin (first one wins).
+#   2. Lowercase the result (LC_ALL=C makes this a byte-level A-Z -> a-z).
+#   3. Replace any non-alphanumeric byte with a single `-`. Under LC_ALL=C
+#      the `[:alnum:]` class is the ASCII alnum set, so every non-ASCII byte
+#      (e.g. the two-byte UTF-8 sequence for `é`, 0xC3 0xA9) is non-alnum
+#      and is converted to `-`. THIS IS THE DELIBERATE DETERMINISM POLICY —
+#      non-ASCII bytes become hyphens; they are NOT transliterated. A multi-
+#      byte character therefore yields multiple consecutive hyphens which
+#      step 4 collapses. If the team later prefers transliteration via
+#      `iconv -f UTF-8 -t ASCII//TRANSLIT`, document the deviation in this
+#      header and update E63-S4 fixtures in lockstep.
+#   4. Collapse runs of `-` to a single `-`.
+#   5. Trim a leading or trailing `-`.
+#
+# Empty-input contract:
+#   Both an empty title and an all-non-alphanumeric title yield empty stdout
+#   with exit code 0. Callers that need a non-empty slug must validate
+#   upstream — this script does not police caller intent.
+#
+# Exit codes:
+#   0 — success (including empty output)
+#   non-zero — bash error only (e.g. unexpected flag)
+#
+# Locale invariance:
+#   `LC_ALL=C` is set so character-class semantics in `tr` are byte-based and
+#   identical across macOS, Linux, and CI runners.
+#
+# Spec references:
+#   - docs/planning-artifacts/feature-create-story-hardening.md#Work-Item-6.3
+#   - docs/planning-artifacts/architecture.md §Decision Log — ADR-074
+#   - gaia-public/plugins/gaia/skills/gaia-shell-idioms/SKILL.md (set -euo
+#     pipefail + LC_ALL=C + tr|sed collapse-and-trim)
+
+set -euo pipefail
+LC_ALL=C
+export LC_ALL
+
+# Argument parsing — only --title is supported, plus stdin fallback. We use a
+# simple `case` (not `getopts`) per the story Technical Notes.
+title=""
+title_set=0
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --title)
+      if [ $# -lt 2 ]; then
+        printf 'slugify.sh: --title requires a value\n' >&2
+        exit 2
+      fi
+      title="$2"
+      title_set=1
+      shift 2
+      ;;
+    -h|--help)
+      sed -n '1,40p' "$0"
+      exit 0
+      ;;
+    *)
+      printf 'slugify.sh: unknown argument: %s\n' "$1" >&2
+      exit 2
+      ;;
+  esac
+done
+
+# If --title was not provided, read from stdin. We keep only the first line so
+# multi-line stdin (e.g. `cat file | slugify.sh`) collapses predictably.
+if [ "$title_set" -eq 0 ]; then
+  IFS= read -r title || title=""
+fi
+
+# Pipeline: lowercase -> non-alnum -> collapse -> trim. Under LC_ALL=C the
+# `[:alnum:]` class is byte-level ASCII alnum, so every non-ASCII byte (the
+# bytes of any multi-byte UTF-8 character) is non-alnum and becomes `-`.
+# That is exactly the AC3 contract: `café résumé` -> `caf-r-sum`.
+slug="$(printf '%s' "$title" \
+  | tr 'A-Z' 'a-z' \
+  | tr -c '[:alnum:]' '-' \
+  | tr -s '-' \
+  | sed 's/^-//; s/-$//')"
+
+printf '%s\n' "$slug"

@@ -151,8 +151,12 @@ Backward-compatibility note (NFR-DSH-3): a resumed in-progress story with no Ste
 - Run the test suite -- verify all new tests FAIL.
 - Tests MUST fail because implementation does not exist yet. If a test passes without implementation, it is vacuous and must be rewritten.
 
+### Step 5a -- TDD Review Gate (Red phase)
+
 <!-- E57-S4: step5 tdd-review-gate begin -->
-**TDD Review Gate (Red phase):** After Step 5 completes with all new tests failing, invoke the risk-gated TDD review hook. The gate is a deterministic SKIP / PROMPT / QA_AUTO decision driven by the story's `risk` frontmatter, the configured `dev_story.tdd_review.threshold` and `phases`, and YOLO mode (per ADR-067, ADR-057, ADR-073). The wiring is single-source-of-truth — never re-implement the decision matrix inline (FR-TDR-2).
+After Step 5 completes with all new tests failing, invoke the risk-gated TDD review hook. The gate is a deterministic SKIP / PROMPT / QA_AUTO decision driven by the story's `risk` frontmatter, the configured `dev_story.tdd_review.threshold` and `phases`, and YOLO mode (per ADR-067, ADR-057, ADR-073). The wiring is single-source-of-truth — never re-implement the decision matrix inline (FR-TDR-2).
+
+This gate sits OUTSIDE the Step 5 TDD body so the pause-free TDD invariant (E55-S4 / TC-DSH-12) is preserved — the body of Step 5 itself contains no `AskUserQuestion` and no `HALT` directive.
 
 - Run `${CLAUDE_PLUGIN_ROOT}/skills/gaia-dev-story/scripts/tdd-review-gate.sh {story_key} red`. The script prints exactly one of `SKIP`, `PROMPT`, `QA_AUTO` on stdout; capture it as `decision`.
 - **`SKIP`:** Continue silently to Step 6. NO `AskUserQuestion` is presented. Emit a single-line gate log to stderr (NFR-DSH-5): `step5_tdd_gate: phase=red verdict=skip`.
@@ -173,8 +177,12 @@ The hook fires exactly once per Step 5. If the gate returns `SKIP`, no subagent 
 - Run the test suite -- verify all tests PASS.
 - Mark each completed subtask in the story file.
 
+### Step 6a -- TDD Review Gate (Green phase)
+
 <!-- E57-S4: step6 tdd-review-gate begin -->
-**TDD Review Gate (Green phase):** After Step 6 completes with all tests green, invoke the risk-gated TDD review hook. Decision matrix and dispatch contract mirror Step 5 — the only difference is `phase=green` (per ADR-067, ADR-057, ADR-073, FR-TDR-2).
+After Step 6 completes with all tests green, invoke the risk-gated TDD review hook. Decision matrix and dispatch contract mirror Step 5a — the only difference is `phase=green` (per ADR-067, ADR-057, ADR-073, FR-TDR-2).
+
+This gate sits OUTSIDE the Step 6 TDD body so the pause-free TDD invariant (E55-S4 / TC-DSH-12) is preserved — the body of Step 6 itself contains no `AskUserQuestion` and no `HALT` directive.
 
 - Run `${CLAUDE_PLUGIN_ROOT}/skills/gaia-dev-story/scripts/tdd-review-gate.sh {story_key} green`. Capture stdout as `decision`.
 - **`SKIP`:** Continue silently to Step 6b. NO `AskUserQuestion`. Emit `step6_tdd_gate: phase=green verdict=skip`.
@@ -210,8 +218,12 @@ After Step 6 Green completes with all tests passing, run a single advisory pass 
 - Extract shared utilities, decompose large functions, improve naming, remove duplication.
 - Run the test suite -- verify all tests STILL PASS.
 
+### Step 7a -- TDD Review Gate (Refactor phase)
+
 <!-- E57-S4: step7 tdd-review-gate begin -->
-**TDD Review Gate (Refactor phase):** After Step 7 completes with all tests still green, invoke the risk-gated TDD review hook. Decision matrix and dispatch contract mirror Steps 5 and 6 — the only difference is `phase=refactor` (per ADR-067, ADR-057, ADR-073, FR-TDR-2).
+After Step 7 completes with all tests still green, invoke the risk-gated TDD review hook. Decision matrix and dispatch contract mirror Steps 5a and 6a — the only difference is `phase=refactor` (per ADR-067, ADR-057, ADR-073, FR-TDR-2).
+
+This gate sits OUTSIDE the Step 7 TDD body so the pause-free TDD invariant (E55-S4 / TC-DSH-12) is preserved — the body of Step 7 itself contains no `AskUserQuestion` and no `HALT` directive.
 
 - Run `${CLAUDE_PLUGIN_ROOT}/skills/gaia-dev-story/scripts/tdd-review-gate.sh {story_key} refactor`. Capture stdout as `decision`.
 - **`SKIP`:** Continue silently to Step 7b. NO `AskUserQuestion`. Emit `step7_tdd_gate: phase=refactor verdict=skip`.

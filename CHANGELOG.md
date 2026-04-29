@@ -9,6 +9,39 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) for t
 
 ## [Unreleased]
 
+### v1.132.x — Dev-story tooling quirks cleanup (E64-S1)
+
+- **E64-S1**: bundle four sprint-33 dev-story tooling quirks into a single
+  cleanup pass.
+  - `dod-check.sh` no longer falls through to the system POSIX
+    `/bin/test` builtin for the `tests` row. The script now resolves a
+    project test command via deterministic precedence:
+    `config/project-config.yaml test_cmd:` → `package.json scripts.test`
+    (via `npm test`) → `bats tests/*.bats` discovery. When no signal
+    resolves, the row is reported as `SKIPPED — no test runner detected`
+    (exit 0), never `FAILED`.
+  - `dod-check.sh` subtask scan is scoped to the `## Tasks / Subtasks`
+    section. Unchecked items in `## Definition of Done` (e.g., "PR merged
+    to staging" pre-merge) and `## Acceptance Criteria` are intentionally
+    excluded from the count. Stories whose Tasks/Subtasks are all checked
+    now PASS the subtask row even when the DoD section legitimately
+    carries unchecked items at Step 9.
+  - New shared parser library
+    `skills/gaia-dev-story/scripts/frontmatter-lib.sh` with `fm_slice`
+    (extract YAML frontmatter block) and `fm_get_field` (read a single
+    field). `story-parse.sh`, `pr-body.sh`, and `commit-msg.sh` now
+    source the library instead of carrying three duplicated awk
+    implementations of the same primitive.
+  - `commit-msg.sh` emits commitlint-safe subjects by prepending a
+    lowercase verb derived from the story `type:` field (`feature` →
+    `wire`, `bug` → `fix`, `refactor` → `refactor`, `chore` → `update`).
+    Story titles that already start with a lowercase verb are passed
+    through unchanged. Effect: PRs opened from a `/gaia-dev-story` run
+    on a story whose title begins with an ALL-CAPS or PascalCase token
+    (e.g., `SKILL.md gate wiring`, `API client retry policy`) now pass
+    the `lint-pr-title` GitHub Action check without manual `gh pr edit`
+    intervention.
+
 ### v1.131.x — TDD Review Gate Default
 
 - **Deprecation — `/gaia-dev-story` Steps 1, 10, 11 narrative fallback**: the

@@ -63,49 +63,20 @@ fi
 # --- Frontmatter extraction -----------------------------------------------
 #
 # Frontmatter lives between the first two `---` lines. If the second `---` is
-# absent we exit 2 (malformed). awk state machine: state 0 = pre-marker,
-# 1 = inside frontmatter, 2 = post-marker.
+# absent we exit 2 (malformed). The shared frontmatter-lib.sh provides the
+# slicing and field-reading primitives — see AC3, AC-EC3 (E64-S1).
 
-FRONTMATTER="$(awk '
-  BEGIN { state = 0 }
-  state == 0 && $0 == "---" { state = 1; next }
-  state == 1 && $0 == "---" { state = 2; exit }
-  state == 1 { print }
-  END {
-    # state==2 means we saw both markers; otherwise malformed
-    if (state != 2) exit 1
-  }
-' "$STORY_PATH_INPUT")" || die_parse "malformed frontmatter (unbalanced '---' markers): $STORY_PATH_INPUT"
+# shellcheck source=./frontmatter-lib.sh
+SCRIPT_DIR_FOR_LIB="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck disable=SC1091
+. "$SCRIPT_DIR_FOR_LIB/frontmatter-lib.sh"
+
+FRONTMATTER="$(fm_slice "$STORY_PATH_INPUT")" || die_parse "malformed frontmatter (unbalanced '---' markers): $STORY_PATH_INPUT"
 
 # --- Field extraction -----------------------------------------------------
-#
-# Read a key: value line from the frontmatter. Strips surrounding quotes
-# (single or double). Returns empty string if the key is absent.
 get_field() {
   local key="$1"
-  printf '%s\n' "$FRONTMATTER" | awk -v key="$key" '
-    {
-      # Match `key: rest` (allowing leading whitespace before key)
-      if (match($0, "^[[:space:]]*" key "[[:space:]]*:[[:space:]]*")) {
-        rest = substr($0, RSTART + RLENGTH)
-        # Trim trailing whitespace / CR
-        sub(/[[:space:]]+$/, "", rest)
-        # Strip surrounding double quotes
-        n = length(rest)
-        if (n >= 2 && substr(rest, 1, 1) == "\"" && substr(rest, n, 1) == "\"") {
-          print substr(rest, 2, n - 2)
-          exit
-        }
-        # Strip surrounding single quotes
-        if (n >= 2 && substr(rest, 1, 1) == "'"'"'" && substr(rest, n, 1) == "'"'"'") {
-          print substr(rest, 2, n - 2)
-          exit
-        }
-        print rest
-        exit
-      }
-    }
-  '
+  printf '%s\n' "$FRONTMATTER" | fm_get_field "$key"
 }
 
 # Special handling for depends_on: emit comma-joined list. Supports the

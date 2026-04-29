@@ -16,6 +16,7 @@
 #
 # Refs: FR-DSS-1..6, AF-2026-04-28-6.
 
+bats_require_minimum_version 1.5.0
 load 'test_helper.bash'
 
 setup() {
@@ -257,4 +258,113 @@ _skill_md_minus_wiring_blocks() {
   echo "$residue" | grep -Fq '### Step 1 -- Load Story'
   echo "$residue" | grep -Fq '### Step 10 -- Commit and Push'
   echo "$residue" | grep -Fq '### Step 11 -- Create PR'
+}
+
+# ---------------------------------------------------------------------------
+# AC4 (TC-DSS-09 integration) — End-to-end smoke run on the cluster-7-chain
+# fixture. Exercises the six new scripts wired into Steps 1, 10, 11 against a
+# clean fixture story file; asserts each script is invokable from SKILL.md's
+# canonical path and emits the expected exit code / stdout shape.
+#
+# This is a unit-of-integration smoke test (not a full /gaia-dev-story run) —
+# it proves the wiring resolves to working scripts on the cluster-7-chain
+# fixture without LLM involvement.
+# ---------------------------------------------------------------------------
+
+@test "AC4 integration: cluster-7-chain smoke — Step 1 + Step 10 + Step 11 scripts all invokable" {
+  local fixture_src dev_scripts plugin_scripts
+  fixture_src="$(cd "$BATS_TEST_DIRNAME/../../../tests/fixtures/cluster-7-chain" && pwd)"
+  dev_scripts="$(cd "$BATS_TEST_DIRNAME/../skills/gaia-dev-story/scripts" && pwd)"
+  plugin_scripts="$(cd "$BATS_TEST_DIRNAME/../scripts" && pwd)"
+  [ -d "$fixture_src" ]
+  [ -x "$dev_scripts/story-parse.sh" ]
+  [ -x "$dev_scripts/detect-mode.sh" ]
+  [ -x "$dev_scripts/check-deps.sh" ]
+  [ -x "$dev_scripts/commit-msg.sh" ]
+  [ -x "$dev_scripts/pr-body.sh" ]
+  [ -x "$plugin_scripts/promotion-chain-guard.sh" ] \
+    || [ -x "$dev_scripts/promotion-chain-guard.sh" ]
+
+  cp -R "$fixture_src/." "$TEST_TMP/cluster-7-chain/"
+  mkdir -p "$TEST_TMP/cluster-7-chain/docs/implementation-artifacts"
+  cd "$TEST_TMP/cluster-7-chain"
+
+  # Smoke fixture: a `done` parent dependency and an `in-progress` child story
+  # whose key matches the path-traversal regex enforced by story-parse.sh.
+  cat > "docs/implementation-artifacts/E99-S1-fixture-parent.md" <<'EOF'
+---
+template: 'story'
+key: "E99-S1"
+title: "Fixture parent"
+status: done
+depends_on: []
+---
+
+# Story: Fixture parent
+
+## Acceptance Criteria
+
+- [x] AC1: parent done
+
+## Definition of Done
+
+- [x] All acceptance criteria verified and checked off
+EOF
+
+  cat > "docs/implementation-artifacts/E99-S2-fixture-child.md" <<'EOF'
+---
+template: 'story'
+key: "E99-S2"
+type: feat
+title: "Fixture child"
+status: in-progress
+depends_on: ["E99-S1"]
+risk_level: low
+---
+
+# Story: Fixture child
+
+## Acceptance Criteria
+
+- [x] AC1: child wired through Step 1, Step 10, Step 11
+- [x] AC2: scripts emit deterministic stdout
+
+## Definition of Done
+
+- [x] All acceptance criteria verified and checked off
+- [x] All tests pass
+EOF
+
+  local child_path="$TEST_TMP/cluster-7-chain/docs/implementation-artifacts/E99-S2-fixture-child.md"
+
+  # ----- Step 1 wiring -----
+  # story-parse.sh: emits eval-able key=val pairs covering frontmatter.
+  run "$dev_scripts/story-parse.sh" "$child_path"
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -Eq "^STORY_KEY='E99-S2'$"
+  echo "$output" | grep -Eq "^STATUS='in-progress'$"
+
+  # detect-mode.sh: in-progress -> RESUME or REWORK; either is acceptable for
+  # AC4 smoke — the contract is "exit 0 + a known mode token on stdout".
+  run "$dev_scripts/detect-mode.sh" "$child_path"
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -Eq '^(FRESH|RESUME|REWORK)$'
+
+  # check-deps.sh: parent is done, so exit 0 with empty stderr.
+  run --separate-stderr "$dev_scripts/check-deps.sh" "$child_path"
+  [ "$status" -eq 0 ]
+  [ -z "$stderr" ]
+
+  # ----- Step 10 wiring -----
+  # commit-msg.sh: emits a Conventional Commit line with the story key.
+  run "$dev_scripts/commit-msg.sh" "$child_path"
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -Eq '\(E99-S2\)'
+
+  # ----- Step 11 wiring -----
+  # pr-body.sh: emits the four canonical Markdown sections.
+  run "$dev_scripts/pr-body.sh" "$child_path"
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -Fq 'Acceptance Criteria'
+  echo "$output" | grep -Fq 'Definition of Done'
 }

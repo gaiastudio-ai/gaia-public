@@ -23,7 +23,7 @@ This skill is the native Claude Code conversion of the legacy create-story workf
 - The story file MUST be written to `docs/implementation-artifacts/{story_key}-{slug}.md` using the canonical `{story_key}-{story_title_slug}.md` filename convention.
 - Slug generation: lowercase the title, replace non-alphanumeric characters with hyphens, collapse consecutive hyphens, trim leading/trailing hyphens.
 - The story template is bundled at `${CLAUDE_PLUGIN_ROOT}/skills/gaia-create-story/story-template.md`. Do NOT take a runtime dependency on the `_gaia/` framework tree.
-- After writing the story file, call `scripts/update-story-status.sh` to register the story with `status=backlog` in `sprint-status.yaml`.
+- After writing the story file, call `scripts/transition-story-status.sh {story_key} --to backlog` to register the story atomically with `status=backlog` across the four canonical surfaces (story-file frontmatter, `sprint-status.yaml`, `epics-and-stories.md`, `story-index.yaml`).
 - The `sprint-status.yaml` MUST be re-read immediately before writing (Sprint-Status Write Safety rule).
 - If a story file already exists for this key with status other than `backlog`, HALT with guidance to use /gaia-fix-story.
 - The priority_flag field accepts only `null` (default) or `"next-sprint"` as valid values.
@@ -335,7 +335,7 @@ Columns: `TC ID | Scenario | Type | Severity | Story Key`. The literal `edge-cas
 
 - Call `${CLAUDE_PLUGIN_ROOT}/scripts/transition-story-status.sh {story_key} --to backlog` to register the story atomically across the four canonical status surfaces (story-file frontmatter, sprint-status.yaml, epics-and-stories.md, story-index.yaml). This is the unified atomic writer introduced by E54-S3.
 - This MUST happen AFTER the story file write has succeeded (story file is source of truth).
-- Legacy callers still using `scripts/update-story-status.sh {story_key} backlog` continue to work via the deprecation wrapper (E54-S3) but emit a WARNING to stderr; new code MUST call `transition-story-status.sh` directly.
+- New code MUST call `scripts/transition-story-status.sh {story_key} --to backlog` directly. The legacy deprecation wrapper introduced in E54-S3 still forwards old call sites with a WARNING to stderr, but it is scheduled for removal — do not introduce new dependencies on it.
 
 ### Step 6 -- Validation (ADR-050 Shared Val + SM Fix-Loop Dispatch Pattern)
 
@@ -374,7 +374,7 @@ Scope is restricted to the single story file path and (for Component 6) the `rev
 ${CLAUDE_PLUGIN_ROOT}/scripts/transition-story-status.sh {story_key} --to {new_status}
 ```
 
-`transition-story-status.sh` (E54-S3) atomically updates ALL FOUR locations the status lives in — the story-file frontmatter, sprint-status.yaml, epics-and-stories.md per-story status indicator, and story-index.yaml — under a shared flock with rollback on partial failure (FR-338, NFR-056). It supersedes the legacy `update-story-status.sh` wrapper, which now logs a deprecation warning and forwards.
+`transition-story-status.sh` (E54-S3) atomically updates ALL FOUR locations the status lives in — the story-file frontmatter, sprint-status.yaml, epics-and-stories.md per-story status indicator, and story-index.yaml — under a shared flock with rollback on partial failure (FR-338, NFR-056). It is the canonical status writer; a legacy deprecation wrapper still forwards old call sites with a stderr warning but is scheduled for removal.
 
 **AC-EC3 — self-transition is benign.** `transition-story-status.sh` treats a self-transition (current status equal to `--to` value) as a no-op: it logs the no-op, performs no writes, and exits 0. Step 6 callers MUST treat this as benign (non-blocking) and proceed to re-validation. Do NOT HALT.
 

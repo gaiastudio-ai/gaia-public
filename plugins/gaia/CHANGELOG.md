@@ -3,6 +3,53 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.132.0] — 2026-04-29
+
+### Added
+
+- (create-story) thin-orchestrator rewrite + e2e + token-savings benchmark (E63-S11) (#374)
+- (create-story) migrate SKILL.md + setup.sh to resolve-config.sh (E60-S3) (#366)
+- (create-story) add scaffold-story.sh + bats (E63-S9) (#363)
+- (create-story) add append-edge-case-tests.sh + bats (E63-S8) (#362)
+- (create-story) add append-edge-case-acs.sh + bats (E63-S7) (#361)
+- (create-story) add validate-frontmatter.sh + bats (E63-S5) (#360)
+- (create-story) add validate-ac-format.sh + bats (E63-S6) (#359)
+- (create-story) add validate-canonical-filename.sh + bats (E63-S4) (#358)
+- (create-story) add generate-frontmatter.sh + bats (E63-S3) (#357)
+- (create-story) add next-story-id.sh + bats (E63-S2)
+- (create-story) add deterministic slugify.sh and bats coverage (E63-S1) (#355)
+- (E62-S2) pin validator.md model to claude-opus-4-7 + document Val opus-pin contract
+- (E62-S1) pin model claude-opus-4-7 + effort high in 10 Val-dispatching skills (#353)
+- (E60-S1) add four flat artifact-path keys to project-config.yaml (#351)
+- (E61-S2) wire gaia-create-story Step 4 to read sizing_map for points derivation (#350)
+- (E61-S1) add sizing_map block to project-config.yaml + reclassify in MIGRATION (#349)
+- (E64-S1) wire Dev-story tooling quirks cleanup (#345)
+- (dev-story) rewrite gaia-run-all-reviews skill as thin orchestrator with --force flag (E58-S6) (#342)
+- (dev-story) wire script invocations into SKILL.md Steps 1/10/11 (E57-S8) (#341)
+- (dev-story) review-runner.sh true orchestration harness (E58-S5) (#339)
+- (dev-story) add pr-body.sh and commit-msg.sh (E57-S7) (#336)
+- (dev-story) add promotion-chain-guard.sh and check-deps.sh (E57-S6) (#335)
+- (dev-story) add tdd-review-gate.sh decision script (E57-S2) (#334)
+- (dev-story) add story-parse.sh and detect-mode.sh (E57-S5) (#331)
+- (agents) add tdd-reviewer fork-context subagent (E57-S3) (#330)
+
+### Changed
+
+- (e38-s1-reconcile-risk) migrate CATALOG fixture to per-test TEST_TMP path (E38-S5) (#371)
+- (retro) swap action-items-increment.sh for shared writer delegation (E36-S5) (#370)
+- (skills) reconcile action-items.yaml path to planning-artifacts (E36-S4) (#369)
+- (resolve-config) replace frozen-date literals with sentinel (E28-S214) (#368)
+- (config) document four artifact-path keys in migration doc (E60-S4) (#367)
+- (skills,claude-md) add status-edit discipline critical rule (E59-S4) (#365)
+- (E60-S2) bats coverage for the four artifact-path keys (#352)
+- (E59-S3) delete update-story-status.sh deprecation wrappers (#348)
+- (E59-S2) update bats tests for wrapper removal (#347)
+
+### Fixed
+
+- (dev-story) close E57-S8 ac4 integration smoke gap (e57-s8) (#344)
+- (dev-story) close E57-S8 ac5 absence-assertion gap (e57-s8) (#343)
+
 ## [1.131.0] — 2026-04-28
 
 ### Added

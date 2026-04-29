@@ -128,7 +128,7 @@ _die_usage() {
 
 # Map a canonical gate name to its per-gate slash command. Used by the
 # UNVERIFIED-only and MIXED branches. Keep in sync with the story-spec map.
-gate_to_command() {
+_gate_to_command() {
   local gate="$1"
   case "$gate" in
     "Code Review")        printf '/gaia-code-review' ;;
@@ -143,7 +143,7 @@ gate_to_command() {
 
 # Emit the advisory-fallback block (used when gate state is unreadable). Always
 # exits 0 from main() after this is printed.
-emit_fallback() {
+_emit_fallback() {
   printf '%s\n' "$NUDGE_FENCE"
   printf 'gate state unreadable, see story file directly\n'
   printf '%s\n' "$NUDGE_FENCE"
@@ -202,13 +202,13 @@ main() {
   set -e
 
   if [ "$status_rc" -ne 0 ]; then
-    emit_fallback
+    _emit_fallback
     exit 0
   fi
 
   # Validate JSON shape: must contain a .gates object.
   if ! printf '%s' "$status_json" | jq -e '.gates' >/dev/null 2>&1; then
-    emit_fallback
+    _emit_fallback
     exit 0
   fi
 
@@ -218,7 +218,7 @@ main() {
   for gate in "${CANONICAL_GATES[@]}"; do
     verdict="$(printf '%s' "$status_json" | jq -r --arg g "$gate" '.gates[$g] // empty')"
     if [ -z "$verdict" ] || [[ ! "$verdict" =~ $CANONICAL_VERDICTS_REGEX ]]; then
-      emit_fallback
+      _emit_fallback
       exit 0
     fi
     verdicts+=("$verdict")
@@ -282,8 +282,8 @@ main() {
         if [ "${verdicts[$i]}" = "UNVERIFIED" ]; then
           printf '  - UNVERIFIED: %s → %s\n' \
             "${CANONICAL_GATES[$i]}" \
-            "$(gate_to_command "${CANONICAL_GATES[$i]}")"
-          unrun_cmds+=("$(gate_to_command "${CANONICAL_GATES[$i]}")")
+            "$(_gate_to_command "${CANONICAL_GATES[$i]}")"
+          unrun_cmds+=("$(_gate_to_command "${CANONICAL_GATES[$i]}")")
         fi
       done
       # Render as comma-separated command list on a single line.
@@ -301,7 +301,7 @@ main() {
       if [ "${verdicts[$i]}" = "UNVERIFIED" ]; then
         printf '  - UNVERIFIED: %s → %s\n' \
           "${CANONICAL_GATES[$i]}" \
-          "$(gate_to_command "${CANONICAL_GATES[$i]}")"
+          "$(_gate_to_command "${CANONICAL_GATES[$i]}")"
       fi
     done
   fi

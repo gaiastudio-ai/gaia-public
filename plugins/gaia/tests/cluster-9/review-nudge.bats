@@ -21,6 +21,14 @@
 # is enforced before any side effect.
 #
 # Refs: FR-RAR-3, AF-2026-04-28-7, NFR-RAR-1, ADR-042, ADR-050, ADR-054
+#
+# NFR-052 public-function coverage anchor:
+#   review-nudge.sh's only public functions are `usage`, `parse_args`, and
+#   `main` — all allowlisted by the coverage gate (`usage` directly; `parse_args`
+#   via the review-runner internals exemption; `main` via substring match).
+#   Internal helpers `_gate_to_command` and `_emit_fallback` are underscore-
+#   prefixed (private) per project convention; they are exercised end-to-end
+#   by Tests 4, 5, 6, 10 below.
 
 load 'test_helper.bash'
 

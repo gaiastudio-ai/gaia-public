@@ -6,7 +6,7 @@
 #   AC2 / TC-CSE-10 — write failure rolls back; no partial state
 #   AC3 / TC-CSE-11 — idempotent self-transition exits 0 with no writes
 #   AC4 / TC-CSE-12 — Step 6 PASSED ordering: review-gate -> transition -> val-sidecar
-#   AC5 / TC-CSE-18 — deprecation wrapper logs WARNING and forwards
+#   AC5 / TC-CSE-18 — DELETED in E59-S2; deprecation wrapper retired in E59-S3 (ADR-074)
 #   AC6           — epics-and-stories.md `**Status:**` insert/update is byte-stable
 #   AC7           — invalid transitions rejected with state-machine cite
 #
@@ -30,7 +30,6 @@ setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   SCRIPTS_DIR="$REPO_ROOT/plugins/gaia/scripts"
   TRANSITION="$SCRIPTS_DIR/transition-story-status.sh"
-  WRAPPER="$REPO_ROOT/plugins/gaia/skills/gaia-create-story/scripts/update-story-status.sh"
 
   TEST_TMP="$BATS_TEST_TMPDIR/tss-$$"
   mkdir -p "$TEST_TMP/docs/implementation-artifacts"
@@ -260,14 +259,12 @@ index_status() {
   [ "$(index_status)" = "validating" ]
 }
 
-# AC5 / TC-CSE-18
-@test "TC-CSE-18: deprecation wrapper logs WARNING and forwards to transition-story-status.sh" {
-  run "$WRAPPER" "$STORY_KEY" validating
-  [ "$status" -eq 0 ]
-  echo "$output $stderr" | grep -q "deprecat"
-  [ "$(fm_status)" = "validating" ]
-  [ "$(yaml_status)" = "validating" ]
-}
+# AC5 / TC-CSE-18 — DELETED (E59-S2 / ADR-074 contract C3)
+# The deprecation wrapper at plugins/gaia/skills/gaia-create-story/scripts/update-story-status.sh
+# is being removed in E59-S3. This test asserted wrapper-forwarding behavior; with
+# the wrapper gone the assertion has no contract to validate. Direct callers now
+# invoke transition-story-status.sh; coverage of that path lives in the happy-path
+# test below ("AC1+AC6: full transition updates all four locations consistently").
 
 # Optional follow-up: --from mismatch
 @test "AC: --from flag rejects when current status != expected" {

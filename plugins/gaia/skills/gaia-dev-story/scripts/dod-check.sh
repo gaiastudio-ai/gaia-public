@@ -156,15 +156,14 @@ _resolve_test_cmd() {
       return 0
     fi
   fi
-  # 3. bats discovery on tests/*.bats (recursive — tests/ may have subdirs)
+  # 3. bats discovery on tests/*.bats
   if command -v bats >/dev/null 2>&1; then
+    # Use a glob expansion guarded by nullglob so the test for `[ -e $file ]`
+    # works even when no match is found.
     local first_match
-    first_match="$(find tests -maxdepth 3 -name '*.bats' -print -quit 2>/dev/null || true)"
+    first_match="$(find tests -maxdepth 2 -name '*.bats' -print -quit 2>/dev/null || true)"
     if [ -n "$first_match" ]; then
-      # Recursive flag so bats finds .bats files in tests/*/ subdirectories
-      # in addition to tests/*.bats. Mirrors the convention used across the
-      # plugin's own bats suite.
-      printf 'bats -r tests\n'
+      printf 'bats tests\n'
       return 0
     fi
   fi

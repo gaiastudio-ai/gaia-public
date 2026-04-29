@@ -41,6 +41,44 @@ This skill is the native Claude Code conversion of the legacy dev-story workflow
 
 - Parse the story key from the argument (e.g., `/gaia-dev-story E1-S2`).
 - Run `scripts/load-story.sh {story_key}` to locate and validate the story file.
+
+<!-- E57-S8: step1 script-wiring begin -->
+After `load-story.sh` resolves the absolute story path, drive frontmatter parsing,
+mode detection, and dependency-readiness through the deterministic helper scripts —
+the LLM no longer parses the YAML frontmatter or computes the FRESH/REWORK/RESUME
+verdict inline (per ADR-057, ADR-073, AF-2026-04-28-6).
+
+- Run `${CLAUDE_PLUGIN_ROOT}/skills/gaia-dev-story/scripts/story-parse.sh {story_path}`
+  and `eval` its stdout to populate the canonical 10-variable env-var contract
+  (`STORY_KEY`, `STATUS`, `RISK`, `EPIC_KEY`, `TYPE`, `DEPENDS_ON`, `SUBTASK_COUNT`,
+  `SUBTASK_CHECKED`, `AC_COUNT`, `STORY_PATH`). Exit 2 = malformed frontmatter; HALT
+  with the script's stderr.
+- Run `${CLAUDE_PLUGIN_ROOT}/skills/gaia-dev-story/scripts/detect-mode.sh {story_path}`.
+  Stdout is exactly one of `FRESH | REWORK | RESUME` — capture it as the execution
+  mode. Do NOT re-derive the mode from `$STATUS` inline; the script is the single
+  source of truth (per FR-DSS-1, FR-DSS-2).
+- Run `${CLAUDE_PLUGIN_ROOT}/skills/gaia-dev-story/scripts/check-deps.sh {story_path}`.
+  Exit 0 = all `depends_on:` stories are status `done`; exit 1 = at least one dep is
+  not done (stderr lists `<KEY>: <STATUS>`); exit 2 = at least one dep file is missing
+  on disk. HALT on exit 1 or 2 — surface stderr to the user before proceeding.
+
+**Narrative Fallback (deprecated v1.131.x → v1.132.0):**
+For brownfield projects on a stale plugin where these scripts are not yet present,
+fall back to the legacy LLM narrative path. Each fallback is gated on the absence
+of the new script:
+
+```
+if ! command -v story-parse.sh >/dev/null 2>&1; then
+  # legacy narrative: read frontmatter inline, derive mode from $STATUS
+else
+  # new script path (above)
+fi
+```
+
+This fallback is retained for ONE minor version (v1.131.x → v1.132.0) so brownfield
+users with stale plugins do not break mid-upgrade. It will be removed in v1.132.0.
+<!-- E57-S8: step1 script-wiring end -->
+
 - Read the story file: extract key, status, acceptance criteria, subtasks, dependencies, risk level.
 - Detect execution mode:
   - Status `ready-for-dev` -> FRESH (new implementation)
@@ -293,6 +331,43 @@ else:
 <!-- E55-S8: step 10 git-push wire begin -->
 ### Step 10 -- Commit and Push
 
+<!-- E57-S8: step10 script-wiring begin -->
+At the top of the CI section — before any commit / push action — the orchestrator
+MUST consult the deterministic promotion-chain guard. This replaces the LLM
+narrative that previously inferred CI configuration inline (per ADR-057, ADR-073,
+AF-2026-04-28-6, FR-DSS-3).
+
+- Run `${CLAUDE_PLUGIN_ROOT}/skills/gaia-dev-story/scripts/promotion-chain-guard.sh`.
+  Exit 0 = `PRESENT:<branch>` on stdout (the resolved first promotion-chain branch);
+  exit 1 = `ABSENT` (stderr names the missing config and points to `/gaia-ci-edit`).
+  On `ABSENT`, Steps 10–13 (push, PR, CI, merge) MUST be skipped — the story can
+  still complete locally but the promotion gates do not fire. On `PRESENT`, capture
+  the branch as `$PR_BASE` for use by `pr-create.sh --base`.
+- For commit-message construction, run
+  `${CLAUDE_PLUGIN_ROOT}/skills/gaia-dev-story/scripts/commit-msg.sh {story_path}`
+  and feed its stdout to `git commit -F -`. Do NOT compose Conventional Commit
+  subject lines inline — `commit-msg.sh` is the single source of truth (per
+  FR-DSS-5, FR-DSS-6, NFR-DSS-1). The script enforces the
+  `<type>(<story_key>): <title>` schema and the no-`Claude` / no-`AI` /
+  no-`Co-Authored-By` policy from CLAUDE.md.
+
+**Narrative Fallback (deprecated v1.131.x → v1.132.0):**
+For brownfield projects on a stale plugin where these scripts are not yet present,
+fall back to the legacy LLM narrative path:
+
+```
+if ! command -v promotion-chain-guard.sh >/dev/null 2>&1; then
+  # legacy narrative: infer CI config from project-config.yaml inline
+fi
+if ! command -v commit-msg.sh >/dev/null 2>&1; then
+  # legacy narrative: compose Conventional Commit subject inline
+fi
+```
+
+This fallback is retained for ONE minor version (v1.131.x → v1.132.0) so brownfield
+users with stale plugins do not break mid-upgrade. It will be removed in v1.132.0.
+<!-- E57-S8: step10 script-wiring end -->
+
 - Run `scripts/git-branch.sh` to verify branch state.
 - Stage and commit with conventional commit format.
 - Run `${CLAUDE_PLUGIN_ROOT}/scripts/git-push.sh` to push the current branch to `origin`. The shared helper (a) refuses to push from `main` / `staging` (delegating to `lib/dev-story-security-invariants.sh::assert_branch_not_protected` from E55-S6 when present), (b) retries ONCE on transient network errors (e.g., `Could not resolve host`, `Operation timed out`) with a 5-second backoff, and (c) fails LOUDLY on auth / permission errors with no retry. DO NOT inline `git push` here — the helper is the single source of truth.
@@ -300,6 +375,34 @@ else:
 <!-- E55-S8: step 10 git-push wire end -->
 
 ### Step 11 -- Create PR
+
+<!-- E57-S8: step11 script-wiring begin -->
+The PR body is sourced from `pr-body.sh` — the LLM no longer composes the body
+inline (per ADR-057, ADR-073, AF-2026-04-28-6, FR-DSS-5, FR-DSS-6).
+
+- Run `${CLAUDE_PLUGIN_ROOT}/skills/gaia-dev-story/scripts/pr-body.sh {story_path}`
+  and capture stdout as `$PR_BODY`. The script emits exactly four canonical
+  Markdown sections in order: Acceptance Criteria, Definition of Done, Diff Stat,
+  Story-link.
+- Then invoke `${CLAUDE_PLUGIN_ROOT}/skills/gaia-dev-story/scripts/pr-create.sh
+  {story_key} {title} --body-file <(printf '%s\n' "$PR_BODY")` (or pipe `$PR_BODY`
+  via the helper's body-file convention) so that `pr-create.sh` consumes the
+  pre-rendered body rather than constructing one inline. Do NOT hand-craft the PR
+  body in chat — `pr-body.sh` is the single source of truth.
+
+**Narrative Fallback (deprecated v1.131.x → v1.132.0):**
+For brownfield projects on a stale plugin where `pr-body.sh` is not yet present,
+fall back to the legacy LLM narrative path:
+
+```
+if ! command -v pr-body.sh >/dev/null 2>&1; then
+  # legacy narrative: pr-create.sh composes a default body from $STORY_KEY
+fi
+```
+
+This fallback is retained for ONE minor version (v1.131.x → v1.132.0) so brownfield
+users with stale plugins do not break mid-upgrade. It will be removed in v1.132.0.
+<!-- E57-S8: step11 script-wiring end -->
 
 - Run `scripts/pr-create.sh {story_key} {title}` to create a pull request.
 - The script targets the first promotion chain environment.

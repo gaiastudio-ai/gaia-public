@@ -11,6 +11,20 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) for t
 
 ### v1.131.x — TDD Review Gate Default
 
+- **Deprecation — `/gaia-dev-story` Steps 1, 10, 11 narrative fallback**: the
+  inline LLM narrative paths for frontmatter parsing (Step 1), commit-message
+  composition / promotion-chain inference (Step 10), and PR-body construction
+  (Step 11) are deprecated in v1.131.x and removed in v1.132.0. The canonical
+  paths now run through `story-parse.sh`, `detect-mode.sh`, `check-deps.sh`,
+  `promotion-chain-guard.sh`, `commit-msg.sh`, and `pr-body.sh`. Brownfield
+  projects on a stale plugin retain a single-minor-version fallback gated on
+  `command -v <script>`; upgrade to v1.132.0 will hard-remove the fallback.
+- **E57-S8**: wire the six new helper scripts (`story-parse.sh`,
+  `detect-mode.sh`, `check-deps.sh`, `promotion-chain-guard.sh`, `commit-msg.sh`,
+  `pr-body.sh`) into `/gaia-dev-story` SKILL.md at Steps 1, 10, and 11.
+  Narrative fallback retained for one minor version (v1.131.x → v1.132.0) so
+  brownfield projects don't break mid-upgrade. Regression bats at
+  `tests/dev-story-script-wiring.bats` enforces the wiring contract.
 - **E57-S1**: introduce the `dev_story.tdd_review` config block consumed by
   `/gaia-dev-story`. The block ships in `project-config.schema.yaml` and
   `project-config.yaml.example` with the following defaults:

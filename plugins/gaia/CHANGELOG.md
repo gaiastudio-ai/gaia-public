@@ -3,6 +3,26 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.131.0] — 2026-04-28
+
+### Added
+
+- (dev-story) step 6b conditional-check advisory hints (E55-S7) (#325)
+- (dev-story) auto-reviews YOLO-only step 16 + 4 helper scripts + bats coverage (E55-S8) (#323)
+- (dev-story) val-in-tdd single post-refactor pass (E55-S4) (#322)
+- (dev-story) atdd gate + plan-structure validator + figma graceful-degrade (E55-S5) (#321)
+- (dev-story) non-YOLO three-option planning gate (approve/revise/validate) (E55-S3) (#320)
+- (dev-story) yolo val auto-validation loop with 3-iter cap and audit file (E55-S2) (#319)
+- (dev-story) hard-halt planning gate via AskUserQuestion (E55-S1) (#317)
+
+### Changed
+
+- (yolo) add TC-AMG-1..5 conformance bats for ADR-067 disambiguation guard (E56-S1) (#324)
+
+### Fixed
+
+- (dev-story) emit step6b_gate stderr log + extend bats coverage (E55-S7)
+
 ## [1.130.0] — 2026-04-28
 
 ### Added

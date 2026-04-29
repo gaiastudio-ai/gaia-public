@@ -23,6 +23,8 @@ This skill is the native Claude Code conversion of the legacy validate-framework
 ## Val Dispatch Contract
 
 > Any Val invocation triggered by this skill (directly or as a follow-up validation pass on findings) is dispatched with `model: claude-opus-4-7` and `effort: high` per ADR-074 contract C2 (Val opus pin). Validation rigor is the framework-wide contract; the harness MUST NOT downgrade Val to a cheaper default model. **Non-opus mismatch guard (AC3):** if a test fixture or downstream override forces a non-opus model into the dispatch context, this skill MUST emit the canonical WARNING `Val dispatch on non-opus model — forcing opus per ADR-074 contract C2` and force `model: claude-opus-4-7` before invoking Val. Silent degradation is forbidden.
+>
+> [Val opus-pin contract — see plugins/gaia/agents/validator.md §Val Operations]
 
 ## Inputs
 

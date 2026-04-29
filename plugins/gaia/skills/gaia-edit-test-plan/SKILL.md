@@ -189,7 +189,7 @@ Write the updated test plan to `docs/test-artifacts/test-plan.md`.
 **Loop:**
 
 1. iteration = 1.
-2. Invoke `/gaia-val-validate` with `artifact_path = docs/test-artifacts/test-plan.md`, `artifact_type = test-plan`, `model: claude-opus-4-7`, `effort: high` (ADR-074 contract C2 — Val opus pin). **Non-opus mismatch guard (AC3):** if a test fixture or downstream override forces a non-opus model, emit the canonical WARNING `Val dispatch on non-opus model — forcing opus per ADR-074 contract C2` and force `model: claude-opus-4-7` before invoking Val.
+2. Invoke `/gaia-val-validate` with `artifact_path = docs/test-artifacts/test-plan.md`, `artifact_type = test-plan`, `model: claude-opus-4-7`, `effort: high` (ADR-074 contract C2 — Val opus pin). [Val opus-pin contract — see plugins/gaia/agents/validator.md §Val Operations]. **Non-opus mismatch guard (AC3):** if a test fixture or downstream override forces a non-opus model, emit the canonical WARNING `Val dispatch on non-opus model — forcing opus per ADR-074 contract C2` and force `model: claude-opus-4-7` before invoking Val.
 3. If findings is empty: proceed past the loop.
 4. If findings contains only INFO: log informational notes, proceed past the loop.
 5. If findings contains CRITICAL or WARNING:

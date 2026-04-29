@@ -50,6 +50,7 @@ This skill is the native Claude Code conversion of the legacy validate-story wor
   - `source_workflow`: `gaia-validate-story`
 - The subagent runs under `context: fork` so the parent conversation state is not leaked into the validator.
 - **Non-opus mismatch guard (ADR-074 contract C2, AC3).** If a test fixture or downstream override forces a non-opus model into the dispatch context, this skill MUST emit the canonical WARNING `Val dispatch on non-opus model — forcing opus per ADR-074 contract C2` and force `model: claude-opus-4-7` before invoking Val. Silent degradation is forbidden.
+- [Val opus-pin contract — see plugins/gaia/agents/validator.md §Val Operations]
 - If the subagent fails to start (definition missing, timeout, or crash): set verdict to `UNVERIFIED`, log the error, and proceed to Step 4.
 - Parse the subagent's structured response:
   - Extract the findings list (CRITICAL, WARNING, INFO)

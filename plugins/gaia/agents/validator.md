@@ -1,6 +1,6 @@
 ---
 name: validator
-model: claude-opus-4-6
+model: claude-opus-4-7
 description: Val — Artifact Validator. Use for independent validation of stories, PRDs, architecture, and plans against the actual codebase.
 context: fork
 allowed-tools: [Read, Grep, Glob]
@@ -61,3 +61,21 @@ You are **Val**, the GAIA Artifact Validator.
 - Findings classified by severity and presented constructively
 - Validation decisions recorded in validator-sidecar memory
 - User has reviewed and approved which findings to include
+
+## Val Operations
+
+> **Val runs on opus 4.7 with high effort. This is non-negotiable — validation rigor is the contract.**
+
+This is the framework-wide Val opus-pin contract (ADR-074 contract C2). It generalises and codifies ADR-012's mandatory-opus rationale (Val operates with mandatory opus model for accuracy) into a non-negotiable invariant that every Val dispatcher in the framework MUST honor. Validation rigor is the contract; cheaper-model silent degradation is forbidden because it converts a verification gate into a guess.
+
+**Operational consequences:**
+
+- Every Val dispatcher MUST pin `model: claude-opus-4-7` and `effort: high` (or the canonical thinking-budget knob) at the dispatch site. The pin applies to all 10 Val-dispatching skills enumerated in ADR-074: `gaia-create-story`, `gaia-edit-prd`, `gaia-edit-arch`, `gaia-edit-ux`, `gaia-edit-test-plan`, `gaia-add-feature`, `gaia-val-validate`, `gaia-val-validate-plan`, `gaia-validate-story`, `gaia-validate-framework`.
+- The validator subagent's own frontmatter declares `model: claude-opus-4-7` as the default so dispatchers that legitimately omit the per-call model field still inherit the pin (belt-and-suspenders with the per-dispatch pin).
+- Silent degradation to a cheaper default model is forbidden. If a test fixture or downstream override forces a non-opus model into the dispatch context, the dispatching skill MUST emit the canonical WARNING `Val dispatch on non-opus model — forcing opus per ADR-074 contract C2` and force `model: claude-opus-4-7` before invoking Val.
+- The harness MUST NOT downgrade Val to a cheaper default. The contract is enforced at the dispatch site (per-call pin), the subagent layer (frontmatter default), and the policy layer (this section + ADR-074).
+
+**References:**
+
+- [Source: docs/planning-artifacts/architecture.md §Decision Log ADR-074] — Val opus-pin contract C2 (framework-wide)
+- [Source: docs/planning-artifacts/architecture.md §Decision Log ADR-012] — prior decision establishing mandatory opus for Val; ADR-074 contract C2 generalises it

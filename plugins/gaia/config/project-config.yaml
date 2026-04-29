@@ -15,6 +15,13 @@ installed_path: /Users/jlouage/Dev/GAIA-Framework/_gaia
 framework_version: 1.127.2-rc.1
 date: 2026-04-15
 
+# Artifact paths — relative to project_root (E60-S1 / ADR-074 contract C1).
+# Resolver composes absolute paths at call time; do NOT prepend ${project_root}/.
+planning_artifacts: docs/planning-artifacts
+implementation_artifacts: docs/implementation-artifacts
+test_artifacts: docs/test-artifacts
+creative_artifacts: docs/creative-artifacts
+
 # Dev-Story workflow knobs (E57-S1). The nested tdd_review block configures
 # the post-Red TDD review gate consumed by /gaia-dev-story. Defaults:
 #   threshold: medium       # off | low | medium | high — 'off' opts out

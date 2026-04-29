@@ -151,12 +151,50 @@ Backward-compatibility note (NFR-DSH-3): a resumed in-progress story with no Ste
 - Run the test suite -- verify all new tests FAIL.
 - Tests MUST fail because implementation does not exist yet. If a test passes without implementation, it is vacuous and must be rewritten.
 
+### Step 5a -- TDD Review Gate (Red phase)
+
+<!-- E57-S4: step5 tdd-review-gate begin -->
+After Step 5 completes with all new tests failing, invoke the risk-gated TDD review hook. The gate is a deterministic SKIP / PROMPT / QA_AUTO decision driven by the story's `risk` frontmatter, the configured `dev_story.tdd_review.threshold` and `phases`, and YOLO mode (per ADR-067, ADR-057, ADR-073). The wiring is single-source-of-truth — never re-implement the decision matrix inline (FR-TDR-2).
+
+This gate sits OUTSIDE the Step 5 TDD body so the pause-free TDD invariant (E55-S4 / TC-DSH-12) is preserved — the body of Step 5 itself contains no `AskUserQuestion` and no `HALT` directive.
+
+- Run `${CLAUDE_PLUGIN_ROOT}/skills/gaia-dev-story/scripts/tdd-review-gate.sh {story_key} red`. The script prints exactly one of `SKIP`, `PROMPT`, `QA_AUTO` on stdout; capture it as `decision`.
+- **`SKIP`:** Continue silently to Step 6. NO `AskUserQuestion` is presented. Emit a single-line gate log to stderr (NFR-DSH-5): `step5_tdd_gate: phase=red verdict=skip`.
+- **`PROMPT`:** The next tool invocation MUST be `AskUserQuestion`. The prompt body offers exactly three labeled options — verbatim labels `review-myself`, `route-to-qa`, `proceed-anyway` (case-sensitive, hyphen-sensitive, in that exact order, no synonyms, no fourth option). The question stem names the gate trigger (story risk, configured threshold, current phase = `red`).
+  - On `review-myself`: HALT for user-driven review. Resume via `/gaia-resume` re-enters at this same gate point.
+  - On `route-to-qa`: dispatch the `tdd-reviewer` subagent (`gaia-public/plugins/gaia/agents/tdd-reviewer.md`, persona "Tex") in fork context with the Red-phase diff. Surface the verdict per ADR-063 (PASSED / FAILED / UNVERIFIED + ADR-037 findings line-by-line for WARNING-only). HALT on any `severity: CRITICAL` finding per ADR-067 — YOLO MUST NOT auto-resolve CRITICAL findings; the halt fires in BOTH YOLO and non-YOLO. Findings persist to `_memory/checkpoints/{story_key}-tdd-review-findings.md` (append-only).
+  - On `proceed-anyway`: record a timestamped decision in the dev-story checkpoint via the PostToolUse `checkpoint.sh` write hook — the entry MUST include the timestamp (UTC ISO-8601), the phase (`red`), and the free-form reason captured from the user. Continue to Step 6.
+  - Emit `step5_tdd_gate: phase=red verdict=prompt choice={review-myself|route-to-qa|proceed-anyway}` to stderr.
+- **`QA_AUTO`:** YOLO + `qa_auto_in_yolo=true` branch. Dispatch the `tdd-reviewer` subagent with the same payload as `route-to-qa` (the only difference is the user did not explicitly choose). Surface the verdict per ADR-063; HALT on CRITICAL per ADR-067 in BOTH modes. Emit `step5_tdd_gate: phase=red verdict=qa_auto`.
+
+The hook fires exactly once per Step 5. If the gate returns `SKIP`, no subagent is dispatched and no prompt is presented.
+<!-- E57-S4: step5 tdd-review-gate end -->
+
 ### Step 6 -- TDD Green Phase (Implement to Pass)
 
 - Follow the playbook's design approach reasoning.
 - For each subtask: implement minimum code to make failing tests pass.
 - Run the test suite -- verify all tests PASS.
 - Mark each completed subtask in the story file.
+
+### Step 6a -- TDD Review Gate (Green phase)
+
+<!-- E57-S4: step6 tdd-review-gate begin -->
+After Step 6 completes with all tests green, invoke the risk-gated TDD review hook. Decision matrix and dispatch contract mirror Step 5a — the only difference is `phase=green` (per ADR-067, ADR-057, ADR-073, FR-TDR-2).
+
+This gate sits OUTSIDE the Step 6 TDD body so the pause-free TDD invariant (E55-S4 / TC-DSH-12) is preserved — the body of Step 6 itself contains no `AskUserQuestion` and no `HALT` directive.
+
+- Run `${CLAUDE_PLUGIN_ROOT}/skills/gaia-dev-story/scripts/tdd-review-gate.sh {story_key} green`. Capture stdout as `decision`.
+- **`SKIP`:** Continue silently to Step 6b. NO `AskUserQuestion`. Emit `step6_tdd_gate: phase=green verdict=skip`.
+- **`PROMPT`:** Next tool invocation MUST be `AskUserQuestion` with the three verbatim labels — `review-myself`, `route-to-qa`, `proceed-anyway` (case-sensitive, hyphen-sensitive, in that order, no fourth option).
+  - On `review-myself`: HALT for user-driven review; `/gaia-resume` re-enters at this gate point.
+  - On `route-to-qa`: dispatch the `tdd-reviewer` subagent in fork context with the Green-phase diff. Surface the verdict per ADR-063 (line-by-line for WARNING-only). HALT on `severity: CRITICAL` per ADR-067 in BOTH YOLO and non-YOLO. Findings append to `_memory/checkpoints/{story_key}-tdd-review-findings.md`.
+  - On `proceed-anyway`: record a timestamped decision (UTC ISO-8601 + phase=`green` + reason) in the dev-story checkpoint via the PostToolUse `checkpoint.sh` write hook. Continue to Step 6b.
+  - Emit `step6_tdd_gate: phase=green verdict=prompt choice={review-myself|route-to-qa|proceed-anyway}`.
+- **`QA_AUTO`:** Dispatch the `tdd-reviewer` subagent with the same payload as `route-to-qa`. Surface the verdict per ADR-063; HALT on CRITICAL per ADR-067 in BOTH modes. Emit `step6_tdd_gate: phase=green verdict=qa_auto`.
+
+The hook fires exactly once per Step 6 and ALWAYS BEFORE Step 6b advisory hints.
+<!-- E57-S4: step6 tdd-review-gate end -->
 
 <!-- E55-S7: step 6b begin -->
 ### Step 6b -- Conditional Check Advisory Hints (FR-DSH-9)
@@ -179,6 +217,25 @@ After Step 6 Green completes with all tests passing, run a single advisory pass 
 - Improve code quality while keeping all tests green.
 - Extract shared utilities, decompose large functions, improve naming, remove duplication.
 - Run the test suite -- verify all tests STILL PASS.
+
+### Step 7a -- TDD Review Gate (Refactor phase)
+
+<!-- E57-S4: step7 tdd-review-gate begin -->
+After Step 7 completes with all tests still green, invoke the risk-gated TDD review hook. Decision matrix and dispatch contract mirror Steps 5a and 6a — the only difference is `phase=refactor` (per ADR-067, ADR-057, ADR-073, FR-TDR-2).
+
+This gate sits OUTSIDE the Step 7 TDD body so the pause-free TDD invariant (E55-S4 / TC-DSH-12) is preserved — the body of Step 7 itself contains no `AskUserQuestion` and no `HALT` directive.
+
+- Run `${CLAUDE_PLUGIN_ROOT}/skills/gaia-dev-story/scripts/tdd-review-gate.sh {story_key} refactor`. Capture stdout as `decision`.
+- **`SKIP`:** Continue silently to Step 7b. NO `AskUserQuestion`. Emit `step7_tdd_gate: phase=refactor verdict=skip`.
+- **`PROMPT`:** Next tool invocation MUST be `AskUserQuestion` with the three verbatim labels — `review-myself`, `route-to-qa`, `proceed-anyway` (case-sensitive, hyphen-sensitive, in that order, no fourth option).
+  - On `review-myself`: HALT for user-driven review; `/gaia-resume` re-enters at this gate point.
+  - On `route-to-qa`: dispatch the `tdd-reviewer` subagent in fork context with the Refactor-phase diff. Surface the verdict per ADR-063 (line-by-line for WARNING-only). HALT on `severity: CRITICAL` per ADR-067 in BOTH YOLO and non-YOLO. Findings append to `_memory/checkpoints/{story_key}-tdd-review-findings.md`.
+  - On `proceed-anyway`: record a timestamped decision (UTC ISO-8601 + phase=`refactor` + reason) in the dev-story checkpoint via the PostToolUse `checkpoint.sh` write hook. Continue to Step 7b.
+  - Emit `step7_tdd_gate: phase=refactor verdict=prompt choice={review-myself|route-to-qa|proceed-anyway}`.
+- **`QA_AUTO`:** Dispatch the `tdd-reviewer` subagent with the same payload as `route-to-qa`. Surface the verdict per ADR-063; HALT on CRITICAL per ADR-067 in BOTH modes. Emit `step7_tdd_gate: phase=refactor verdict=qa_auto`.
+
+The hook fires exactly once per Step 7 and ALWAYS BEFORE Step 7b Val-in-TDD pass.
+<!-- E57-S4: step7 tdd-review-gate end -->
 
 <!-- E55-S4: step 7b begin -->
 ### Step 7b -- Val-in-TDD single post-Refactor pass (ADR-073)

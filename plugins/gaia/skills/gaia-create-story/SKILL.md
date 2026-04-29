@@ -30,6 +30,7 @@ This skill is the native Claude Code conversion of the legacy create-story workf
 - Step 6 (Validation) MUST implement the shared Val + SM Fix-Loop dispatch pattern defined in ADR-050. The SM fix is INLINE — this skill uses its own `Edit` and `Write` tools to apply fixes. Nested subagent spawning for the fix is forbidden (preserves NFR-046 single-spawn-level constraint). The existing `allowed-tools: [Read, Write, Edit, Bash]` frontmatter already supports inline SM fix — no allowlist expansion is required.
 - The 3-attempt cap in Step 6 is a hard constraint. YOLO mode MUST NOT bypass the cap or the terminal FAILED verdict (FR-340).
 - Terminal verdicts from Step 6 are recorded via `review-gate.sh` using the `story-validation` ledger-keyed gate (`--plan-id <id>`). This path does NOT touch the six canonical Review Gate table rows — those belong to the six downstream review commands.
+- Story status MUST only be changed via `transition-story-status.sh`. Direct edits to `status:` fields in story frontmatter, sprint-status.yaml, epics-and-stories.md, or story-index.yaml are FORBIDDEN.
 
 ## Steps
 

@@ -33,6 +33,12 @@ export LC_ALL
 #                       dev_story.tdd_review.phases
 #                       dev_story.tdd_review.qa_auto_in_yolo
 #                       dev_story.tdd_review.qa_timeout_seconds
+#   - sizing_map:     positional block-query (E61-S1 / ADR-074 contract C1).
+#                     Emits four canonical key=value lines: S=…, M=…, L=…,
+#                     XL=… for the resolved sizing_map block (project >
+#                     global per ADR-044 §10.26.3). Falls back to the
+#                     framework defaults (S=2, M=5, L=8, XL=13) when the
+#                     project layer does not declare a sizing_map block.
 #
 # =============================================================================
 # Config Split Merge (ADR-044 / E28-S141 / E28-S142)
@@ -272,6 +278,7 @@ LOCAL_PATH=""
 SCHEMA_PATH=""
 FORMAT="shell"
 FIELD=""                    # E57-S1 — single-field lookup mode
+POSITIONAL_QUERY=""         # E61-S1 — positional block-query mode (e.g. `sizing_map`)
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -307,6 +314,11 @@ while [ $# -gt 0 ]; do
       FIELD="${1#--field=}"; shift ;;
     -h|--help)
       sed -n '1,87p' "$0" >&2; exit 0 ;;
+    sizing_map)
+      # E61-S1 — positional block-query: emit four S/M/L/XL key=value lines
+      # for the resolved sizing_map block (project > global precedence per
+      # ADR-074 contract C1 / ADR-044 §10.26.3).
+      POSITIONAL_QUERY="sizing_map"; shift ;;
     *)
       die "unknown argument: $1" ;;
   esac
@@ -464,6 +476,42 @@ v_creative_artifacts=$(merge_key creative_artifacts)
 # more flattened keys is a one-liner (future-proof).
 v_val_integration_template_output_review=$(merge_nested_key val_integration template_output_review)
 
+# E61-S1 / ADR-074 contract C1 — sizing_map at the project layer with
+# project > global precedence per ADR-044 §10.26.3.
+#
+# Resolution: read each S/M/L/XL key from the shared (project-config.yaml)
+# layer only; if absent, fall back to the canonical Fibonacci defaults
+# (S=2, M=5, L=8, XL=13) that match the legacy framework global.yaml.
+#
+# The local overlay (config/global.yaml) is intentionally NOT consulted for
+# sizing_map — sizing_map is a project-level concern, not a machine-local
+# one. This is what "project > global" means in ADR-074 contract C1: the
+# project-config.yaml block supersedes the framework-shipped defaults.
+sizing_map_default_S=2
+sizing_map_default_M=5
+sizing_map_default_L=8
+sizing_map_default_XL=13
+
+v_sizing_map_S=""
+v_sizing_map_M=""
+v_sizing_map_L=""
+v_sizing_map_XL=""
+SIZING_MAP_PROJECT_SET=0
+if [ "$SHARED_EXISTS" -eq 1 ]; then
+  v_sizing_map_S=$(parse_yaml_nested_key  "$SHARED_PATH" sizing_map S)
+  v_sizing_map_M=$(parse_yaml_nested_key  "$SHARED_PATH" sizing_map M)
+  v_sizing_map_L=$(parse_yaml_nested_key  "$SHARED_PATH" sizing_map L)
+  v_sizing_map_XL=$(parse_yaml_nested_key "$SHARED_PATH" sizing_map XL)
+fi
+if [ -n "$v_sizing_map_S" ] || [ -n "$v_sizing_map_M" ] \
+   || [ -n "$v_sizing_map_L" ] || [ -n "$v_sizing_map_XL" ]; then
+  SIZING_MAP_PROJECT_SET=1
+fi
+[ -z "$v_sizing_map_S" ]  && v_sizing_map_S="$sizing_map_default_S"
+[ -z "$v_sizing_map_M" ]  && v_sizing_map_M="$sizing_map_default_M"
+[ -z "$v_sizing_map_L" ]  && v_sizing_map_L="$sizing_map_default_L"
+[ -z "$v_sizing_map_XL" ] && v_sizing_map_XL="$sizing_map_default_XL"
+
 # E57-S1 — dev_story.tdd_review.* doubly-nested resolution.
 # Reads the user-set value (if any) from shared then local, then applies
 # the schema-declared default when neither layer set the key. Defaults:
@@ -574,6 +622,29 @@ if [ -n "$FIELD" ]; then
   exit 0
 fi
 
+# ---------- Positional block-query short-circuit (E61-S1) ----------
+#
+# `resolve-config.sh sizing_map` emits four canonical key=value lines for
+# the resolved sizing_map block (project > global precedence per ADR-074
+# contract C1 / ADR-044 §10.26.3). Output is consumed by callers like
+# `gaia-sprint-plan` and (in E61-S2) `gaia-create-story` to derive points
+# from a story size. Order S, M, L, XL is canonical for the t-shirt scale,
+# not lexicographic.
+
+if [ -n "$POSITIONAL_QUERY" ]; then
+  case "$POSITIONAL_QUERY" in
+    sizing_map)
+      printf 'S=%s\n' "$v_sizing_map_S"
+      printf 'M=%s\n' "$v_sizing_map_M"
+      printf 'L=%s\n' "$v_sizing_map_L"
+      printf 'XL=%s\n' "$v_sizing_map_XL"
+      ;;
+    *)
+      die "unknown positional query: '$POSITIONAL_QUERY'" ;;
+  esac
+  exit 0
+fi
+
 # ---------- Emit ----------
 
 emit_pair_shell() {
@@ -594,6 +665,18 @@ if [ "$FORMAT" = "shell" ]; then
   emit_pair_shell planning_artifacts       "$v_planning_artifacts"
   emit_pair_shell project_path             "$v_project_path"
   emit_pair_shell project_root             "$v_project_root"
+  # E61-S1 — sizing_map.{S,M,L,XL} emitted only when at least one sub-key
+  # was set in the shared layer. Absent sizing_map blocks → no emission, so
+  # the eval-friendly key surface stays clean for downstream consumers that
+  # do not need the sizing map. Callers that need the sizing map should use
+  # the positional `sizing_map` invocation form below (E61-S1 ADR-074 C1),
+  # which always emits the four sub-keys (with defaults when unset).
+  if [ "$SIZING_MAP_PROJECT_SET" -eq 1 ]; then
+    emit_pair_shell sizing_map.L  "$v_sizing_map_L"
+    emit_pair_shell sizing_map.M  "$v_sizing_map_M"
+    emit_pair_shell sizing_map.S  "$v_sizing_map_S"
+    emit_pair_shell sizing_map.XL "$v_sizing_map_XL"
+  fi
   emit_pair_shell test_artifacts           "$v_test_artifacts"
   if [ -n "$v_val_integration_template_output_review" ]; then
     emit_pair_shell val_integration.template_output_review \

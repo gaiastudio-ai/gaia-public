@@ -171,3 +171,9 @@ fields:
       - phases (array): default [red]. TDD phase(s) at which the review fires. type=array.
       - qa_auto_in_yolo (bool): default true. Whether YOLO auto-runs the QA review after the gate.
       - qa_timeout_seconds (int): default 600. Per-review timeout for the QA auto-run."
+
+  sizing_map:
+    type: map
+    required: false
+    default: null
+    description: "Story-size to points mapping (T-shirt → Fibonacci scale). Optional project-overridable block per ADR-074 contract C1 / ADR-044 §10.26.3. When set, project values override the framework defaults (S=2, M=5, L=8, XL=13); when absent, the resolver falls back to those defaults so absence is the documented new-project behavior. Resolved via `resolve-config.sh sizing_map`, which emits four canonical key=value lines (S=…, M=…, L=…, XL=…). Consumers: gaia-sprint-plan (today) and gaia-create-story Step 4 (E61-S2)."

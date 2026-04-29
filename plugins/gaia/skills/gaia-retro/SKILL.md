@@ -241,7 +241,7 @@ Invoke:
 ```bash
 ${CLAUDE_PLUGIN_ROOT}/skills/gaia-retro/scripts/cross-retro-detect.sh \
   --retros-dir     "${CLAUDE_PROJECT_ROOT}/docs/implementation-artifacts" \
-  --action-items   "${CLAUDE_PROJECT_ROOT}/docs/implementation-artifacts/action-items.yaml" \
+  --action-items   "${CLAUDE_PROJECT_ROOT}/docs/planning-artifacts/action-items.yaml" \
   --current-sprint "${sprint_id}"
 ```
 

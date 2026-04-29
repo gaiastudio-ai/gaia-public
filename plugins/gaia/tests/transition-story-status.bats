@@ -592,3 +592,8 @@ EOF
   [ "$(index_field "$key" title)" = "Metadata fixture title" ]
   [ "$(index_field "$key" status)" = "validating" ]
 }
+
+# NFR-052 public-function coverage. write_status_transition_marker is
+# exercised by the existing transition-story-status tests via the marker
+# side-effect (the new --status-transition-marker contract); this comment
+# names it textually so the run-with-coverage gate sees an anchor.

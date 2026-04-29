@@ -814,5 +814,38 @@ trap - EXIT
 
 cleanup_snapshots "$SNAP_STORY" "$SNAP_YAML" "$SNAP_EPICS" "$SNAP_INDEX"
 
+# Write status-transition marker (E59-S5 / ADR-074 contract C3).
+# The marker lets the pre-commit `check-status-discipline.sh` distinguish
+# legitimate transitions from manual `status:` edits. Marker is consumed by
+# the discipline check during the same commit cycle. Best-effort — never
+# fails the transition if the .git directory is unavailable (e.g., CI tasks
+# running outside a checkout). Marker freshness window is enforced by the
+# consumer (default 300s).
+write_status_transition_marker() {
+  local marker_dir marker_path
+  if [ -n "${STATUS_TRANSITION_MARKER:-}" ]; then
+    marker_path="$STATUS_TRANSITION_MARKER"
+    marker_dir="$(dirname "$marker_path")"
+  else
+    local git_root
+    if git_root=$(git -C "${PROJECT_PATH:-$PWD}" rev-parse --show-toplevel 2>/dev/null); then
+      marker_dir="$git_root/.git"
+    elif [ -d "${PROJECT_PATH:-$PWD}/.git" ]; then
+      marker_dir="${PROJECT_PATH:-$PWD}/.git"
+    else
+      return 0  # outside a checkout — silent best-effort
+    fi
+    marker_path="$marker_dir/gaia-status-transition.marker"
+  fi
+  mkdir -p "$marker_dir" 2>/dev/null || return 0
+  {
+    printf 'story_key=%s\n' "$STORY_KEY"
+    printf 'timestamp=%s\n' "$(date -u +%s)"
+    printf 'from=%s\n' "$CURRENT_STATUS"
+    printf 'to=%s\n' "$NEW_STATUS"
+  } > "$marker_path" 2>/dev/null || return 0
+}
+write_status_transition_marker
+
 log "$STORY_KEY transitioned $CURRENT_STATUS -> $NEW_STATUS"
 exit 0

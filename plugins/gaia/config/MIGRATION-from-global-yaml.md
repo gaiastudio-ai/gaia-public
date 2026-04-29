@@ -60,10 +60,10 @@ The shared default (`framework_version`, `date`) passes through unchanged; the o
 | 8 | `project_root` | moved-to-project-config | Per-project absolute path to the framework root. Machine-local override via `global.yaml` wins. |
 | 9 | `project_path` | moved-to-project-config | Core per-project setting per ADR-044. Machine-local override via `global.yaml` wins. |
 | 10 | `output_folder` | deprecated | Replaced by per-artifact paths; no GAIA Native consumer. |
-| 11 | `planning_artifacts` | deprecated | Canonical path `{project-root}/docs/planning-artifacts` is hard-wired in GAIA Native; override was never used. |
-| 12 | `implementation_artifacts` | deprecated | Same as above — canonical path is hard-wired. |
-| 13 | `test_artifacts` | deprecated | Same as above. |
-| 14 | `creative_artifacts` | deprecated | Same as above. |
+| 11 | `planning_artifacts` | project-overridable | Reclassified by E60-S1 / ADR-074 contract C1. Default `docs/planning-artifacts` (relative to `project_root`); projects may override per ADR-044 §10.26.3. See [§ Artifact Paths (project-overridable)](#artifact-paths-project-overridable). |
+| 12 | `implementation_artifacts` | project-overridable | Reclassified by E60-S1 / ADR-074 contract C1. Default `docs/implementation-artifacts`; project-overridable per ADR-044 §10.26.3. See [§ Artifact Paths (project-overridable)](#artifact-paths-project-overridable). |
+| 13 | `test_artifacts` | project-overridable | Reclassified by E60-S1 / ADR-074 contract C1. Default `docs/test-artifacts`; project-overridable per ADR-044 §10.26.3. See [§ Artifact Paths (project-overridable)](#artifact-paths-project-overridable). |
+| 14 | `creative_artifacts` | project-overridable | Reclassified by E60-S1 / ADR-074 contract C1. Default `docs/creative-artifacts`; project-overridable per ADR-044 §10.26.3. See [§ Artifact Paths (project-overridable)](#artifact-paths-project-overridable). |
 | 15 | `sizing_map` | project-overridable | Story-size to points mapping. `project > global` precedence per ADR-044 §10.26.3 / ADR-074 contract C1: when `project-config.yaml` defines `sizing_map:`, those values override the framework defaults (S=2, M=5, L=8, XL=13); when absent, `resolve-config.sh sizing_map` emits the framework defaults. Absence is the documented new-project behavior. |
 | 16 | `problem_solving` | stays-in-global | Framework-wide knob (context budget); not per-project. |
 | 17 | `installed_path` | stays-in-global | Machine-local absolute path to `_gaia/` — encodes operator filesystem and cannot be meaningfully shared. Declared in schema so CI fixtures can set it deterministically; in practice the machine-local value always wins. |
@@ -88,14 +88,55 @@ The shared default (`framework_version`, `date`) passes through unchanged; the o
 
 ## Disposition summary
 
-- **moved-to-project-config:** 12 fields
+- **moved-to-project-config:** 16 fields
 - **stays-in-global:** 8 fields
-- **deprecated:** 7 fields
+- **deprecated:** 3 fields
 - **new (no predecessor):** 6 fields
 
 > Disposition note (E61-S1 / ADR-074 contract C1): `sizing_map` was reclassified from `stays-in-global` to `moved-to-project-config` (a.k.a. project-overridable). The block follows the `project > global` precedence rule per ADR-044 §10.26.3; absence in `project-config.yaml` falls back to the framework defaults (S=2, M=5, L=8, XL=13) emitted by `resolve-config.sh sizing_map`.
 
+> Disposition note (E60-S1 / ADR-074 contract C1): `planning_artifacts`, `implementation_artifacts`, `test_artifacts`, and `creative_artifacts` were reclassified from `deprecated` to `moved-to-project-config` (project-overridable). They follow the `project > global` precedence rule per ADR-044 §10.26.3; absence in `project-config.yaml` falls back to the framework defaults (`docs/planning-artifacts`, `docs/implementation-artifacts`, `docs/test-artifacts`, `docs/creative-artifacts`) composed under `project_root` by `resolve-config.sh`. See [§ Artifact Paths (project-overridable)](#artifact-paths-project-overridable) for defaults, override semantics, and a worked example.
+
 Total legacy fields accounted for: 23 (every top-level key currently in `_gaia/_config/global.yaml`).
+
+## Artifact Paths (project-overridable)
+
+The four artifact-path keys — `planning_artifacts`, `implementation_artifacts`, `test_artifacts`, and `creative_artifacts` — locate the canonical `docs/*` subdirectories that GAIA writes planning, implementation, test, and creative artifacts to. Added to `project-config.yaml` by E60-S1 / ADR-074 contract C1, they replace the hardcoded `{project-root}/docs/<dir>` paths previously baked into skills and scripts.
+
+### Defaults
+
+Each key's default resolves relative to `project_root` and matches the live values in `gaia-public/plugins/gaia/config/project-config.yaml`:
+
+| Key                         | Default                        | Description                                                                |
+|-----------------------------|--------------------------------|----------------------------------------------------------------------------|
+| `planning_artifacts`        | `docs/planning-artifacts`      | PRDs, architecture docs, epics-and-stories, test plans, threat models.     |
+| `implementation_artifacts`  | `docs/implementation-artifacts`| Story files, dev notes, retrospectives, change logs.                       |
+| `test_artifacts`            | `docs/test-artifacts`          | ATDD scenarios, test reports, traceability matrices, gap analyses.        |
+| `creative_artifacts`        | `docs/creative-artifacts`      | Brainstorms, design-thinking outputs, innovation strategies, pitch decks.  |
+
+### Override semantics
+
+The four keys follow the `project > global` precedence rule per [ADR-044 §10.26.3 (Config Split — Local vs Shared)](../../../docs/planning-artifacts/architecture.md#10263-foundation-scripts-adr-042). When `project-config.yaml` declares any of these keys, the project value overrides the framework default; when absent, `resolve-config.sh` composes the default under `project_root` (`{project_root}/docs/<dir>`). The same precedence governs every other shared/local pair documented above — artifact paths are not a special case.
+
+The resolver emits the merged value verbatim. An override of `planning_artifacts: planning/` flows through unchanged — the resolver does NOT re-prefix it with `project_root`. Operators are responsible for choosing values that make sense in their project layout (relative to `project_root` is the convention; absolute paths work but discourage portability).
+
+### Worked example — overriding `planning_artifacts`
+
+A project that wants planning artifacts at the repo root under `planning/` instead of the default `docs/planning-artifacts/` adds the override to its team-shared config:
+
+```yaml
+# gaia-public/plugins/gaia/config/project-config.yaml (team-shared, committed)
+planning_artifacts: planning/
+```
+
+The resolver's positional flat-key query returns the override verbatim:
+
+```bash
+$ resolve-config.sh planning_artifacts
+planning/
+```
+
+The same override pattern applies to `implementation_artifacts`, `test_artifacts`, and `creative_artifacts` — each has its own positional-query alias and follows the identical project-over-global precedence.
 
 ## Schema enforcement
 

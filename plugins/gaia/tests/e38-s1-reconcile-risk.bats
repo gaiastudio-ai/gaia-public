@@ -26,8 +26,10 @@ load 'test_helper.bash'
 SCRIPTS_DIR="$(cd "$BATS_TEST_DIRNAME/../scripts" && pwd)"
 SPRINT_STATE="$SCRIPTS_DIR/sprint-state.sh"
 DASHBOARD="$SCRIPTS_DIR/sprint-status-dashboard.sh"
-SKILL_DIR="$(cd "$BATS_TEST_DIRNAME/../skills/gaia-sprint-status" && pwd)"
-CATALOG="$SKILL_DIR/mitigation-catalog.yaml"
+# Per-test catalog path is set in setup() via $MITIGATION_CATALOG; the
+# dashboard resolves the bundled catalog when MITIGATION_CATALOG is unset
+# (see sprint-status-dashboard.sh:74). The real on-disk catalog is never
+# touched by this fixture (E38-S5 — AC4).
 
 # ---------------------------------------------------------------------------
 # assert_reconcile_recognized — fails if the reconcile subcommand is not yet
@@ -139,31 +141,15 @@ setup() {
   # Export the path variables that sprint-state.sh respects.
   export PROJECT_PATH="$TEST_TMP"
   export IMPLEMENTATION_ARTIFACTS="$ARTIFACTS_DIR"
-  # Hermeticity: CATALOG points at the real plugin path because the
-  # dashboard resolves the bundled catalog relative to its own script dir.
-  # Back up the on-disk catalog, then REMOVE it so each test starts with a
-  # clean slate — AC5/AC6 create it via mk_catalog, AC-EC7 writes an inline
-  # variant, and AC-EC6 relies on its absence. Teardown restores the original
-  # contents so the repo tree is byte-identical after the suite runs.
-  if [ -f "$CATALOG" ]; then
-    export CATALOG_BACKUP="$TEST_TMP/.catalog-backup.yaml"
-    cp "$CATALOG" "$CATALOG_BACKUP"
-    rm -f "$CATALOG"
-  else
-    export CATALOG_BACKUP=""
-  fi
+  # E38-S5 — point the dashboard at a per-test catalog path under
+  # BATS_TEST_TMPDIR. The dashboard's MITIGATION_CATALOG env-var override
+  # (sprint-status-dashboard.sh:74) consumes this. The real on-disk catalog
+  # is never touched, eliminating the prior backup/restore dance and a class
+  # of test-ordering races (AC1, AC2, AC4).
+  export MITIGATION_CATALOG="$BATS_TEST_TMPDIR/mitigation-catalog.yaml"
 }
 
 teardown() {
-  # Restore the bundled catalog to the state captured in setup(), or remove
-  # any leftover file if none existed originally. Load-bearing for tests that
-  # run after this suite: without restoration, mk_catalog / inline cat writes
-  # from AC5/AC6/AC-EC7 would leak into production.
-  if [ -n "${CATALOG_BACKUP:-}" ] && [ -f "$CATALOG_BACKUP" ]; then
-    cp "$CATALOG_BACKUP" "$CATALOG"
-  else
-    rm -f "$CATALOG" 2>/dev/null || true
-  fi
   common_teardown
 }
 
@@ -257,7 +243,7 @@ teardown() {
 @test "AC5: HIGH-risk story shows inline mitigation suggestion from catalog on dashboard" {
   mk_sprint_status "$SPRINT_YAML" "E99-S5" "in-progress"
   mk_story_file    "$ARTIFACTS_DIR" "E99-S5" "in-progress" "high" > /dev/null
-  mk_catalog "$CATALOG"
+  mk_catalog "$MITIGATION_CATALOG"
 
   run "$DASHBOARD"
   # RED PHASE: dashboard does not yet read mitigation-catalog.yaml or annotate
@@ -281,7 +267,7 @@ teardown() {
 @test "AC6: when no story has risk: HIGH, dashboard renders no mitigation block" {
   mk_sprint_status "$SPRINT_YAML" "E99-S6" "in-progress"
   mk_story_file    "$ARTIFACTS_DIR" "E99-S6" "in-progress" "low" > /dev/null
-  mk_catalog "$CATALOG"
+  mk_catalog "$MITIGATION_CATALOG"
 
   run "$DASHBOARD"
   # RED PHASE: dashboard risk-surfacing code path does not yet exist.
@@ -431,8 +417,8 @@ teardown() {
   mk_story_file    "$ARTIFACTS_DIR" "E99-S10" "in-progress" "high" > /dev/null
 
   # Catalog contains one known entry and one entirely unexpected entry.
-  mkdir -p "$(dirname "$CATALOG")"
-  cat > "$CATALOG" <<'CATALOG'
+  mkdir -p "$(dirname "$MITIGATION_CATALOG")"
+  cat > "$MITIGATION_CATALOG" <<'CATALOG'
 mitigations:
   - id: pair-programming
     label: "Pair programming"

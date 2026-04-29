@@ -347,9 +347,13 @@ This step implements the six-component dispatch pattern from ADR-050. It replace
 
 **Component 1 — Val dispatch.** Invoke the Val (validator) subagent with:
 - `context: fork` (isolated validation context)
+- `model: claude-opus-4-7` (ADR-074 contract C2 — Val opus pin)
+- `effort: high` (ADR-074 contract C2 — Val opus pin)
 - read-only tool allowlist: `[Read, Grep, Glob, Bash]`
 - `artifact_path`: the story file path written in Step 4
 - `source_workflow`: `gaia-create-story`
+
+**Non-opus mismatch guard (ADR-074 contract C2, AC3).** If a test fixture or downstream override forces a non-opus model into the dispatch context, the skill MUST emit the canonical WARNING `Val dispatch on non-opus model — forcing opus per ADR-074 contract C2` and force `model: claude-opus-4-7` before invoking Val. Silent degradation is forbidden — validation rigor is the contract.
 
 Val returns a structured 8-part response. The eight parts are: `frontmatter`, `completeness`, `clarity`, `semantics`, `dependencies`, `factual`, `origin`, `review_gate_vocabulary`. Each part carries a `findings` array (possibly empty); each finding carries a severity classification (`CRITICAL`, `WARNING`, or `INFO`) and the structured fields needed to locate and fix it.
 

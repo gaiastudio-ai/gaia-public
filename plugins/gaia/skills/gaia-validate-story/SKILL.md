@@ -42,9 +42,14 @@ This skill is the native Claude Code conversion of the legacy validate-story wor
 ### Step 2 -- Invoke Val Subagent
 
 - Invoke the Val (validator) subagent with the following parameters:
+  - `context: fork` (isolated validation context)
+  - `model: claude-opus-4-7` (ADR-074 contract C2 — Val opus pin)
+  - `effort: high` (ADR-074 contract C2 — Val opus pin)
+  - read-only tool allowlist: `[Read, Grep, Glob, Bash]`
   - `artifact_path`: the resolved story file path from Step 1
   - `source_workflow`: `gaia-validate-story`
 - The subagent runs under `context: fork` so the parent conversation state is not leaked into the validator.
+- **Non-opus mismatch guard (ADR-074 contract C2, AC3).** If a test fixture or downstream override forces a non-opus model into the dispatch context, this skill MUST emit the canonical WARNING `Val dispatch on non-opus model — forcing opus per ADR-074 contract C2` and force `model: claude-opus-4-7` before invoking Val. Silent degradation is forbidden.
 - If the subagent fails to start (definition missing, timeout, or crash): set verdict to `UNVERIFIED`, log the error, and proceed to Step 4.
 - Parse the subagent's structured response:
   - Extract the findings list (CRITICAL, WARNING, INFO)

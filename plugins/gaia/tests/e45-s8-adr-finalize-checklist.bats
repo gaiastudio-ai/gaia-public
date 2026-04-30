@@ -79,11 +79,26 @@ _count_adr_table_row() {
 }
 
 _have_workspace_artifact() {
-  # Returns 0 (true) if the workspace-only ADR file is present. Used to
-  # gate the AC5 @tests that assert against architecture.md and global.yaml,
-  # which only exist when the gaia-public repo sits inside a full
-  # GAIA-Framework workspace tree.
+  # Returns 0 (true) if the workspace-only ADR file is present.
+  #
+  # NOTE: this helper guards ONLY on the workspace ADR. AC5 @tests that
+  # assert against architecture.md or global.yaml MUST NOT use this guard
+  # alone — they must additionally verify presence of the artifact they
+  # actually assert against (see _have_workspace_arch and
+  # _have_workspace_global_yaml below). The original single-guard design
+  # produced a false-positive failure for the global.yaml @test when the
+  # ADR was present but global.yaml was not (E28-S219).
   [ -f "$WORKSPACE_ADR" ]
+}
+
+_have_workspace_arch() {
+  # Returns 0 (true) if the workspace architecture.md file is present.
+  [ -f "$WORKSPACE_ARCH" ]
+}
+
+_have_workspace_global_yaml() {
+  # Returns 0 (true) if the workspace global.yaml file is present.
+  [ -f "$WORKSPACE_GLOBAL_YAML" ]
 }
 
 # ---------------------------------------------------------------------------
@@ -182,20 +197,18 @@ _have_workspace_artifact() {
 }
 
 @test "AC5: ADR-068 is registered in architecture.md ADR table (workspace)" {
-  if ! _have_workspace_artifact; then
+  if ! _have_workspace_arch; then
     skip "workspace architecture.md not present (running outside GAIA-Framework workspace)"
   fi
-  [ -f "$WORKSPACE_ARCH" ]
   local rows
   rows=$(_count_adr_table_row "$WORKSPACE_ARCH" "ADR-068")
   [ "$rows" -ge 1 ]
 }
 
 @test "AC5: global.yaml contains an ADR registry reference (workspace)" {
-  if ! _have_workspace_artifact; then
+  if ! _have_workspace_global_yaml; then
     skip "workspace global.yaml not present (running outside GAIA-Framework workspace)"
   fi
-  [ -f "$WORKSPACE_GLOBAL_YAML" ]
   run grep -iE "adr_registry|ADR registry|adr-068" "$WORKSPACE_GLOBAL_YAML"
   [ "$status" -eq 0 ]
 }

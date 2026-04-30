@@ -231,7 +231,7 @@ Phase 6 is the **persistence layer**. The fork CANNOT write — persistence is p
 
 **Re-run handling (EC-8).** Parent **overwrites** the existing review file on re-run (latest verdict wins). No append, no version-suffix. The `review-gate.sh` row update is the source of truth for verdict history if needed.
 
-**Gate row update.** Parent invokes:
+**Gate row update.** Parent invokes the individual gate update (single-line form): `review-gate.sh update --story "{story_key}" --gate "Code Review" --verdict "{PASSED|FAILED}"`. Equivalent multi-line form for readability:
 
 ```bash
 ${CLAUDE_PLUGIN_ROOT}/scripts/review-gate.sh update \

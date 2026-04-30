@@ -12,110 +12,251 @@ allowed-tools: [Read, Grep, Glob, Bash]
 
 ## Mission
 
-You are performing a pre-merge code review for a story. The story is resolved by `{story_key}` via the canonical glob `{story_key}-*.md` in `docs/implementation-artifacts/`. You review each changed file for correctness, security, performance, readability, and test coverage. You produce a machine-readable verdict (APPROVE or REQUEST_CHANGES) in the report body and write PASSED or FAILED to the story's Review Gate row via `review-gate.sh`.
+**Deterministic tools provide evidence. The LLM provides judgment. The LLM consumes deterministic output; it does not override it.**
 
-This skill is the native Claude Code conversion of the legacy `_gaia/lifecycle/workflows/4-implementation/code-review` workflow (brief Cluster 9, story E28-S66, ADR-042). This is the CANONICAL reference implementation of the reviewer skill pattern (no-write isolation) that E28-S67..S71 follow.
+This is the unifying principle of every GAIA review skill (FR-DEJ-1, ADR-075). For `gaia-code-review` it means: deterministic tools (linter, formatter, per-file rules, type checker, build verification) run first and emit a structured `analysis-results.json` artifact. The LLM then performs a semantic review **on top of** that artifact — it cannot disregard a `tsc` type error or an `eslint` crash, and it cannot relabel a tool failure as APPROVE. The verdict is computed by `verdict-resolver.sh` from the deterministic checks plus the LLM findings; the LLM never computes the verdict in natural language.
 
-**Fork context semantics (ADR-041, ADR-045):** This skill runs under `context: fork` with read-only tools (`Read Grep Glob Bash`). It CANNOT modify files — the tool allowlist enforces NFR-048 (no-write isolation). Do NOT attempt to call Write or Edit.
+This skill is the **canonical reference implementation** for the six review skills (E65-S2 lands first; E65-S3..S7 pattern-match against this file). Any structural decision here cascades into the sibling-review-skill migrations.
+
+**Fork context semantics (ADR-041, ADR-045, NFR-DEJ-4):** This skill runs under `context: fork` with read-only tools (`Read Grep Glob Bash`). It CANNOT modify files — the tool allowlist enforces no-write isolation. Persistence of the rendered review report is parent-mediated (Option A per ADR-075): the fork returns the rendered report payload to the parent context, and the parent writes the file. `Write` and `Edit` are NEVER added to the fork allowlist.
 
 ## Critical Rules
 
 - A story key argument MUST be provided. If missing, fail fast with "usage: /gaia-code-review [story-key]".
 - The story file MUST exist at `docs/implementation-artifacts/{story_key}-*.md`. Use the canonical glob to resolve regardless of title slug. If zero matches, fail with "story file not found for key {story_key}".
 - The story MUST be in `review` status. If not, fail with "story must be in review status before code review".
-- This skill is READ-ONLY. Do NOT attempt to call Write or Edit tools — the fork context allowlist enforces this.
-- The verdict in the report body uses APPROVE or REQUEST_CHANGES (internal vocabulary).
-- The Review Gate row uses PASSED or FAILED (canonical vocabulary, per CLAUDE.md).
-- Mapping: APPROVE maps to PASSED; REQUEST_CHANGES maps to FAILED.
-- Call `review-gate.sh` to update the Review Gate row — do NOT manually edit the story file.
+- This skill is READ-ONLY in the fork. Do NOT attempt to call Write or Edit — the allowlist enforces this. Persistence is routed through the parent context.
+- The verdict is `verdict-resolver.sh`'s output (APPROVE | REQUEST_CHANGES | BLOCKED). The LLM MUST NOT compute or override it.
+- Mapping to Review Gate canonical vocabulary (inline, no separate script): APPROVE → PASSED; REQUEST_CHANGES → FAILED; BLOCKED → FAILED.
+- Determinism settings: `temperature: 0`, `model: claude-opus-4-7` (per ADR-074), `prompt_hash` recorded in the report header. Re-running with identical `analysis-results.json` MUST yield findings that match by category and severity (NFR-DEJ-2); textual variation is allowed.
 - Sprint-status.yaml is NEVER written by this skill (Sprint-Status Write Safety rule).
 
-## Steps
+## Determinism Settings
 
-### Step 1 -- Resolve Story File
+```
+temperature: 0
+model: claude-opus-4-7        # per ADR-074, frontmatter-pinned at fork dispatch
+prompt_hash: sha256:<hex>     # recorded in report header at Phase 6
+```
+
+`prompt_hash` is the sha256 of (system prompt || `analysis-results.json` content). Two runs against unchanged inputs MUST produce findings that match by `{category, severity}` (NFR-DEJ-2). Textual message variation is allowed; category+severity divergence is an escalation signal — investigate model pin, temperature, or prompt-hash mismatch.
+
+## Stack Toolkit Table
+
+The toolkit invoked by Phase 3A is selected by the canonical stack name emitted by `load-stack-persona.sh`. Stack-key vocabulary is canonical across this skill and the script — they MUST match (EC-14):
+
+| Stack key (canonical) | File-scoped tools                         | Project-scoped tools          |
+|-----------------------|-------------------------------------------|-------------------------------|
+| `ts-dev`              | `eslint`, `prettier`                      | `tsc --noEmit`, `npm run build` |
+| `java-dev`            | `checkstyle`, `spotless --check`          | `mvn -DskipTests compile`     |
+| `python-dev`          | `ruff check`, `black --check`             | `mypy`, `python -m compileall` |
+| `go-dev`              | `gofmt -l`, `golangci-lint run`           | `go vet`, `go build ./...`    |
+| `flutter-dev`         | `dart format --output=none --set-exit-if-changed`, `dart analyze` | `flutter build` |
+| `mobile-dev`          | `swiftlint`, `ktlint`                     | `xcodebuild build` / `gradle assemble` |
+| `angular-dev`         | `eslint`, `prettier`                      | `tsc --noEmit`, `ng build`    |
+
+The table is authoritative for Phase 3A toolkit selection. Phase 3A scope per FR-DEJ-3 is **strict**: file-scoped (linter, formatter, per-file rules) plus project-scoped (type checker, build verification). Phase 3A does NOT invoke Semgrep, gitleaks, secret scan, dep audit (`npm audit`, `pip-audit`), or test-runner execution (`go test`, `jest`, `vitest`). Those belong to sibling review skills.
+
+## Severity Rubric
+
+The LLM Phase 3B review applies the rubric below. Findings outside `correctness` and `readability` are out-of-scope for this skill (security → `gaia-security-review`, performance → `gaia-performance-review`, etc.).
+
+### Critical
+
+> Blocking. Produces `REQUEST_CHANGES` if the deterministic resolver did not already block.
+
+Examples (correctness only — there is no Critical readability tier per FR-DEJ-7):
+- Off-by-one in a loop bound that produces incorrect output for the documented happy path.
+- Null-deref on a code path with no guard, reachable via a documented public API entry point.
+- Resource leak (file handle, DB connection, lock) on the happy path with no `finally` / `defer` / `using`.
+
+### Warning
+
+> Non-blocking but worth surfacing. Persisted to the report.
+
+Examples (correctness + readability):
+- Edge case unhandled but documented as out-of-scope (correctness).
+- Undocumented invariant a future maintainer cannot verify (correctness).
+- Function exceeds the team length/complexity threshold (readability).
+- Misleading variable name that would surprise a future maintainer (readability).
+
+### Suggestion
+
+> Non-blocking. Style/comment polish; no behavior implications.
+
+Examples:
+- Comment wording could be tightened.
+- Naming could match team convention more closely.
+- Consider extracting a helper for clarity.
+
+The category+severity sets MUST match across two runs of identical inputs (NFR-DEJ-2 determinism contract); textual message variation is allowed. Category+severity divergence escalates as a model-pin or temperature regression.
+
+## Phases
+
+The skill is organized into seven canonical phases in this order: Setup → Story Gate → Phase 3A Deterministic Analysis → Phase 3B LLM Semantic Review → Architecture Conformance + Design Fidelity → Verdict → Output + Gate Update → Finalize. Each phase has explicit responsibilities; phase boundaries are non-negotiable.
+
+### Phase 1 — Setup
 
 - If no story key was provided as an argument, fail with: "usage: /gaia-code-review [story-key]"
-- Resolve the story file path using the canonical glob: `docs/implementation-artifacts/{story_key}-*.md`
-- If zero matches: fail with "story file not found for key {story_key} -- searched docs/implementation-artifacts/{story_key}-*.md"
-- If multiple matches: fail with "multiple story files matched key {story_key} -- resolve ambiguity"
-- Read the resolved story file.
+- Resolve the story file path using the canonical glob: `docs/implementation-artifacts/{story_key}-*.md`. If zero matches: fail. If multiple matches: fail with "multiple story files matched key {story_key}".
+- Read the resolved story file; parse YAML frontmatter to extract `status` and `figma:` block (if any).
+- Invoke `${CLAUDE_PLUGIN_ROOT}/scripts/load-stack-persona.sh --story-file <path>` in the parent context. The script emits the canonical stack name (`ts-dev`, `java-dev`, `python-dev`, `go-dev`, `flutter-dev`, `mobile-dev`, `angular-dev`) and lazy-loads the matching reviewer persona + memory sidecar BEFORE fork dispatch (NFR-DEJ-4 preserved). Forward the persona payload + canonical stack name into the fork.
+- **Tool prereq probe (EC-4).** For each tool listed in the stack-toolkit table row matched by the canonical stack name: probe via `command -v <tool>` first; fall back to `node_modules/.bin/<tool> --version` (TS/Angular). NEVER use `npx <tool> --version` (triggers npm install and breaks the NFR-DEJ-1 60s P95 budget). Cap each probe at 5s wall-clock; on timeout, log a Warning and continue (assume tool present). Capture each tool's reported version into `tool_versions` for the cache key.
+- **Expected-missing-tool (FR-DEJ-4 case 1).** If a required toolkit binary is absent and not optional for the stack: emit Phase 1 BLOCKED with an actionable error message naming the missing tool and the install hint. Do NOT dispatch the fork.
 
-### Step 2 -- Status Gate
+### Phase 2 — Story Gate
 
-- Parse the story file YAML frontmatter and extract the `status` field.
-- If status is not `review`, fail with: "story {story_key} is in '{status}' status -- must be in 'review' status for code review"
-- Extract the list of files changed from the story file's "File List" section under "Dev Agent Record".
+- Status check: if `status` is not `review`, fail with "story {story_key} is in '{status}' status — must be in 'review' status for code review".
+- Extract the File List section under "Dev Agent Record".
+- Run `${CLAUDE_PLUGIN_ROOT}/scripts/file-list-diff-check.sh --story-file <path> --base <branch> --repo <repo>`. The script returns a JSON-shaped report; surface divergence as a Warning to the user. **Story Gate semantics are advisory per FR-DEJ-2 — divergence does NOT halt the review.** Honor `no-file-list`, `empty-file-list`, and `divergence` reasons.
+- Record divergence findings in `gate_warnings[]` of the eventual `analysis-results.json`.
+- Missing-file handling (EC-2): if a File List entry is absent from disk (renamed/deleted post-File-List-write), record it as a Warning finding under `category: integrity, severity: warning` in `analysis-results.json`. Do NOT crash; Phase 3A handles it gracefully.
 
-### Step 3 -- Code Review
+### Phase 3A — Deterministic Analysis
 
-- For each changed file listed in the story, read the file and review for:
-  - **Correctness:** Logic errors, edge cases, null/undefined handling, type safety
-  - **Security:** Injection vulnerabilities, credential exposure, input validation, OWASP Top 10
-  - **Performance:** Unnecessary loops, N+1 queries, missing indexes, memory leaks, large allocations
-  - **Readability:** Naming conventions, function length, code duplication, comment quality
-  - **Test Coverage:** Each acceptance criterion has at least one test, edge cases tested, mocking appropriate
+Phase 3A is the **evidence layer**. Output: `analysis-results.json` written to `.review/gaia-code-review/{story_key}/analysis-results.json` validating against `plugins/gaia/schemas/analysis-results.schema.json` (`schema_version: "1.0"`).
 
-### Step 4 -- Architecture Conformance
+**Toolkit invocation.** Look up the toolkit row in the Stack Toolkit Table above using the canonical stack name from Phase 1. Run file-scoped tools (linter, formatter, per-file rules) against the File List. Run project-scoped tools (type checker, build verification) against the project root. Phase 3A scope is strict — see scope table above.
 
-- Read `docs/planning-artifacts/architecture.md` and extract ADRs, component hierarchy, layer boundaries, and API patterns.
-- For each changed file, verify:
-  - Component placement follows the documented hierarchy
-  - Dependencies flow in the correct direction per architecture
-  - API patterns match the architecture specification
-  - Referenced ADRs exist and have status Accepted
-- Include an "Architecture Conformance" section in findings with PASS/FAIL per check.
+**Status taxonomy (FR-DEJ-4, EC-6, EC-12).** Each tool invocation produces exactly one of:
+- `status: passed` — tool ran to completion, no findings, exit code zero.
+- `status: failed` — tool ran to completion AND emitted findings (e.g., `tsc` exit 1/2 with type errors; `eslint` exit 1 with lint findings). Maps to REQUEST_CHANGES via verdict-resolver precedence rule 2 (LLM-cannot-override).
+- `status: errored` — tool crashed mid-run or returned an unclassified non-zero exit code (e.g., `eslint` exit 2 from a malformed config; `tsc` cannot find tsconfig.json). Maps to BLOCKED via precedence rule 1. Even when partial findings were emitted before the crash (EC-12), `errored` wins over partial findings.
+- `status: skipped` — tool not applicable; `skip_reason` populated verbatim.
 
-### Step 5 -- Design Fidelity Check
+**Distinguish `failed` vs `errored` by exit-code semantics, not by exit code alone.** `eslint` exits 1 on findings (failed) and 2 on crash (errored). `tsc` 5.x exits 2 on type errors; 4.x sometimes exits 1 — both are findings (failed). The bats fixtures assert the EXACT `status` field, not the exit code (EC-6).
 
-- Read story file YAML frontmatter -- check if a `figma:` block exists.
-- If a `figma:` block is present: compare design token references in changed code against `docs/planning-artifacts/design-system/design-tokens.json`, classify as matched/drifted/missing, and include fidelity results in findings.
-- If no `figma:` block: skip fidelity check.
+**Not-applicable handling (FR-DEJ-4 case 3, EC-7).** If the File List contains no files of the tool's target language, emit `status: skipped` with `skip_reason` matching the language verbatim:
+- `tsc` skip when no `.ts`/`.tsx` files in File List: `skip_reason: "no TypeScript files in File List"` (verbatim).
+- `mypy` skip when no `.py` files in File List: `skip_reason: "no Python files in File List"` (verbatim).
+- The skip decision is **File-List-driven**, not project-structure-driven. A monorepo with `tsconfig.json` at the project root but a Python-only File List still skips `tsc`. The verdict is unaffected by the skip.
 
-### Step 6 -- Generate Findings
+**Cache plumbing (FR-DEJ-11, EC-1, EC-3, EC-5, EC-13).** Cache lives at `.review/gaia-code-review/{story_key}/.cache/`. Cache directory created via `mkdir -p` (idempotent and concurrency-safe at directory creation).
 
-- Categorize all issues found by severity:
-  - **Critical:** Must be fixed before merge (security vulnerabilities, data loss risks, correctness bugs)
-  - **Warning:** Should be fixed but not blocking (performance concerns, minor code quality issues)
-  - **Suggestion:** Nice to have improvements (naming, style, documentation)
+Cache key:
+```
+sha256(
+  File List contents
+  || file_hashes (sha256 per File List entry, sorted)
+  || tool_config blob
+  || tool_versions (sorted "tool:version" lines)
+  || resolved_config_hash
+)
+```
 
-### Step 7 -- Decision
+`resolved_config_hash` is the sha256 of `eslint --print-config <file>` output for ESLint, and `tsc --showConfig` output for TypeScript — NOT the raw config file content. This is the EC-1 mitigation: extended ESLint configs (`extends: airbnb`) and shared config packages change the resolved ruleset without touching the local `.eslintrc`. Hashing the raw file would silently miss those changes.
 
-- If NO critical issues were found: verdict is **APPROVE**
-- If ANY critical issues were found: verdict is **REQUEST_CHANGES**
-- The verdict MUST appear as a machine-readable keyword in the report output.
+Cache lookup:
+1. Compute the candidate cache key from current File List + tool versions + resolved configs.
+2. Look up `.review/gaia-code-review/{story_key}/.cache/{cache_key}.json`. On miss: run tools.
+3. On candidate hit, **revalidate file_hashes** against current on-disk file hashes (EC-3). A file in the File List can be edited externally without changing any cache-key input — if any cached `file_hashes` entry diverges from the current on-disk hash, treat as miss. Cache key is necessary but not sufficient.
 
-### Step 8 -- Write Review Report
+Cache write (EC-5 same-story parallel-invocation safety):
+- Write `analysis-results.json` to a per-PID temp path: `.review/gaia-code-review/{story_key}/.cache/.tmp.<pid>.<timestamp>.json`.
+- `mv` (atomic rename) to the final `.cache/{cache_key}.json` path. Atomic-rename gives last-writer-wins without corruption.
+- Cross-story parallel invocations are safe by per-story directory partitioning.
+- Persist via `${CLAUDE_PLUGIN_ROOT}/scripts/checkpoint.sh write --workflow code-review --step 3 --file <results.json> --var cache_key=<hash>` so `checkpoint.sh validate --workflow code-review` can detect drift later.
 
-- Generate the review report and print it to the conversation. The report must contain:
-  - Story key and title
-  - Summary of files reviewed
-  - Findings organized by severity (Critical, Warning, Suggestion)
-  - Architecture Conformance results
-  - Design Fidelity results (if applicable)
-  - Machine-readable verdict line: `**Verdict: APPROVE**` or `**Verdict: REQUEST_CHANGES**`
-- Save the report to `docs/implementation-artifacts/{story_key}-review.md`.
+Phase 3A also emits a rendered `.md` companion alongside `analysis-results.json` — a human-readable summary of per-tool status and findings count for log inspection.
 
-### Step 9 -- Update Review Gate
+### Phase 3B — LLM Semantic Review
 
-- Map the verdict to the canonical Review Gate vocabulary:
-  - APPROVE maps to PASSED
-  - REQUEST_CHANGES maps to FAILED
-- Invoke the shared `review-gate.sh` script to update the story's Review Gate table:
-  ```bash
-  ${CLAUDE_PLUGIN_ROOT}/scripts/review-gate.sh update --story "{story_key}" --gate "Code Review" --verdict "{PASSED|FAILED}"
-  ```
-- Confirm the update succeeded (exit code 0).
-- Report the final status to the user.
-- Note: sprint-status.yaml may now be out of sync. Run `/gaia-sprint-status` to reconcile.
+Phase 3B is the **judgment layer**. The fork subagent reads `analysis-results.json` as evidence and applies the severity rubric to produce category-organized Critical / Warning / Suggestion findings restricted to **correctness + readability** scope only.
 
-### Step 10 -- Composite Review Gate Check
+**Fork dispatch contract.**
+- `context: fork`
+- `allowed-tools: [Read, Grep, Glob, Bash]` (frontmatter-enforced; no Write/Edit ever)
+- `model: claude-opus-4-7` (frontmatter-pinned per ADR-074)
+- `temperature: 0`
+- Inputs forwarded into the fork: persona payload (from Phase 1), `analysis-results.json` content, story file path, severity rubric (this section).
 
-- After the individual gate update completes successfully, invoke the composite review-gate-check to show the overall story review status:
-  ```bash
-  ${CLAUDE_PLUGIN_ROOT}/scripts/review-gate.sh review-gate-check --story "{story_key}"
-  ```
-- Capture stdout and include the Review Gate table and summary line (`Review Gate: COMPLETE|PENDING|BLOCKED`) in the command's output.
-- This check is informational only -- do not halt on non-zero exit codes. Exit codes 0/1/2 correspond to COMPLETE/BLOCKED/PENDING per ADR-054. Log the result and continue regardless of exit code.
+**Output contract.** Fork returns a structured findings JSON with shape `{ "findings": [{"category", "severity", "file", "line", "message"}, ...] }`. The fork ALSO returns the rendered report payload as its conversational output — the parent will validate the structure in Phase 6 before persisting.
+
+**Determinism contract (NFR-DEJ-2, EC-11).** Two runs against unchanged `analysis-results.json` MUST produce findings that match by `{category, severity}`. Textual message variation is allowed. Category+severity divergence is an escalation signal — investigate model pin, temperature, or prompt-hash mismatch. The bats determinism regression test compares ONLY `{category, severity}` sets across two runs.
+
+**Prompt hash recording.** The fork records `prompt_hash` (sha256 of system prompt || `analysis-results.json` content) in the report header. This is the audit trail for determinism debugging.
+
+### Phase 4 — Architecture Conformance + Design Fidelity
+
+The fork extends Phase 3B's findings with architecture and design checks; findings flow into the Phase 3B category buckets.
+
+- **Architecture conformance.** Fork reads `docs/planning-artifacts/architecture.md`. For each File List entry, verify component placement follows the documented hierarchy, dependency direction matches the architecture, and any ADRs referenced by the story exist with status Accepted. Findings under `category: architecture`.
+- **Design fidelity.** If the story frontmatter has a `figma:` block, fork compares design-token references in the changed code against `docs/planning-artifacts/design-system/design-tokens.json` and classifies as matched / drifted / missing. Findings under `category: fidelity`. If no `figma:` block: skip silently (no Warning, no finding).
+
+### Phase 5 — Verdict
+
+The verdict is computed by `verdict-resolver.sh`. The LLM never computes or overrides it.
+
+```bash
+${CLAUDE_PLUGIN_ROOT}/scripts/verdict-resolver.sh \
+  --analysis-results .review/gaia-code-review/{story_key}/analysis-results.json \
+  --llm-findings .review/gaia-code-review/{story_key}/llm-findings.json
+```
+
+The resolver applies strict first-match-wins precedence (FR-DEJ-6):
+1. Any check `status: errored` → **BLOCKED**.
+2. Any check `status: failed` with blocking finding → **REQUEST_CHANGES**. *The LLM cannot override this — rule 2 wins over rule 4 (LLM APPROVE) every time.*
+3. Any LLM finding `severity: Critical` → **REQUEST_CHANGES**.
+4. Otherwise → **APPROVE**.
+
+Stdout is exactly one of `APPROVE | REQUEST_CHANGES | BLOCKED`. **Mapping to Review Gate canonical vocabulary is inline (no separate `verdict-normalizer.sh`):**
+
+| Resolver output  | Review Gate verdict |
+|------------------|---------------------|
+| APPROVE          | PASSED              |
+| REQUEST_CHANGES  | FAILED              |
+| BLOCKED          | FAILED              |
+
+This three-line mapping is local to this section per PRD §4.37. If a future review skill diverges, extract to a shared script then (YAGNI).
+
+### Phase 6 — Output + Gate Update
+
+Phase 6 is the **persistence layer**. The fork CANNOT write — persistence is parent-mediated (Option A per ADR-075).
+
+**Fork output.** The fork returns a rendered report payload as its conversational output. The report MUST contain:
+
+- Header: story key, title, prompt_hash, model, temperature.
+- `## Deterministic Analysis` — per-tool status table + per-tool findings list (from `analysis-results.json`).
+- `## LLM Semantic Review` — Critical / Warning / Suggestion organized by category (correctness, readability, architecture, fidelity).
+- Final line, exactly: `**Verdict: APPROVE**` or `**Verdict: REQUEST_CHANGES**` or `**Verdict: BLOCKED**`.
+
+**Parent payload validation (EC-9).** Before persisting, the parent context validates the fork output structure:
+- `## Deterministic Analysis` section present.
+- `## LLM Semantic Review` section present.
+- Final line matches regex `^\*\*Verdict: (APPROVE|REQUEST_CHANGES|BLOCKED)\*\*$`.
+
+**Malformed-payload handling (EC-9).** On any of the above checks failing, the parent persists what it received with an explicit `[INCOMPLETE]` marker prepended to the report, and emits `verdict=BLOCKED` to `review-gate.sh`. Fork output untrustworthy → BLOCKED. The bats fixture covers this case explicitly.
+
+**Parent write to FR-402 locked path.** The parent context writes the rendered report to `docs/implementation-artifacts/code-review-E<NN>-S<NNN>.md` per FR-402 naming convention. The path is **locked**: `code-review-{story_key}.md` — no slug, no date suffix.
+
+**Re-run handling (EC-8).** Parent **overwrites** the existing review file on re-run (latest verdict wins). No append, no version-suffix. The `review-gate.sh` row update is the source of truth for verdict history if needed.
+
+**Gate row update.** Parent invokes the individual gate update (single-line form): `review-gate.sh update --story "{story_key}" --gate "Code Review" --verdict "{PASSED|FAILED}"`. Equivalent multi-line form for readability:
+
+```bash
+${CLAUDE_PLUGIN_ROOT}/scripts/review-gate.sh update \
+  --story "{story_key}" \
+  --gate "Code Review" \
+  --verdict "{PASSED|FAILED}"
+```
+
+Mapping per Phase 5 table. Confirm exit code 0.
+
+**Composite review gate check.** After the row update, parent invokes the composite check informationally:
+
+```bash
+${CLAUDE_PLUGIN_ROOT}/scripts/review-gate.sh review-gate-check --story "{story_key}"
+```
+
+Capture stdout for the `Review Gate: COMPLETE|PENDING|BLOCKED` summary (per ADR-054). Do NOT halt on non-zero exit. Sprint-status.yaml may be out of sync — surface a hint to run `/gaia-sprint-status`.
+
+**Fork allowlist sanity.** The frontmatter `allowed-tools` MUST remain exactly `[Read, Grep, Glob, Bash]`. The `evidence-judgment-parity.bats` AC1 assertion catches any post-merge regression that adds Write or Edit (EC-10).
+
+### Phase 7 — Finalize
+
+- Surface the verdict to the orchestrator per ADR-063 (mandatory verdict surfacing).
+- Persist findings to the per-skill checkpoint via `checkpoint.sh write` (already invoked in Phase 3A for the cache; final state recorded via the standard `finalize.sh` hook).
+- The Phase 3A artifact is cached for the next run by the `.cache/{cache_key}.json` write performed in Phase 3A.
 
 ## Finalize
 

@@ -1,0 +1,11 @@
+{
+  "findings": [
+    {
+      "category": "readability",
+      "severity": "Suggestion",
+      "file": "src/broken.ts",
+      "line": 1,
+      "message": "Synthetic LLM=APPROVE outcome (no Critical findings). Verdict resolver MUST still emit REQUEST_CHANGES because tsc reported a blocking type error (LLM-cannot-override invariant)."
+    }
+  ]
+}

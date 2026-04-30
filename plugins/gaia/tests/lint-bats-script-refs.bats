@@ -5,7 +5,13 @@
 # deleted/deprecated script across BOTH gaia-public/tests/ and
 # gaia-public/plugins/gaia/tests/ trees.
 #
-# Public functions covered: extract_script_refs, lint_one_bats, main.
+# Public functions covered: extract_script_refs, lint_one_bats, is_ignored,
+# main.
+#
+# is_ignored is exercised end-to-end through the --ignore-pattern CLI flag
+# (see "--ignore-pattern" tests below); the helper has no separate CLI
+# surface, so its behaviour is asserted via the linter's exit code and
+# STALE-line output rather than a direct function call.
 #
 # AC mapping:
 #   AC3 — sweep linter exists; fails when any bats file references a script
@@ -135,6 +141,46 @@ EOS
 
   # With --ignore-pattern matching the script name: should pass.
   run "$SCRIPT" --root "$FIXTURE_ROOT" --ignore-pattern "intentional-fixture"
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"STALE:"* ]]
+}
+
+@test "lint-bats-script-refs.sh: is_ignored — multiple --ignore-pattern flags compose" {
+  cat > "$FIXTURE_ROOT/plugins/gaia/tests/two-stale.bats" <<EOS
+#!/usr/bin/env bats
+${AT}test "two stale" {
+  bash plugins/gaia/scripts/fixture-a.sh
+  bash plugins/gaia/scripts/fixture-b.sh
+}
+EOS
+
+  # Both patterns must apply for the linter to exit 0; without the second
+  # pattern, fixture-b remains stale. This exercises the loop body of
+  # is_ignored for the second iteration (RSTART/RLENGTH-style globals are
+  # not at risk here, but loop coverage matters).
+  run "$SCRIPT" --root "$FIXTURE_ROOT" --ignore-pattern "fixture-a"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"fixture-b.sh"* ]]
+  [[ "$output" != *"fixture-a.sh"* ]]
+
+  run "$SCRIPT" --root "$FIXTURE_ROOT" \
+    --ignore-pattern "fixture-a" --ignore-pattern "fixture-b"
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"STALE:"* ]]
+}
+
+@test "lint-bats-script-refs.sh: is_ignored — regex pattern matches multiple paths" {
+  cat > "$FIXTURE_ROOT/plugins/gaia/tests/regex-stale.bats" <<EOS
+#!/usr/bin/env bats
+${AT}test "regex stale" {
+  bash plugins/gaia/scripts/fake-one.sh
+  bash plugins/gaia/scripts/fake-two.sh
+}
+EOS
+
+  # A single regex pattern (^.*fake-.*\\.sh$) covers both stale references
+  # via is_ignored; the linter must exit 0 when every stale ref matches.
+  run "$SCRIPT" --root "$FIXTURE_ROOT" --ignore-pattern "fake-.*\\.sh"
   [ "$status" -eq 0 ]
   [[ "$output" != *"STALE:"* ]]
 }

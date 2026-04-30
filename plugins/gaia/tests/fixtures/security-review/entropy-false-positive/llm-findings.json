@@ -1,0 +1,11 @@
+{
+  "findings": [
+    {
+      "category": "A02",
+      "severity": "Suggestion",
+      "file": "src/constants.ts",
+      "line": 4,
+      "message": "Entropy heuristic false-positive: literal matches hex-hash pattern (64 hex chars) — classified as Suggestion per EC-12 rule. LLM-cannot-override does NOT apply because rule_confidence=low."
+    }
+  ]
+}

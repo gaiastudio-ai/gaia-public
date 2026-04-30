@@ -1,0 +1,11 @@
+{
+  "findings": [
+    {
+      "category": "A02",
+      "severity": "Suggestion",
+      "file": "tests/fixtures/auth.test.ts",
+      "line": 8,
+      "message": "Synthetic test secret with sk-test- prefix in tests/ path; downgraded to Suggestion per EC-4 context-aware rule."
+    }
+  ]
+}

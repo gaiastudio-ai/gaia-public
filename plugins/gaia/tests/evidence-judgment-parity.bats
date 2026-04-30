@@ -14,6 +14,7 @@ bats_require_minimum_version 1.5.0
 # Each entry is the path (relative to plugins/gaia/) of the SKILL.md file.
 REVIEW_SKILLS=(
   "skills/gaia-code-review/SKILL.md"
+  "skills/gaia-security-review/SKILL.md"
 )
 
 # --- assertion helpers ---

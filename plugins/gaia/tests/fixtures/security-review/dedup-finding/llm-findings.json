@@ -1,0 +1,12 @@
+{
+  "findings": [
+    {
+      "category": "A02",
+      "severity": "Critical",
+      "file": "src/config.ts",
+      "line": 12,
+      "finding_type": "hardcoded-secret",
+      "message": "Hardcoded API key in production config; deduplicated tuple (file, line, finding_type) — single finding after EC-11 dedup."
+    }
+  ]
+}

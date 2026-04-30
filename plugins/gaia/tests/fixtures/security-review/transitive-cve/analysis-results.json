@@ -1,0 +1,34 @@
+{
+  "schema_version": "1.0",
+  "story_key": "E99-EC7",
+  "skill": "gaia-security-review",
+  "model": "claude-opus-4-7",
+  "model_temperature": 0,
+  "tool_versions": {
+    "npm-audit": "10.5.0"
+  },
+  "advisory_db_fingerprint": "sha256:advisorydb-2026-04-30-v1",
+  "file_hashes": {
+    "package.json": "ec07cafe"
+  },
+  "checks": [
+    {
+      "name": "npm-audit",
+      "scope": "project",
+      "status": "passed",
+      "findings": [
+        {
+          "file": "package.json:dependencies.webpack-plugin-foo",
+          "line": null,
+          "severity": "high",
+          "rule": "CVE-2024-EXAMPLE",
+          "rule_confidence": "high",
+          "message": "Transitive dep CVE; dependency path is dev-only (webpack plugin not in production bundle)",
+          "dependency_path": ["webpack-plugin-foo", "transitive-vuln-pkg"],
+          "is_dev_dependency": true,
+          "blocking": false
+        }
+      ]
+    }
+  ]
+}

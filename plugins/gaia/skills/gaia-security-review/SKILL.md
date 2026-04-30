@@ -12,193 +12,303 @@ allowed-tools: [Read, Grep, Glob, Bash]
 
 ## Mission
 
-You are performing a pre-merge OWASP-focused security review for a story. The story is resolved by `{story_key}` via the canonical glob `{story_key}-*.md` in `docs/implementation-artifacts/`. You review each changed file against the OWASP Top 10 categories, scan for hardcoded secrets, review authentication/authorization patterns, assess data privacy compliance, and produce a machine-readable verdict (PASSED or FAILED) written to the story's Review Gate row via `review-gate.sh`.
+**Deterministic tools provide evidence. The LLM provides judgment. The LLM consumes deterministic output; it does not override it.**
 
-This skill is the native Claude Code conversion of the legacy `_gaia/lifecycle/workflows/4-implementation/security-review` workflow (brief Cluster 9, story E28-S67, ADR-042). It follows the canonical reviewer skill pattern established by E28-S66.
+This is the unifying principle of every GAIA review skill (FR-DEJ-1, ADR-075). For `gaia-security-review` it means: deterministic tools (Semgrep ruleset, secret scanner, dependency CVE audit) run first and emit a structured `analysis-results.json` artifact. The LLM then performs an OWASP-aligned semantic review **on top of** that artifact — it cannot disregard a high-confidence Semgrep `p/security-audit` failure or a gitleaks hit on a production path, and it cannot relabel a tool failure as APPROVE. The verdict is computed by `verdict-resolver.sh` from the deterministic checks plus the LLM findings; the LLM never computes the verdict in natural language.
 
-**Fork context semantics (ADR-041, ADR-045):** This skill runs under `context: fork` with read-only tools (`Read Grep Glob Bash`). It CANNOT modify files — the tool allowlist enforces NFR-048 (no-write isolation). Do NOT attempt to call Write or Edit.
+This skill pattern-matches against `gaia-code-review` (E65-S2) as the canonical reference. Per-skill specialization here = (a) the security toolkit (Semgrep + secret scan + dep audit) and (b) the OWASP-aligned severity rubric examples. Structural plumbing — fork dispatch, cache key, parent-mediated write — is identical to E65-S2.
 
-**Subagent dispatch:** OWASP analysis is dispatched to the Zara security subagent (E28-S21). The fork context invokes Zara for threat assessment; Zara's verdict is returned across the fork boundary and surfaced to the user per ADR-063.
-
-**Threat-model context (ADR-064):** When `docs/planning-artifacts/threat-model.md` exists, this skill loads it via the `Read` tool and injects it into the Zara dispatch context under a "Threat Model Context" section so Zara can cross-reference OWASP findings against modeled threat IDs (e.g., "see T3 in threat model"). When the file is absent, the skill proceeds silently — no error, no warning, no user-visible message about the missing file — preserving exact pre-E48-S2 behavior.
+**Fork context semantics (ADR-041, ADR-045, NFR-DEJ-4):** This skill runs under `context: fork` with read-only tools (`Read Grep Glob Bash`). It CANNOT modify files — the tool allowlist enforces no-write isolation. Persistence of the rendered review report is parent-mediated (Option A per ADR-075): the fork returns the rendered report payload to the parent context, and the parent writes the file. `Write` and `Edit` are NEVER added to the fork allowlist.
 
 ## Critical Rules
 
 - A story key argument MUST be provided. If missing, fail fast with "usage: /gaia-security-review [story-key]".
 - The story file MUST exist at `docs/implementation-artifacts/{story_key}-*.md`. Use the canonical glob to resolve regardless of title slug. If zero matches, fail with "story file not found for key {story_key}".
 - The story MUST be in `review` status. If not, fail with "story must be in review status before security review".
-- This skill is READ-ONLY. Do NOT attempt to call Write or Edit tools — the fork context allowlist enforces this.
-- OWASP analysis MUST be dispatched to the Zara security subagent — do NOT perform inline analysis in the fork context.
-- Zara's return MUST be parsed as the ADR-037 structured schema (`{status, summary, artifacts, findings, next}`) and the verdict MUST be surfaced to the user per ADR-063 (the Subagent Dispatch Contract). Never silently consume Zara's return.
-- A CRITICAL verdict from Zara HALTS the skill before the Review Gate is written. This applies in all execution modes (normal and YOLO) per ADR-067.
-- The verdict uses PASSED or FAILED (canonical Review Gate vocabulary, per CLAUDE.md).
-- Verdict logic: NO critical or high severity findings = PASSED; ANY critical or high severity finding = FAILED.
-- Call `review-gate.sh` to update the Review Gate row — do NOT manually edit the story file.
+- This skill is READ-ONLY in the fork. Do NOT attempt to call Write or Edit — the allowlist enforces this. Persistence is routed through the parent context.
+- The verdict is `verdict-resolver.sh`'s output (APPROVE | REQUEST_CHANGES | BLOCKED). The LLM MUST NOT compute or override it.
+- Mapping to Review Gate canonical vocabulary (inline, no separate script): APPROVE → PASSED; REQUEST_CHANGES → FAILED; BLOCKED → FAILED.
+- Determinism settings: `temperature: 0`, `model: claude-opus-4-7` (per ADR-074), `prompt_hash` recorded in the report header. Re-running with identical `analysis-results.json` MUST yield findings that match by category and severity (NFR-DEJ-2); textual variation is allowed.
 - Sprint-status.yaml is NEVER written by this skill (Sprint-Status Write Safety rule).
 
-## Subagent Dispatch Contract
+## Determinism Settings
 
-This skill follows the framework-wide Subagent Dispatch Contract (ADR-063). The Zara dispatch in Step 3 is invoked via `context: fork` per ADR-045 with the same read-only tool allowlist `[Read, Grep, Glob, Bash]`. After Zara returns:
+```
+temperature: 0
+model: claude-opus-4-7        # per ADR-074, frontmatter-pinned at fork dispatch
+prompt_hash: sha256:<hex>     # recorded in report header at Phase 6
+```
 
-1. **Parse the subagent return** using the ADR-037 structured schema: `{ status, summary, artifacts, findings, next }`. The `status` field is one of `PASS`, `WARNING`, `CRITICAL`. Each entry in `findings` carries a `severity` of `CRITICAL`, `WARNING`, `INFO`, plus an OWASP category and (when threat-model context was provided) an optional `threat_ref` (e.g., "T3").
-2. **Surface the verdict** to the user inline: display `status` and `summary`, then list every finding with its severity, OWASP category, location, recommended remediation, and any `threat_ref` cross-reference.
-3. **Halt on CRITICAL** — if `status == "CRITICAL"` or any finding has `severity == "CRITICAL"`, the skill HALTS before writing the Review Gate row. The user must resolve the finding before re-running the security review. No Review Gate write occurs on a CRITICAL halt — the existing UNVERIFIED row stays as-is.
-4. **Display WARNING** — findings with `severity == "WARNING"` are displayed inline before proceeding. The skill does NOT halt; warnings are recorded in the security review report and counted toward the PASSED/FAILED verdict per the canonical verdict logic (any critical OR high severity finding ⇒ FAILED).
-5. **Log INFO** — findings with `severity == "INFO"` are written to the security review report but are not surfaced inline unless the user requests verbose output.
+`prompt_hash` is the sha256 of (system prompt || `analysis-results.json` content). Two runs against unchanged inputs MUST produce findings that match by `{category, severity}` (NFR-DEJ-2). Textual message variation is allowed; category+severity divergence is an escalation signal — investigate model pin, temperature, or prompt-hash mismatch.
 
-This contract is enforced uniformly per ADR-063. CRITICAL findings cannot be auto-dismissed in any execution mode. This closes the "validation gates swallowed by subagents" regression class for `/gaia-security-review`.
+## Stack Toolkit Table
 
-## YOLO Behavior
+The toolkit invoked by Phase 3A is selected by the canonical stack name emitted by `load-stack-persona.sh`. Stack-key vocabulary is canonical across this skill and the script — they MUST match (EC-8). The Semgrep ruleset and secret scanner are stack-agnostic; only the dep-audit binary varies per stack:
 
-This skill conforms to the framework-wide YOLO Mode Contract (ADR-067).
+| Stack key (canonical) | Semgrep ruleset                                          | Secret scanner | Dep-audit binary                             |
+|-----------------------|----------------------------------------------------------|----------------|----------------------------------------------|
+| `ts-dev`              | `p/security-audit` + `p/secrets` (+ `.semgrep/` if present) | `gitleaks`     | `npm audit`                                  |
+| `java-dev`            | `p/security-audit` + `p/secrets` (+ `.semgrep/` if present) | `gitleaks`     | `mvn org.owasp:dependency-check-maven:check` |
+| `python-dev`          | `p/security-audit` + `p/secrets` (+ `.semgrep/` if present) | `gitleaks`     | `pip-audit`                                  |
+| `go-dev`              | `p/security-audit` + `p/secrets` (+ `.semgrep/` if present) | `gitleaks`     | `govulncheck ./...`                          |
+| `flutter-dev`         | `p/security-audit` + `p/secrets` (+ `.semgrep/` if present) | `gitleaks`     | `dart pub audit` (or `pub-audit`)            |
+| `mobile-dev`          | `p/security-audit` + `p/secrets` (+ `.semgrep/` if present) | `gitleaks`     | `swift package audit` / `gradle dependencyCheckAnalyze` |
+| `angular-dev`         | `p/security-audit` + `p/secrets` (+ `.semgrep/` if present) | `gitleaks`     | `npm audit`                                  |
 
-| Behavior | YOLO Action |
-|----------|-------------|
-| Template-output prompts (`[c]/[y]/[e]`) | Auto-continue (skip prompt). |
-| Severity / filter selection | Auto-accept defaults. |
-| Optional confirmation prompts | Auto-confirm. |
-| Subagent verdict display (Zara return) | Auto-display, but a CRITICAL verdict still HALTS per ADR-063. |
-| Open-question indicators (unchecked checkboxes, TBD markers) | HALT — never auto-skip; require human input. |
-| Memory save prompt at end | HALT — require human input (Phase 4 per ADR-061). |
+Phase 3A scope per FR-DEJ-3 is **strict**: Semgrep static analysis + secret scan + dep CVE audit. Phase 3A does NOT invoke linters, formatters, type checkers, or build verification — those belong to `gaia-code-review`. Phase 3A does NOT invoke test runners — those belong to `gaia-qa-tests` / `gaia-test-automate`.
 
-In YOLO mode the Zara verdict is auto-displayed but a CRITICAL verdict still halts the skill — this is the canonical YOLO/CRITICAL interaction established by ADR-067.
+Mismatched stack name (vocabulary drift between `load-stack-persona.sh` output and the table key) → silent skip on dep audit per FR-DEJ-4 case 3 with `skip_reason` populated.
 
-## Steps
+## Severity Rubric
 
-### Step 1 -- Resolve Story File
+The LLM Phase 3B review applies the rubric below. Findings are organized by OWASP Top 10 category. Coverage targets the five categories most likely to surface in pre-merge review: **A01 Broken Access Control**, **A02 Cryptographic Failures**, **A03 Injection**, **A05 Security Misconfiguration**, **A07 Identification & Authentication Failures**. Other OWASP categories (A04, A06, A08, A09, A10) are still in scope; the rubric below seeds disambiguation for the high-frequency tiers.
+
+The category+severity sets MUST match across two runs of identical inputs (NFR-DEJ-2 determinism contract); textual message variation is allowed. Category+severity divergence escalates as a model-pin or temperature regression.
+
+### Critical
+
+> Blocking. Produces `REQUEST_CHANGES` if the deterministic resolver did not already block. Critical-promotion threshold for Semgrep: `(rule_confidence: high) AND (rule_severity: high/error)` — prevents stock `p/security-audit` noise from forcing REQUEST_CHANGES on every diff (EC-1).
+
+Examples (per OWASP category):
+
+- **A01 Broken Access Control** — Admin route `/api/admin/users` reachable without authn middleware on the production-bound handler.
+- **A01 Broken Access Control** — Object-level authz bypass: handler trusts a client-supplied `userId` parameter when the authenticated session already pins a different identity.
+- **A02 Cryptographic Failures** — Hardcoded production API key checked into `src/config.ts:12` (gitleaks rule_confidence=high).
+- **A02 Cryptographic Failures** — Symmetric encryption key derived from a constant string and used for at-rest PII encryption.
+- **A03 Injection** — SQL injection in user-input path: handler concatenates `req.body.name` into a SQL string with no parameterization, Semgrep rule_confidence=high.
+- **A03 Injection** — OS command injection: shell call with unescaped user input `exec("convert " + req.query.file)`.
+- **A05 Security Misconfiguration** — Production CORS allows `*` on a credentialed endpoint.
+- **A05 Security Misconfiguration** — Debug endpoint `/__debug__/dump` mounted on the production router with no flag gate.
+- **A07 Identification & Authentication Failures** — Session cookie set without `HttpOnly`, `Secure`, and `SameSite` on a production auth flow.
+- **A07 Identification & Authentication Failures** — Password reset link uses a sequential-integer token with no expiry.
+
+### Warning
+
+> Non-blocking but worth surfacing. Persisted to the report.
+
+Examples (per OWASP category):
+
+- **A01 Broken Access Control** — Authz check present at the route layer but missing on a sibling handler that exposes the same resource — defense-in-depth gap.
+- **A01 Broken Access Control** — Rate-limit middleware applied per-route but not per-user — abuse vector for an authenticated bulk endpoint.
+- **A02 Cryptographic Failures** — Weak crypto used for a non-security hash (e.g., MD5 for cache-key fingerprint) — not directly exploitable but flagged for cleanup.
+- **A02 Cryptographic Failures** — TLS 1.0/1.1 still listed in the cipher allowlist for a non-public endpoint; modern config recommended.
+- **A03 Injection** — Unsafe regex on bounded input (ReDoS-medium): user input length-capped at 64 chars but the regex still has catastrophic backtracking on a ≤64-char attacker string.
+- **A03 Injection** — Missing CSRF token on an idempotent `GET` route that nevertheless writes audit-log entries.
+- **A05 Security Misconfiguration** — Verbose error response leaks internal class names (e.g., `NullPointerException at com.app.service.UserService.lookup`).
+- **A05 Security Misconfiguration** — Default Express security headers (`x-powered-by: Express`) not stripped.
+- **A07 Identification & Authentication Failures** — Password complexity policy enforced client-side only; server accepts any non-empty string.
+- **A07 Identification & Authentication Failures** — Session timeout not documented anywhere; default framework behavior likely acceptable but unverified.
+
+### Suggestion
+
+> Non-blocking. Style/comment polish; no behavior implications. Includes context-aware downgrades.
+
+Examples (per OWASP category):
+
+- **A01 Broken Access Control** — Comment-only TODO referencing a future RBAC migration; no current finding, just a tracked intent.
+- **A02 Cryptographic Failures** — Synthetic test secret with the `sk-test-` prefix in `tests/fixtures/auth.test.ts` — context-aware downgrade per EC-4 (test-fixture path rule).
+- **A02 Cryptographic Failures** — High-entropy literal flagged by gitleaks but matches the hex-hash pattern (64 hex chars) in a constants file — entropy false-positive per EC-12.
+- **A03 Injection** — Variable named `query` in a context that does NOT reach a SQL builder; misleading name worth a rename comment.
+- **A05 Security Misconfiguration** — Deprecated TLS cipher in dev-only configuration (not production-reachable) — note for cleanup.
+- **A05 Security Misconfiguration** — Verbose log message in a debug-only path; not user-facing.
+- **A07 Identification & Authentication Failures** — Comment in auth flow could be tightened to clarify which token type is expected.
+- **A06 Vulnerable Components** — Transitive CVE in dev-only dependency path (e.g., webpack plugin not in production bundle); evidence-gated downgrade Critical→Warning→Suggestion per EC-7.
+
+**Context-aware downgrade rules (documented in rubric):**
+- Test-fixture path (e.g., `tests/`, `__tests__/`, `*.test.*`) → secret findings downgrade to Suggestion (EC-4).
+- High-entropy literal matching a known non-secret pattern (hex hash, base64-encoded UUID, fixed test-data fingerprint) → Suggestion (EC-12). LLM-cannot-override still applies if the deterministic tool's `rule_confidence` is high.
+- Transitive CVE in a dev-only dependency path or unreachable code path → Warning (EC-7); LLM-cannot-override still applies for production-reachable CVEs.
+
+## Phases
+
+The skill is organized into seven canonical phases in this order: Setup → Story Gate → Phase 3A Deterministic Analysis → Phase 3B LLM Semantic Review → Architecture Conformance + Design Fidelity → Verdict → Output + Gate Update → Finalize. Each phase has explicit responsibilities; phase boundaries are non-negotiable.
+
+### Phase 1 — Setup
 
 - If no story key was provided as an argument, fail with: "usage: /gaia-security-review [story-key]"
-- Resolve the story file path using the canonical glob: `docs/implementation-artifacts/{story_key}-*.md`
-- If zero matches: fail with "story file not found for key {story_key} -- searched docs/implementation-artifacts/{story_key}-*.md"
-- If multiple matches: fail with "multiple story files matched key {story_key} -- resolve ambiguity"
-- Read the resolved story file.
+- Resolve the story file path using the canonical glob: `docs/implementation-artifacts/{story_key}-*.md`. If zero matches: fail. If multiple matches: fail with "multiple story files matched key {story_key}".
+- Read the resolved story file; parse YAML frontmatter to extract `status` and `figma:` block (if any).
+- Invoke `${CLAUDE_PLUGIN_ROOT}/scripts/load-stack-persona.sh --story-file <path>` in the parent context. The script emits the canonical stack name (`ts-dev`, `java-dev`, `python-dev`, `go-dev`, `flutter-dev`, `mobile-dev`, `angular-dev`) and lazy-loads the matching reviewer persona + memory sidecar BEFORE fork dispatch (NFR-DEJ-4 preserved). Forward the persona payload + canonical stack name into the fork.
+- **Threat-model context (ADR-064).** When `docs/planning-artifacts/threat-model.md` exists, the skill loads it and injects it into the Phase 3B fork context under a "Threat Model Context" section. When the file is absent, proceed silently — preserves exact pre-E48-S2 behavior.
+- **Tool prereq probe.** For each tool (Semgrep, gitleaks/trufflehog, the dep-audit binary listed in the toolkit row): probe via `command -v <tool>` first; fall back to local binaries. NEVER use `npx <tool> --version` — registry fetch breaks the NFR-DEJ-1 60s P95 budget. Cap each probe at 5s wall-clock; on timeout, log a Warning and continue (assume tool present). Capture each tool's reported version into `tool_versions` for the cache key.
+- **Per-tool wall-clock caps (EC-10):** Semgrep ≤30s, secret scanner ≤15s, dep audit ≤15s. Cumulative Phase 3A budget ≤60s P95 cold (NFR-DEJ-1). On individual tool timeout, that tool's `status: errored` (NOT `failed` — timeout is not a finding); resolver maps to BLOCKED for the run.
+- **Expected-missing-tool (FR-DEJ-4 case 1).** If a required toolkit binary is absent and not optional for the stack: emit Phase 1 BLOCKED with an actionable error message naming the missing tool and the install hint. Do NOT dispatch the fork.
 
-### Step 2 -- Status Gate
+### Phase 2 — Story Gate
 
-- Parse the story file YAML frontmatter and extract the `status` field.
-- If status is not `review`, fail with: "story {story_key} is in '{status}' status -- must be in 'review' status for security review"
-- Extract the list of files changed from the story file's "File List" section under "Dev Agent Record".
+- Status check: if `status` is not `review`, fail with "story {story_key} is in '{status}' status — must be in 'review' status for security review".
+- Extract the File List section under "Dev Agent Record".
+- Run `${CLAUDE_PLUGIN_ROOT}/scripts/file-list-diff-check.sh --story-file <path> --base <branch> --repo <repo>`. The script returns a JSON-shaped report; surface divergence as a Warning to the user. **Story Gate semantics are advisory per FR-DEJ-2 — divergence does NOT halt the review.** Honor `no-file-list`, `empty-file-list`, and `divergence` reasons.
+- Record divergence findings in `gate_warnings[]` of the eventual `analysis-results.json`.
+- Missing-file handling: if a File List entry is absent from disk (renamed/deleted post-File-List-write), record it as a Warning finding under `category: integrity, severity: warning` in `analysis-results.json`. Do NOT crash; Phase 3A handles it gracefully.
 
-### Step 2b -- Threat-Model Context Detection (ADR-064)
+### Phase 3A — Deterministic Analysis
 
-- Probe for `docs/planning-artifacts/threat-model.md` via the `Read` tool (the threat-model read uses the Read tool, which is in the fork-context allowlist `[Read, Grep, Glob, Bash]` per ADR-045).
-- **If the file exists:** read its full content and bind it to the local variable `threat_model_context` for the Step 3 dispatch. Do NOT log "threat model loaded" or any other progress message — the presence of the cross-reference instructions in Zara's prompt is the only user-visible signal.
-- **If the file is absent:** proceed silently. Do NOT emit a warning, error, or user-visible message about the missing file — the skill must produce zero new output when threat-model.md does not exist. This preserves the exact pre-E48-S2 dispatch behavior. The `threat_model_context` variable is unset; downstream Step 3 omits the "Threat Model Context" section and the cross-reference instruction entirely.
-- The skill remains read-only: no `Write` or `Edit` calls are introduced by threat-model detection (ADR-041, ADR-045, NFR-048).
+Phase 3A is the **evidence layer**. Output: `analysis-results.json` written to `.review/gaia-security-review/{story_key}/analysis-results.json` validating against `plugins/gaia/schemas/analysis-results.schema.json` (`schema_version: "1.0"`).
 
-### Step 3 -- Dispatch OWASP Analysis to Zara
+**Toolkit invocation.** Look up the toolkit row in the Stack Toolkit Table above using the canonical stack name from Phase 1. Run Semgrep + secret scanner + dep-audit per row.
 
-Invoke the Zara security subagent to perform the OWASP Top 10 analysis on all changed files. Pass the story key, file list, and — when present — the `threat_model_context` from Step 2b, into Zara's dispatch prompt. Zara performs Steps 3a through 3f below and returns her findings across the fork boundary using the ADR-037 structured schema.
+1. **Semgrep** — invoke with the registry packs `p/security-audit` + `p/secrets`. If `.semgrep/` exists in the repo root, also invoke the custom rules; if `.semgrep/` is missing or empty, silently skip the custom-rules step with `skip_reason: "no Semgrep custom rules at .semgrep/"` (EC-9). Semgrep wall-clock cap: 30s.
+2. **Secret scanner** (gitleaks default; trufflehog acceptable per project policy) — invoke with explicit File List + working-tree scope. CLI flags MUST exclude `--history` mode (EC-2). For gitleaks: `--no-git` is REQUIRED to scope to the working tree only. Historical secrets are an out-of-scope concern for `/gaia-security-review` and belong to a separate periodic full-history scan. Secret scanner wall-clock cap: 15s.
+3. **Dep CVE audit** — invoke the binary listed in the toolkit table for the resolved stack. Capture full advisory output. Dep audit wall-clock cap: 15s.
 
-**Conditional Threat Model Context block.** If `threat_model_context` is set (Step 2b found `threat-model.md`), include it in the Zara dispatch prompt under a clearly labeled section, plus a cross-reference instruction. If `threat_model_context` is unset, omit BOTH the section and the cross-reference instruction — Zara then produces standard OWASP findings without cross-references (no behavioral change from the pre-E48-S2 baseline).
+**Status taxonomy (FR-DEJ-4).** Each tool invocation produces exactly one of:
+- `status: passed` — tool ran to completion, no findings, exit code zero.
+- `status: failed` — tool ran to completion AND emitted findings (e.g., Semgrep exit 1 with security findings; gitleaks exit 1 on secret detection; npm-audit exit 1 with CVE findings). Maps to REQUEST_CHANGES via verdict-resolver precedence rule 2 (LLM-cannot-override).
+- `status: errored` — tool crashed mid-run, returned an unclassified non-zero exit code, OR exceeded its wall-clock cap. Maps to BLOCKED via precedence rule 1. Examples: Semgrep parse error on malformed source (EC-5); npm-audit network failure; tool wall-clock timeout (EC-10). Even when partial findings were emitted before the crash, `errored` wins over partial findings.
+- `status: skipped` — tool not applicable; `skip_reason` populated verbatim. Examples: `skip_reason: "no Semgrep custom rules at .semgrep/"` (EC-9); dep-audit binary absent for an exotic stack (FR-DEJ-4 case 3).
 
-The dispatch prompt template, with the conditional block shown in `<<<...>>>` markers, is:
+**Distinguish `failed` vs `errored` by exit-code semantics, not by exit code alone** (consistent with E65-S2 EC-6). Semgrep exits 1 on findings (failed) and 2 on parse error/crash (errored). gitleaks exits 1 on secret detection (failed) and 2 on config/io error (errored).
 
-> Story: {story_key}
-> Files changed: {file_list}
->
-> <<<IF threat_model_context IS SET, INCLUDE THIS BLOCK:
->
-> ## Threat Model Context
->
-> The following threat model was extracted from `docs/planning-artifacts/threat-model.md`. Each modeled threat carries a stable identifier (e.g., T1, T2, T3). When you find an OWASP issue that directly relates to a modeled threat, **cross-reference the threat ID** in the finding using the format `see T{n} in threat model` (for example: "SQL injection in /api/users — see T3 in threat model"). Only cross-reference when a modeled threat directly applies — do not force cross-references where no threat matches.
->
-> ```
-> {threat_model_context}
-> ```
->
-> END CONDITIONAL BLOCK>>>
->
-> Perform the OWASP Top 10 analysis described in steps 3a-3f and return your findings using the ADR-037 structured schema `{status, summary, artifacts, findings, next}`. Each finding should include `severity`, `owasp_category`, `location`, `remediation`, and (when threat-model context was provided) an optional `threat_ref` field carrying the matched threat ID.
+**Path normalization (EC-13).** Tool outputs vary in path convention:
+- Semgrep emits absolute paths.
+- gitleaks emits paths relative to repo root.
+- npm audit emits package names with no file path.
 
-After Zara returns, apply the Subagent Dispatch Contract above: parse the ADR-037 schema, surface the verdict, halt on CRITICAL, display WARNINGs inline, log INFO findings to the report.
+Phase 3A normalizes all `findings[].file` to repo-relative before writing `analysis-results.json`. Package-only findings (npm audit / pip-audit / govulncheck) use a synthetic location field formatted as `package.json:dependencies.<pkg>` (or per-stack equivalent: `pyproject.toml:dependencies.<pkg>`, `go.mod:require <pkg>`).
 
-#### Step 3a -- OWASP Top 10 Scan
+**Finding deduplication (EC-11).** Phase 3A deduplicates findings across tools by the tuple `(file, line, finding_type)` before passing to Phase 3B. Example: an API key on `src/config.ts:12` flagged by both gitleaks and Semgrep `p/secrets` is deduplicated to a single finding. The dedup key is documented here so resolver counts unique findings only.
 
-Check code changes against each OWASP category:
+**Cache plumbing (FR-DEJ-11).** Cache lives at `.review/gaia-security-review/{story_key}/.cache/`. Cache directory created via `mkdir -p` (idempotent and concurrency-safe).
 
-- A01: Broken Access Control — authorization checks, RBAC, CORS
-- A02: Cryptographic Failures — encryption, hashing, key management
-- A03: Injection — SQL, XSS, command injection, input validation
-- A04: Insecure Design — missing security controls in design
-- A05: Security Misconfiguration — default configs, unnecessary features
-- A06: Vulnerable Components — outdated dependencies, known CVEs
-- A07: Auth Failures — password policies, session management, MFA
-- A08: Data Integrity Failures — deserialization, CI/CD integrity
-- A09: Logging Failures — insufficient logging, missing audit trail
-- A10: SSRF — server-side request forgery vectors
+Cache key:
+```
+sha256(
+  File List contents
+  || file_hashes (sha256 per File List entry, sorted)
+  || tool_config blob
+  || tool_versions (sorted "tool:version" lines)
+  || resolved_config_hash
+  || advisory_db_fingerprint
+)
+```
 
-#### Step 3b -- Secrets Scan
+`advisory_db_fingerprint` is the sha256 of `npm audit --json | jq .metadata.advisories` for npm, or the per-stack equivalent (e.g., `pip-audit --vulnerability-service osv` digest, or a daily date-stamp proxy). This is the EC-3 mitigation: the dep-audit advisory database refreshes daily without changing the binary version. Without this fingerprint, a story marked safe yesterday can have new CVEs today and the cache would return a stale safe verdict.
 
-- Check for hardcoded secrets, API keys, credentials in code
-- Verify secrets are loaded from environment or secrets manager
-- Check .gitignore covers sensitive files (.env, credentials, keys)
+`resolved_config_hash` is the sha256 of the rendered Semgrep configuration (registry packs + custom rules content) — NOT the raw `.semgrep/` directory listing.
 
-#### Step 3c -- Auth Pattern Review
+Cache lookup:
+1. Compute the candidate cache key from current File List + tool versions + resolved configs + advisory_db_fingerprint.
+2. Look up `.review/gaia-security-review/{story_key}/.cache/{cache_key}.json`. On miss: run tools.
+3. On candidate hit, **revalidate file_hashes** against current on-disk file hashes. A file in the File List can be edited externally without changing any cache-key input — if any cached `file_hashes` entry diverges from the current on-disk hash, treat as miss.
 
-- Verify authentication flow follows security best practices
-- Check authorization at every access point (not just UI)
-- Validate session management and token handling
-- Check for privilege escalation paths
+Cache write (same-story parallel-invocation safety):
+- Write `analysis-results.json` to a per-PID temp path: `.review/gaia-security-review/{story_key}/.cache/.tmp.<pid>.<timestamp>.json`.
+- `mv` (atomic rename) to the final `.cache/{cache_key}.json` path. Atomic rename gives last-writer-wins without corruption.
+- Cross-story parallel invocations are safe by per-story directory partitioning.
+- Persist via `${CLAUDE_PLUGIN_ROOT}/scripts/checkpoint.sh write --workflow security-review --step 3 --file <results.json> --var cache_key=<hash>` so `checkpoint.sh validate --workflow security-review` can detect drift later.
 
-#### Step 3d -- Data Privacy and Compliance
+Phase 3A also emits a rendered `.md` companion alongside `analysis-results.json` — a human-readable summary of per-tool status and findings count for log inspection.
 
-- Identify if the story handles PII (names, emails, addresses, phone numbers, payment data, health data, authentication tokens, user-generated content with metadata)
-- If PII is handled:
-  - GDPR applicability: check for consent mechanisms, right-to-delete support, data portability, lawful basis for processing
-  - Data encryption: verify PII is encrypted at rest (database-level or field-level) and in transit (TLS)
-  - Data retention: check if retention policies are defined — flag if no retention period or deletion mechanism exists
-  - Data minimization: flag collection of PII fields not required for the feature's purpose
-  - Cross-border transfer: flag if PII may be stored or processed in different jurisdictions without safeguards
-- If no PII detected: record "No PII handling identified in this story" for auditability
+### Phase 3B — LLM Semantic Review
 
-#### Step 3e -- Generate Findings
+Phase 3B is the **judgment layer**. The fork subagent reads `analysis-results.json` as evidence and applies the OWASP-aligned severity rubric to produce category-organized Critical / Warning / Suggestion findings.
 
-- Classify each finding by severity: critical, high, medium, low, info
-- Include: finding description, location, OWASP category, remediation suggestion
-- When threat-model context was provided: include a `threat_ref` field on findings that match a modeled threat (e.g., `threat_ref: "T3"`). Findings that do not match a modeled threat have no `threat_ref` — do not invent matches.
-- Provide overall security risk assessment
+**Fork dispatch contract.**
+- `context: fork`
+- `allowed-tools: [Read, Grep, Glob, Bash]` (frontmatter-enforced; no Write/Edit ever)
+- `model: claude-opus-4-7` (frontmatter-pinned per ADR-074)
+- `temperature: 0`
+- Inputs forwarded into the fork: persona payload (from Phase 1), `analysis-results.json` content, story file path, severity rubric (this section), and — when present — the threat-model context loaded in Phase 1.
 
-#### Step 3f -- Verdict
+**Output contract.** Fork returns a structured findings JSON with shape `{ "findings": [{"category", "severity", "file", "line", "message", "threat_ref?"}, ...] }`. The fork ALSO returns the rendered report payload as its conversational output — the parent will validate the structure in Phase 6 before persisting.
 
-- If NO critical or high severity findings: verdict is PASSED
-- If ANY critical or high severity finding exists: verdict is FAILED — list blocking findings
+**OWASP categorization.** Each finding carries an `owasp_category` (e.g., `A01`, `A02`, `A03`, `A05`, `A07`). Findings outside the OWASP Top 10 are categorized as `category: integrity` for missing-file divergence or `category: fidelity` for design-token drift, consistent with the cross-skill convention.
 
-### Step 4 -- Write Security Review Report
+**Determinism contract (NFR-DEJ-2).** Two runs against unchanged `analysis-results.json` MUST produce findings that match by `{category, severity}`. Textual message variation is allowed. Category+severity divergence is an escalation signal — investigate model pin, temperature, or prompt-hash mismatch. The bats determinism regression test compares ONLY `{category, severity}` sets across two runs.
 
-- Generate the security review report and print it to the conversation. The report must contain:
-  - Story key and title
-  - Summary of files reviewed
-  - Whether threat-model context was loaded (one-line note: "Threat model: loaded" or "Threat model: not present")
-  - OWASP findings table (category, severity, finding, location, remediation, threat_ref when present)
-  - Secrets scan results
-  - Auth review results
-  - Data Privacy and Compliance assessment
-  - Overall risk assessment
-  - Machine-readable verdict line: `**Verdict: PASSED**` or `**Verdict: FAILED**`
-- Save the report to `docs/implementation-artifacts/{story_key}-security-review.md`.
+**Prompt hash recording.** The fork records `prompt_hash` (sha256 of system prompt || `analysis-results.json` content) in the report header. This is the audit trail for determinism debugging.
 
-### Step 5 -- Update Review Gate
+**Context-aware classification (rubric-driven).** Per the Severity Rubric above:
+- Test-fixture path → secret findings downgrade to Suggestion (EC-4).
+- High-entropy literal matching hex-hash / base64-UUID pattern → Suggestion (EC-12).
+- Transitive CVE in dev-only dependency path or unreachable code path → Warning (EC-7).
+- Semgrep finding promotes to Critical only when `(rule_confidence: high) AND (rule_severity: high/error)` (EC-1).
 
-- Map the verdict to the canonical Review Gate vocabulary:
-  - PASSED stays PASSED
-  - FAILED stays FAILED
-- Invoke the shared `review-gate.sh` script to update the story's Review Gate table:
-  ```bash
-  ${CLAUDE_PLUGIN_ROOT}/scripts/review-gate.sh update --story "{story_key}" --gate "Security Review" --verdict "{PASSED|FAILED}"
-  ```
-- Confirm the update succeeded (exit code 0).
-- Report the final status to the user.
-- Note: sprint-status.yaml may now be out of sync. Run `/gaia-sprint-status` to reconcile.
+LLM-cannot-override invariant: a high-confidence deterministic finding cannot be downgraded by the LLM into APPROVE territory. The rubric downgrades above apply to LLM tier classification (Suggestion vs Warning vs Critical) — NOT to the verdict-resolver.sh blocking decision when the deterministic tool emits `status: failed` with a blocking finding.
 
-### Step 6 -- Composite Review Gate Check
+### Phase 4 — Architecture Conformance + Design Fidelity
 
-- After the individual gate update completes successfully, invoke the composite review-gate-check to show the overall story review status:
-  ```bash
-  ${CLAUDE_PLUGIN_ROOT}/scripts/review-gate.sh review-gate-check --story "{story_key}"
-  ```
-- Capture stdout and include the Review Gate table and summary line (`Review Gate: COMPLETE|PENDING|BLOCKED`) in the command's output.
-- This check is informational only -- do not halt on non-zero exit codes. Exit codes 0/1/2 correspond to COMPLETE/BLOCKED/PENDING per ADR-054. Log the result and continue regardless of exit code.
+The fork extends Phase 3B's findings with architecture and design checks; findings flow into the Phase 3B category buckets.
+
+- **Security-architecture conformance.** Fork reads `docs/planning-artifacts/architecture.md` and (when present) `docs/planning-artifacts/threat-model.md`. For each File List entry, verify authn/authz boundaries align with the documented gateway/middleware pattern, secret-storage references match the documented vault path, and any ADRs referenced by the story exist with status Accepted. Findings under `category: architecture`.
+- **Threat-model cross-reference.** When threat-model context was provided, findings that match a modeled threat carry an optional `threat_ref` field (e.g., `threat_ref: "T3"`). Format the cross-reference inline as `(see T3 in threat model)`.
+- **Design fidelity.** If the story frontmatter has a `figma:` block, fork compares design-token references in the changed code against `docs/planning-artifacts/design-system/design-tokens.json`. Findings under `category: fidelity`. If no `figma:` block: skip silently (no Warning, no finding).
+
+### Phase 5 — Verdict
+
+The verdict is computed by `verdict-resolver.sh`. The LLM never computes or overrides it.
+
+```bash
+${CLAUDE_PLUGIN_ROOT}/scripts/verdict-resolver.sh \
+  --analysis-results .review/gaia-security-review/{story_key}/analysis-results.json \
+  --llm-findings .review/gaia-security-review/{story_key}/llm-findings.json
+```
+
+The resolver applies strict first-match-wins precedence (FR-DEJ-6):
+1. Any check `status: errored` → **BLOCKED**.
+2. Any check `status: failed` with blocking finding → **REQUEST_CHANGES**. *The LLM cannot override this — rule 2 wins over rule 4 (LLM APPROVE) every time.*
+3. Any LLM finding `severity: Critical` → **REQUEST_CHANGES**.
+4. Otherwise → **APPROVE**.
+
+Stdout is exactly one of `APPROVE | REQUEST_CHANGES | BLOCKED`. **Mapping to Review Gate canonical vocabulary is inline (no separate `verdict-normalizer.sh`):**
+
+| Resolver output  | Review Gate verdict |
+|------------------|---------------------|
+| APPROVE          | PASSED              |
+| REQUEST_CHANGES  | FAILED              |
+| BLOCKED          | FAILED              |
+
+This three-line mapping is local to this section per PRD §4.37. If a future review skill diverges, extract to a shared script then (YAGNI).
+
+### Phase 6 — Output + Gate Update
+
+Phase 6 is the **persistence layer**. The fork CANNOT write — persistence is parent-mediated (Option A per ADR-075).
+
+**Fork output.** The fork returns a rendered report payload as its conversational output. The report MUST contain:
+
+- Header: story key, title, prompt_hash, model, temperature.
+- `## Deterministic Analysis` — per-tool status table + per-tool findings list (from `analysis-results.json`).
+- `## LLM Semantic Review` — Critical / Warning / Suggestion organized by OWASP category (A01..A10) plus `architecture`, `fidelity`, and `integrity` non-OWASP buckets.
+- Final line, exactly: `**Verdict: APPROVE**` or `**Verdict: REQUEST_CHANGES**` or `**Verdict: BLOCKED**`.
+
+**Parent payload validation.** Before persisting, the parent context validates the fork output structure:
+- `## Deterministic Analysis` section present.
+- `## LLM Semantic Review` section present.
+- Final line matches regex `^\*\*Verdict: (APPROVE|REQUEST_CHANGES|BLOCKED)\*\*$`.
+
+**Malformed-payload handling.** On any of the above checks failing, the parent persists what it received with an explicit `[INCOMPLETE]` marker prepended to the report, and emits `verdict=BLOCKED` to `review-gate.sh`. Fork output untrustworthy → BLOCKED. The bats fixture covers this case explicitly (mirrors E65-S2 EC-9).
+
+**Parent write to FR-402 locked path.** The parent context writes the rendered report to `docs/implementation-artifacts/security-review-E<NN>-S<NNN>.md` per FR-402 naming convention. The path is **locked**: `security-review-{story_key}.md` — no slug, no date suffix.
+
+**Re-run handling.** Parent **overwrites** the existing review file on re-run (latest verdict wins). No append, no version-suffix. The `review-gate.sh` row update is the source of truth for verdict history if needed.
+
+**Gate row update.** Parent invokes the individual gate update (single-line form): `review-gate.sh update --story "{story_key}" --gate "Security Review" --verdict "{PASSED|FAILED}"`. Equivalent multi-line form for readability:
+
+```bash
+${CLAUDE_PLUGIN_ROOT}/scripts/review-gate.sh update \
+  --story "{story_key}" \
+  --gate "Security Review" \
+  --verdict "{PASSED|FAILED}"
+```
+
+Mapping per Phase 5 table. Confirm exit code 0.
+
+**Composite review gate check.** After the row update, parent invokes the composite check informationally:
+
+```bash
+${CLAUDE_PLUGIN_ROOT}/scripts/review-gate.sh review-gate-check --story "{story_key}"
+```
+
+Capture stdout for the `Review Gate: COMPLETE|PENDING|BLOCKED` summary (per ADR-054). Do NOT halt on non-zero exit. Sprint-status.yaml may be out of sync — surface a hint to run `/gaia-sprint-status`.
+
+**Fork allowlist sanity.** The frontmatter `allowed-tools` MUST remain exactly `[Read, Grep, Glob, Bash]`. The `evidence-judgment-parity.bats` AC1 assertion catches any post-merge regression that adds Write or Edit.
+
+### Phase 7 — Finalize
+
+- Surface the verdict to the orchestrator per ADR-063 (mandatory verdict surfacing).
+- Persist findings to the per-skill checkpoint via `checkpoint.sh write` (already invoked in Phase 3A for the cache; final state recorded via the standard `finalize.sh` hook).
+- The Phase 3A artifact is cached for the next run by the `.cache/{cache_key}.json` write performed in Phase 3A.
 
 ## References
 
@@ -206,9 +316,14 @@ Check code changes against each OWASP category:
 - ADR-041 — Native Execution Model via Claude Code Skills + Subagents + Plugins + Hooks.
 - ADR-042 — Scripts-over-LLM for Deterministic Operations.
 - ADR-045 — Review Gate via Sequential `context: fork` Subagents.
+- ADR-054 — Composite Review Gate.
 - ADR-063 — Subagent Dispatch Contract — Mandatory Verdict Surfacing.
 - ADR-064 — Threat-Model Context Plumbing for Security Skills.
 - ADR-067 — YOLO Mode Contract — Consistent Non-Interactive Behavior.
+- ADR-074 — Frontmatter Model Pin for Determinism.
+- ADR-075 — Review-Skill Evidence/Judgment Split.
+- FR-DEJ-1..12, NFR-DEJ-1..4 — Evidence/Judgment functional and non-functional requirements (PRD §4.37).
+- FR-402 — Locked review-file naming convention (`security-review-{story_key}.md`).
 
 ## Finalize
 

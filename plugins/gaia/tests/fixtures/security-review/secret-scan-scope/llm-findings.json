@@ -1,0 +1,11 @@
+{
+  "findings": [
+    {
+      "category": "A02",
+      "severity": "Critical",
+      "file": "src/config.ts",
+      "line": 12,
+      "message": "Hardcoded API key in production config path; high-confidence gitleaks rule cannot be downgraded by LLM."
+    }
+  ]
+}

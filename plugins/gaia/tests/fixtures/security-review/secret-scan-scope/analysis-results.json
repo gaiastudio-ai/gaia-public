@@ -1,0 +1,33 @@
+{
+  "schema_version": "1.0",
+  "story_key": "E99-EC2",
+  "skill": "gaia-security-review",
+  "model": "claude-opus-4-7",
+  "model_temperature": 0,
+  "tool_versions": {
+    "gitleaks": "8.18.0"
+  },
+  "file_hashes": {
+    "src/config.ts": "ec02beef"
+  },
+  "checks": [
+    {
+      "name": "gitleaks",
+      "scope": "file",
+      "scope_note": "File List + working tree (NOT git history)",
+      "cli_flags": ["--no-banner", "--source=.", "--no-git"],
+      "status": "passed",
+      "findings": [
+        {
+          "file": "src/config.ts",
+          "line": 12,
+          "severity": "high",
+          "rule": "generic-api-key",
+          "rule_confidence": "high",
+          "message": "Working-tree finding only; git-history scan disabled per --no-git flag (EC-2 scope discipline)",
+          "blocking": true
+        }
+      ]
+    }
+  ]
+}

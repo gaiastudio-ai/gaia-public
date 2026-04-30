@@ -1,0 +1,23 @@
+{
+  "schema_version": "1.0",
+  "story_key": "E99-EC3",
+  "skill": "gaia-security-review",
+  "model": "claude-opus-4-7",
+  "model_temperature": 0,
+  "tool_versions": {
+    "npm-audit": "10.5.0"
+  },
+  "advisory_db_fingerprint": "sha256:advisorydb-2026-04-30-v1",
+  "file_hashes": {
+    "package.json": "ec03dead"
+  },
+  "checks": [
+    {
+      "name": "npm-audit",
+      "scope": "project",
+      "status": "passed",
+      "findings": []
+    }
+  ],
+  "fixture_note": "Re-running this fixture with advisory_db_fingerprint=sha256:advisorydb-2026-05-01-v2 must miss the cache and trigger re-run (EC-3)."
+}

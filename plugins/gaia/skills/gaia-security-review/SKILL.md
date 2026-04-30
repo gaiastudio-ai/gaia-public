@@ -61,6 +61,8 @@ Mismatched stack name (vocabulary drift between `load-stack-persona.sh` output a
 
 ## Severity Rubric
 
+> Severity rubric format defined in shared skill `gaia-code-review-standards`. Per-skill examples below conform to this format.
+
 The LLM Phase 3B review applies the rubric below. Findings are organized by OWASP Top 10 category. Coverage targets the five categories most likely to surface in pre-merge review: **A01 Broken Access Control**, **A02 Cryptographic Failures**, **A03 Injection**, **A05 Security Misconfiguration**, **A07 Identification & Authentication Failures**. Other OWASP categories (A04, A06, A08, A09, A10) are still in scope; the rubric below seeds disambiguation for the high-frequency tiers.
 
 The category+severity sets MUST match across two runs of identical inputs (NFR-DEJ-2 determinism contract); textual message variation is allowed. Category+severity divergence escalates as a model-pin or temperature regression.

@@ -71,6 +71,8 @@ Mismatched stack name (vocabulary drift between `load-stack-persona.sh` output a
 
 ## Severity Rubric
 
+> Severity rubric format defined in shared skill `gaia-code-review-standards`. Per-skill examples below conform to this format.
+
 The LLM Review Phase 3B applies the rubric below. Findings are organized by automation category. Coverage targets the four highest-frequency categories: **missing fixture**, **untestable assertion**, **flaky-prone pattern**, **unmocked external dep**. Other categories (missing teardown, missing test-data factory, snapshot test without descriptive name, missing parameterized tests) seed Warning/Suggestion-tier examples below.
 
 The category+severity sets MUST match across two runs of identical inputs (NFR-DEJ-2 determinism contract); textual message variation is allowed. Category+severity divergence escalates as a model-pin or temperature regression.

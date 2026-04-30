@@ -59,6 +59,8 @@ The table is authoritative for Phase 3A toolkit selection. Phase 3A scope per FR
 
 ## Severity Rubric
 
+> Severity rubric format defined in shared skill `gaia-code-review-standards`. Per-skill examples below conform to this format.
+
 The LLM Phase 3B review applies the rubric below. Findings outside `correctness` and `readability` are out-of-scope for this skill (security → `gaia-security-review`, performance → `gaia-performance-review`, etc.).
 
 ### Critical

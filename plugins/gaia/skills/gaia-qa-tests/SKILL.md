@@ -62,6 +62,8 @@ Mismatched stack name (vocabulary drift between `load-stack-persona.sh` output a
 
 ## Severity Rubric
 
+> Severity rubric format defined in shared skill `gaia-code-review-standards`. Per-skill examples below conform to this format.
+
 The LLM Phase 3B review applies the rubric below. Findings are organized by QA category. Coverage targets the four highest-frequency categories: **missing AC coverage**, **weak assertion**, **brittle selector**, **untested error path**. Other QA categories (over-coverage, FR-traceability gaps, malformed AC text) seed Suggestion-tier examples below.
 
 The category+severity sets MUST match across two runs of identical inputs (NFR-DEJ-2 determinism contract); textual message variation is allowed. Category+severity divergence escalates as a model-pin or temperature regression.

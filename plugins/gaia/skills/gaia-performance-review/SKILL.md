@@ -68,6 +68,8 @@ The table is authoritative for Phase 3A toolkit selection. Phase 3A scope per FR
 
 ## Severity Rubric
 
+> Severity rubric format defined in shared skill `gaia-code-review-standards`. Per-skill examples below conform to this format.
+
 The LLM Phase 3B review applies the rubric below. Findings are organized by performance category (`n+1`, `complexity`, `bundle`, `memory`, `blocking-io`, `index-hint`). The category+severity sets MUST match across two runs of identical inputs (NFR-DEJ-2 determinism contract); textual message variation is allowed. Category+severity divergence escalates as a model-pin or temperature regression.
 
 ### Critical

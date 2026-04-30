@@ -1,0 +1,33 @@
+{
+  "schema_version": "1.0",
+  "story_key": "E99-EC12",
+  "skill": "gaia-security-review",
+  "model": "claude-opus-4-7",
+  "model_temperature": 0,
+  "tool_versions": {
+    "gitleaks": "8.18.0"
+  },
+  "file_hashes": {
+    "src/constants.ts": "ec12cafe"
+  },
+  "checks": [
+    {
+      "name": "gitleaks",
+      "scope": "file",
+      "status": "passed",
+      "findings": [
+        {
+          "file": "src/constants.ts",
+          "line": 4,
+          "severity": "warning",
+          "rule": "high-entropy-string",
+          "rule_confidence": "low",
+          "literal_pattern": "hex-hash",
+          "literal_value_redacted": "<sha256 literal, 64 hex chars>",
+          "message": "Entropy heuristic flagged a fixed sha256 hash literal in constants file",
+          "blocking": false
+        }
+      ]
+    }
+  ]
+}

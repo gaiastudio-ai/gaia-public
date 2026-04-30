@@ -1,0 +1,21 @@
+{
+  "schema_version": "1.0",
+  "story_key": "E99-S102",
+  "skill": "gaia-security-review",
+  "model": "claude-opus-4-7",
+  "model_temperature": 0,
+  "tool_versions": {
+    "semgrep": "1.65.0"
+  },
+  "file_hashes": {
+    "src/large.ts": "cafe0001"
+  },
+  "checks": [
+    {
+      "name": "semgrep",
+      "scope": "project",
+      "status": "errored",
+      "error_reason": "Semgrep wall-clock timeout exceeded (>30s cap)"
+    }
+  ]
+}

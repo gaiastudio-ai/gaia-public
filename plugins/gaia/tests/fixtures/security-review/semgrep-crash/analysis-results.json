@@ -1,0 +1,22 @@
+{
+  "schema_version": "1.0",
+  "story_key": "E99-S101",
+  "skill": "gaia-security-review",
+  "model": "claude-opus-4-7",
+  "model_temperature": 0,
+  "tool_versions": {
+    "semgrep": "1.65.0",
+    "gitleaks": "8.18.0"
+  },
+  "file_hashes": {
+    "src/malformed.py": "deadbeef0001"
+  },
+  "checks": [
+    {
+      "name": "semgrep",
+      "scope": "file",
+      "status": "errored",
+      "error_reason": "Semgrep parse error: malformed source — unexpected EOF in src/malformed.py"
+    }
+  ]
+}

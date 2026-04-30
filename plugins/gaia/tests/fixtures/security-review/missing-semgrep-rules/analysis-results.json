@@ -1,0 +1,28 @@
+{
+  "schema_version": "1.0",
+  "story_key": "E99-EC9",
+  "skill": "gaia-security-review",
+  "model": "claude-opus-4-7",
+  "model_temperature": 0,
+  "tool_versions": {
+    "semgrep": "1.65.0"
+  },
+  "file_hashes": {
+    "src/example.ts": "ec09baba"
+  },
+  "checks": [
+    {
+      "name": "semgrep-registry",
+      "scope": "file",
+      "status": "passed",
+      "registry_packs": ["p/security-audit", "p/secrets"],
+      "findings": []
+    },
+    {
+      "name": "semgrep-custom",
+      "scope": "file",
+      "status": "skipped",
+      "skip_reason": "no Semgrep custom rules at .semgrep/"
+    }
+  ]
+}

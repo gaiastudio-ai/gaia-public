@@ -45,6 +45,35 @@ set -euo pipefail
 LC_ALL=C
 export LC_ALL
 
+# Canonical Usage block (E63-S12). Emitted to stdout for --help / -h so the
+# block can be piped to `grep`, `less`, etc. without merging stderr. Sibling
+# scripts (next-story-id.sh, generate-frontmatter.sh) emit Usage to stderr;
+# slugify.sh deliberately uses stdout because (a) Test Scenario #1 specifies
+# stdout containment and (b) the script's primary stdout payload (the slug)
+# is never produced when --help is the dispatch, so there is no stream
+# collision. The e2e AC2 defect-surface check uses `2>&1 | grep -i usage`
+# and accepts either stream.
+usage() {
+  cat <<'USAGE'
+Usage: slugify.sh --title <s>
+       slugify.sh --help | -h
+
+Convert a story title into a byte-deterministic filename slug. The slug is
+lowercased, non-alphanumeric bytes are replaced with `-`, runs of `-` are
+collapsed, and a leading or trailing `-` is trimmed. Non-ASCII bytes are
+dropped (deterministic policy — they are NOT transliterated).
+
+Options:
+  --title <s>    Title to slugify. If omitted, the first line of stdin is
+                 used instead.
+  --help, -h     Print this help block to stdout and exit 0.
+
+Exit codes:
+  0    success (including empty output for empty/all-non-alphanumeric input)
+  2    usage error (unknown flag, --title without a value)
+USAGE
+}
+
 # Argument parsing — only --title is supported, plus stdin fallback. We use a
 # simple `case` (not `getopts`) per the story Technical Notes.
 title=""
@@ -61,7 +90,7 @@ while [ $# -gt 0 ]; do
       shift 2
       ;;
     -h|--help)
-      sed -n '1,40p' "$0"
+      usage
       exit 0
       ;;
     *)

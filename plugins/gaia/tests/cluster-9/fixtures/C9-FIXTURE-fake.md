@@ -17,7 +17,7 @@ origin_ref: null
 depends_on: []
 blocks: []
 traces_to: []
-date: "2026-04-15"
+date: "1970-01-01"
 author: "Test Fixture"
 ---
 
@@ -26,7 +26,7 @@ author: "Test Fixture"
 > **Epic:** E28 — GAIA Native Conversion Program
 > **Priority:** P1
 > **Status:** review
-> **Date:** 2026-04-15
+> **Date:** 1970-01-01
 > **Author:** Test Fixture
 
 ## User Story

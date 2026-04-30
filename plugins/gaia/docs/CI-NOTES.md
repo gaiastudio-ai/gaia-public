@@ -97,3 +97,70 @@ than on the PR.
 - `plugins/gaia/scripts/bats-budget-watch.sh` — the wrapper script.
 - `plugins/gaia/tests/e45-s6-bats-budget-watch.bats` — the unit /
   black-box suite for the wrapper.
+
+## Cross-tree script-reference sweep linter (E28-S221)
+
+The plugin ships **two** bats trees, both exercised by CI:
+
+- `tests/` (legacy, 104 .bats files) — cluster-4-e2e, cluster-5-parity,
+  cluster-6-e2e, cluster-7-chain, cluster-8-sprint-cycle, and
+  skills-bats-tests jobs.
+- `plugins/gaia/tests/` (canonical, 194 .bats files) — `bats-tests`
+  (full suite via `run-with-coverage.sh`) and cluster-9-run-all-reviews.
+
+The two trees are **disjoint** (zero filename or relative-path overlap),
+hosting architecturally distinct surfaces (cluster parity / e2e vs
+plugin-internal unit). Both are intentionally kept in place — see
+E28-S221 for the path (a) consolidate vs (b) lint trade-off discussion.
+
+### Why the linter exists
+
+When a script is deleted from `plugins/gaia/scripts/` or
+`plugins/gaia/skills/*/scripts/`, an engineer can easily miss a stale
+reference in the other tree. E59-S3 finding #1 surfaced this exact
+gap: E59-S2 updated only `plugins/gaia/tests/` and missed two
+references under `gaia-public/tests/`. The sweep linter catches that
+class of regression at PR time.
+
+### What it checks
+
+`plugins/gaia/scripts/lint-bats-script-refs.sh` walks every `.bats`
+under `tests/` and `plugins/gaia/tests/`, extracts script references
+matching `plugins/gaia/scripts/<name>.sh` and
+`plugins/gaia/skills/<skill>/scripts/<name>.sh`, and verifies each one
+resolves to an existing file at the repo root. Stale references print
+one `STALE: <file>:<line> -> <path>` line to stdout and the linter
+exits 1. The script:
+
+- skips comment lines (`^\s*#...`).
+- skips heredoc bodies (e.g., `cat > ... <<EOS ... EOS`) so fixture
+  content embedded inside test setup does not produce false positives.
+- skips matches preceded by `$VAR/` so shell-variable rooted paths
+  (e.g., `$FIXTURE_ROOT/plugins/gaia/scripts/...`) do not register as
+  canonical repo-root references.
+- accepts `--ignore-pattern <regex>` (repeatable) for documented
+  fixture cases that intentionally reference non-existent scripts.
+
+### CI wiring
+
+The `bats-script-refs-lint` job in `.github/workflows/plugin-ci.yml`
+runs on every PR touching `plugins/gaia/**`. It is pure bash + awk
+(no bats install, no apt install) and completes in well under a
+second. Failure surfaces every stale reference at once so the author
+can fix them all in one push.
+
+### Local invocation
+
+```bash
+plugins/gaia/scripts/lint-bats-script-refs.sh --root .
+# or with allowlist
+plugins/gaia/scripts/lint-bats-script-refs.sh --root . \
+  --ignore-pattern "intentional-fixture"
+```
+
+### Related artifacts
+
+- `plugins/gaia/scripts/lint-bats-script-refs.sh` — the linter.
+- `plugins/gaia/tests/lint-bats-script-refs.bats` — the bats suite.
+- `gaia-public/.github/workflows/plugin-ci.yml` — the
+  `bats-script-refs-lint` job.

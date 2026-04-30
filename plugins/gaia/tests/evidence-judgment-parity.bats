@@ -18,6 +18,7 @@ REVIEW_SKILLS=(
   "skills/gaia-qa-tests/SKILL.md"
   "skills/gaia-test-automate/SKILL.md"
   "skills/gaia-test-review/SKILL.md"
+  "skills/gaia-performance-review/SKILL.md"
 )
 
 # --- assertion helpers ---

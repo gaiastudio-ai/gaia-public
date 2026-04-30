@@ -12,7 +12,9 @@ bats_require_minimum_version 1.5.0
 
 # Canonical consumer list — populated by E65-S2..S7 as each review skill migrates.
 # Each entry is the path (relative to plugins/gaia/) of the SKILL.md file.
-REVIEW_SKILLS=()
+REVIEW_SKILLS=(
+  "skills/gaia-code-review/SKILL.md"
+)
 
 # --- assertion helpers ---
 

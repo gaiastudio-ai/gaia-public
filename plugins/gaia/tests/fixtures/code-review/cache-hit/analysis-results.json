@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0",
+  "story_key": "E99-S5",
+  "skill": "gaia-code-review",
+  "model": "claude-opus-4-7",
+  "model_temperature": 0,
+  "tool_versions": {
+    "eslint": "9.0.0",
+    "prettier": "3.2.0",
+    "tsc": "5.4.0"
+  },
+  "file_hashes": {
+    "src/cached.ts": "cafebabedeadbeef0001"
+  },
+  "checks": [
+    {
+      "name": "eslint",
+      "scope": "file",
+      "status": "passed",
+      "findings": []
+    },
+    {
+      "name": "prettier",
+      "scope": "file",
+      "status": "passed",
+      "findings": []
+    },
+    {
+      "name": "tsc",
+      "scope": "project",
+      "status": "passed",
+      "findings": []
+    }
+  ]
+}

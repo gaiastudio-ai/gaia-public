@@ -1,0 +1,138 @@
+#!/usr/bin/env bats
+# lint-bats-script-refs.bats — unit tests for plugins/gaia/scripts/lint-bats-script-refs.sh
+#
+# Story: E28-S221 — sweep linter that flags any bats test referencing a
+# deleted/deprecated script across BOTH gaia-public/tests/ and
+# gaia-public/plugins/gaia/tests/ trees.
+#
+# Public functions covered: extract_script_refs, lint_one_bats, main.
+#
+# AC mapping:
+#   AC3 — sweep linter exists; fails when any bats file references a script
+#         that no longer exists in plugins/gaia/scripts/ or
+#         plugins/gaia/skills/*/scripts/.
+
+load 'test_helper.bash'
+
+setup() {
+  common_setup
+  SCRIPT="$SCRIPTS_DIR/lint-bats-script-refs.sh"
+  # Build a fixture repo root with both tree shapes.
+  FIXTURE_ROOT="$TEST_TMP/repo"
+  mkdir -p "$FIXTURE_ROOT/plugins/gaia/scripts"
+  mkdir -p "$FIXTURE_ROOT/plugins/gaia/skills/example-skill/scripts"
+  mkdir -p "$FIXTURE_ROOT/plugins/gaia/tests"
+  mkdir -p "$FIXTURE_ROOT/tests/cluster-x-parity"
+  # Plant a couple of real scripts to satisfy clean-tree references.
+  cat > "$FIXTURE_ROOT/plugins/gaia/scripts/real-script.sh" <<'EOS'
+#!/bin/bash
+echo real
+EOS
+  cat > "$FIXTURE_ROOT/plugins/gaia/skills/example-skill/scripts/skill-script.sh" <<'EOS'
+#!/bin/bash
+echo skill
+EOS
+  # NOTE: chmod targets are spelled with the $FIXTURE_ROOT prefix on the
+  # same physical line (no newline before the path) so that any future
+  # linter pattern that anchors on a variable prefix can recognise these
+  # as fixture-local rather than repo-canonical references.
+  chmod +x "$FIXTURE_ROOT/plugins/gaia/scripts/real-script.sh" || true
+  chmod +x "$FIXTURE_ROOT/plugins/gaia/skills/example-skill/scripts/skill-script.sh" || true
+}
+teardown() { common_teardown; }
+
+@test "lint-bats-script-refs.sh: --help exits 0 and lists usage" {
+  run "$SCRIPT" --help
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Usage"* ]]
+  [[ "$output" == *"--root"* ]]
+}
+
+@test "lint-bats-script-refs.sh: clean tree exits 0 with no STALE lines" {
+  # A clean .bats in each tree referencing existing scripts only.
+  cat > "$FIXTURE_ROOT/plugins/gaia/tests/clean.bats" <<'EOS'
+#!/usr/bin/env bats
+@test "clean reference" {
+  run bash plugins/gaia/scripts/real-script.sh
+  [ "$status" -eq 0 ]
+}
+EOS
+  cat > "$FIXTURE_ROOT/tests/cluster-x-parity/clean-legacy.bats" <<'EOS'
+#!/usr/bin/env bats
+@test "clean legacy reference" {
+  bash "plugins/gaia/skills/example-skill/scripts/skill-script.sh"
+}
+EOS
+
+  run "$SCRIPT" --root "$FIXTURE_ROOT"
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"STALE:"* ]]
+}
+
+@test "lint-bats-script-refs.sh: planted stale reference -> exit 1 with STALE: line" {
+  cat > "$FIXTURE_ROOT/plugins/gaia/tests/stale.bats" <<'EOS'
+#!/usr/bin/env bats
+@test "stale reference" {
+  run bash plugins/gaia/scripts/deleted-script.sh
+  [ "$status" -eq 0 ]
+}
+EOS
+
+  run "$SCRIPT" --root "$FIXTURE_ROOT"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"STALE:"* ]]
+  [[ "$output" == *"deleted-script.sh"* ]]
+  [[ "$output" == *"stale.bats"* ]]
+}
+
+@test "lint-bats-script-refs.sh: stale reference in legacy tree also flagged" {
+  cat > "$FIXTURE_ROOT/tests/cluster-x-parity/stale-legacy.bats" <<'EOS'
+#!/usr/bin/env bats
+@test "legacy stale" {
+  bash "plugins/gaia/skills/example-skill/scripts/missing-skill-script.sh"
+}
+EOS
+
+  run "$SCRIPT" --root "$FIXTURE_ROOT"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"STALE:"* ]]
+  [[ "$output" == *"missing-skill-script.sh"* ]]
+  [[ "$output" == *"stale-legacy.bats"* ]]
+}
+
+@test "lint-bats-script-refs.sh: commented-out references are ignored" {
+  cat > "$FIXTURE_ROOT/plugins/gaia/tests/commented.bats" <<'EOS'
+#!/usr/bin/env bats
+# bash plugins/gaia/scripts/deleted-script.sh  -- legacy comment, do not flag
+@test "no-op" {
+  :
+}
+EOS
+
+  run "$SCRIPT" --root "$FIXTURE_ROOT"
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"STALE:"* ]]
+}
+
+@test "lint-bats-script-refs.sh: --ignore-pattern suppresses matching stale ref" {
+  cat > "$FIXTURE_ROOT/plugins/gaia/tests/stale-but-allowlisted.bats" <<'EOS'
+#!/usr/bin/env bats
+@test "allowlisted stale" {
+  bash plugins/gaia/scripts/intentional-fixture.sh
+}
+EOS
+
+  # Without --ignore-pattern: should fail.
+  run "$SCRIPT" --root "$FIXTURE_ROOT"
+  [ "$status" -eq 1 ]
+
+  # With --ignore-pattern matching the script name: should pass.
+  run "$SCRIPT" --root "$FIXTURE_ROOT" --ignore-pattern "intentional-fixture"
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"STALE:"* ]]
+}
+
+@test "lint-bats-script-refs.sh: missing --root errors out gracefully" {
+  run "$SCRIPT" --root "$TEST_TMP/does-not-exist"
+  [ "$status" -ne 0 ]
+}

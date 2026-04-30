@@ -111,6 +111,25 @@ jobs:
             tests/skills/validate-plan-structure.bats \
             tests/skills/conditional-check-hints.bats
 
+  bats-script-refs-lint:
+    # E28-S221 — sweep linter that catches bats files referencing scripts
+    # that have been deleted from plugins/gaia/scripts/ or
+    # plugins/gaia/skills/*/scripts/. Closes the cross-tree discoverability
+    # gap surfaced by E59-S3 finding #1: the gaia-public/tests/ and
+    # gaia-public/plugins/gaia/tests/ trees are disjoint (zero overlap)
+    # but both ship and run in CI, so a script deletion under the
+    # canonical scripts roots can leave dangling .bats references in
+    # either tree. The linter is pure bash + awk, sub-second runtime.
+    name: bats-script-refs-lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 2  # trivial scan — keep budget tight
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.2.2
+      - name: Run bats script-reference sweep linter
+        run: |
+          chmod +x plugins/gaia/scripts/lint-bats-script-refs.sh
+          plugins/gaia/scripts/lint-bats-script-refs.sh --root .
+
   cluster-4-e2e:
     name: cluster-4-e2e
     runs-on: ubuntu-latest

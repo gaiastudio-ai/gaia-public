@@ -615,21 +615,27 @@ frontmatter_value() {
   grep -q 'test-automate-plan' "$SKILL_MD"
 }
 
-@test "INFO-1: SKILL.md does NOT invoke review-gate.sh in analysis steps (3-6)" {
+@test "INFO-1: SKILL.md does NOT invoke review-gate.sh in analysis phases (Review Phase 3A-7)" {
   [ -f "$SKILL_MD" ]
-  # Phase 1 Steps (analysis phase, Steps 3-6) must NOT invoke review-gate.sh.
-  # Mentions in Mission/Critical Rules saying "does NOT invoke" are documentation,
-  # not invocations. We check that Steps 3-6 do not contain a review-gate.sh
-  # command invocation (recognizable by the shell code-fence pattern).
-  local steps_3_to_6
-  steps_3_to_6="$(awk '/^### Step 3/,/^### Step 7/' "$SKILL_MD")"
-  # No shell invocation of review-gate.sh in Steps 3-6
-  if echo "$steps_3_to_6" | grep -q 'review-gate\.sh update\|review-gate\.sh.*--story\|review-gate\.sh.*--gate\|review-gate\.sh.*--verdict'; then
-    echo "FAIL: review-gate.sh invocation found in Steps 3-6 (analysis phase should not finalize verdicts)"
+  # Per E65-S5 hybrid migration (AC-EC1), the seven Review Phases all execute
+  # INSIDE ADR-051 Phase 1 (fork-isolated analysis). The seven Review Phases
+  # MUST NOT invoke review-gate.sh; the deferred invocation lives in the
+  # "ADR-051 Approval Gate" section AFTER Review Phase 7.
+  #
+  # We extract the analysis block — from the first "### Phase 3A" header
+  # through the last header before "## ADR-051 Approval Gate" — and assert
+  # no review-gate.sh command invocation appears there. Mentions in Mission /
+  # Critical Rules saying "does NOT invoke" are documentation, not invocations,
+  # so they live OUTSIDE this analysis block.
+  local analysis_block
+  analysis_block="$(awk '/^### Phase 3A/,/^## ADR-051 Approval Gate/' "$SKILL_MD")"
+  # No shell invocation of review-gate.sh update inside the analysis block.
+  if echo "$analysis_block" | grep -q 'review-gate\.sh update\|review-gate\.sh.*--story\|review-gate\.sh.*--gate\|review-gate\.sh.*--verdict'; then
+    echo "FAIL: review-gate.sh invocation found in Review Phases 3A-7 (analysis phases should not finalize verdicts)"
     return 1
   fi
-  # Step 7 is the Approval Gate (E35-S2): it records the user's verdict via
-  # review-gate.sh update --plan-id. This is correct — it is the parent skill's
-  # approval wiring, not the fork-context analysis. The fork-context isolation
-  # boundary is Steps 3-6 (checked above).
+  # The composite review-gate-check (ADR-054, informational) IS allowed in the
+  # Approval Gate section — that section is the parent-context approval wiring,
+  # not the fork-context analysis. The fork-context isolation boundary is
+  # Review Phases 3A-7 (checked above).
 }

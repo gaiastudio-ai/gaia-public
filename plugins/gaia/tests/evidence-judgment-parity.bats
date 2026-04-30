@@ -67,6 +67,14 @@ assert_verdict_resolver_invocation() {
   grep -F 'verdict-resolver.sh' "$file" >/dev/null
 }
 
+# Assert SKILL.md contains the canonical cross-link to gaia-code-review-standards
+# for the shared severity-rubric format (E65-S8, AC2, AC-EC1, AC-EC7).
+# The canonical cross-link string is verbatim — drift from this string fails CI.
+assert_cross_link_present() {
+  local file="$1"
+  grep -F '> Severity rubric format defined in shared skill `gaia-code-review-standards`. Per-skill examples below conform to this format.' "$file" >/dev/null
+}
+
 # --- per-consumer test loop ---
 
 @test "parity: allowed-tools allowlist == [Read, Grep, Glob, Bash]" {
@@ -111,6 +119,15 @@ assert_verdict_resolver_invocation() {
   fi
   for entry in "${REVIEW_SKILLS[@]}"; do
     assert_verdict_resolver_invocation "$BATS_TEST_DIRNAME/../$entry"
+  done
+}
+
+@test "parity: cross-link to gaia-code-review-standards rubric format present" {
+  if [ "${#REVIEW_SKILLS[@]}" -eq 0 ]; then
+    skip "no consumers registered yet — parity not enforceable"
+  fi
+  for entry in "${REVIEW_SKILLS[@]}"; do
+    assert_cross_link_present "$BATS_TEST_DIRNAME/../$entry"
   done
 }
 

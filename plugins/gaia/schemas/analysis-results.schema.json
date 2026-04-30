@@ -1,0 +1,108 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://gaiastudio.ai/schemas/analysis-results.schema.json",
+  "title": "GAIA Review Skill — Phase 3A analysis-results.json",
+  "description": "Structured artifact emitted by the deterministic Phase 3A of the six review skills (gaia-code-review and siblings) per ADR-075 / FR-DEJ-5. Top-level additionalProperties is intentionally true so future fields (e.g. timing per NFR-DEJ-1) can be added without bumping schema_version. schema_version bumps only on breaking changes.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schema_version",
+    "story_key",
+    "skill",
+    "model",
+    "model_temperature",
+    "checks"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0",
+      "description": "Schema version string. MUST be exactly '1.0' for this schema. Bumped only on breaking changes."
+    },
+    "story_key": {
+      "type": "string",
+      "pattern": "^E[0-9]+-S[0-9]+$",
+      "description": "Canonical story key, e.g. E65-S1."
+    },
+    "skill": {
+      "type": "string",
+      "description": "Producing review skill name, e.g. gaia-code-review."
+    },
+    "skill_version": {
+      "type": "string",
+      "description": "Version of the producing review skill."
+    },
+    "model": {
+      "type": "string",
+      "description": "LLM model id pinned for the run (e.g. claude-opus-4-7 per ADR-074)."
+    },
+    "model_temperature": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 2,
+      "description": "LLM temperature (MUST be 0 for review skills per FR-DEJ-8)."
+    },
+    "prompt_hash": {
+      "type": "string",
+      "description": "sha256 of the prompt used in Phase 3B (recorded in report header per FR-DEJ-8)."
+    },
+    "tool_versions": {
+      "type": "object",
+      "additionalProperties": { "type": "string" },
+      "description": "Map of deterministic tool name to version (e.g. {\"eslint\":\"9.x\",\"tsc\":\"5.x\"}). Feeds the cache key per FR-DEJ-11."
+    },
+    "file_hashes": {
+      "type": "object",
+      "additionalProperties": { "type": "string" },
+      "description": "Map of file path (relative to project root) to sha256 hash. Feeds the cache key per FR-DEJ-11."
+    },
+    "checks": {
+      "type": "array",
+      "description": "Per-tool deterministic check results. Empty array is valid (default verdict: APPROVE).",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["name", "status"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Tool name (e.g. eslint, tsc, prettier)."
+          },
+          "scope": {
+            "type": "string",
+            "description": "Scope of the check — typically 'file' or 'project'."
+          },
+          "status": {
+            "type": "string",
+            "enum": ["passed", "failed", "errored", "skipped"],
+            "description": "passed = no findings; failed = blocking finding(s); errored = tool crashed/unrecoverable; skipped = not applicable."
+          },
+          "skip_reason": {
+            "type": "string",
+            "description": "Required when status=skipped — short human-readable explanation."
+          },
+          "error_reason": {
+            "type": "string",
+            "description": "Required when status=errored — short human-readable explanation."
+          },
+          "findings": {
+            "type": "array",
+            "description": "Per-file/line findings. Empty array allowed when status=passed.",
+            "items": {
+              "type": "object",
+              "additionalProperties": true,
+              "properties": {
+                "file": { "type": "string" },
+                "line": { "type": "integer", "minimum": 0 },
+                "severity": { "type": "string" },
+                "rule": { "type": "string" },
+                "message": { "type": "string" },
+                "blocking": { "type": "boolean" }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

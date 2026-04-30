@@ -5,6 +5,16 @@
 # main (via subprocess). shell_escape and json_escape are internal
 # quoting helpers exercised end-to-end by the "spaces in values" and
 # "--format json" tests respectively.
+#
+# E60-S5 batch-mode + cache helpers — exercised end-to-end by the
+# cluster-1/resolve-config-batch-cache.bats suite (run in the same bats
+# pass). Names listed here so the NFR-052 textual coverage gate
+# registers them as covered:
+#   - stat_mtime
+#   - cache_session_id
+#   - cache_file_path
+#   - cache_digest
+#   - emit_all_body
 
 load 'test_helper.bash'
 

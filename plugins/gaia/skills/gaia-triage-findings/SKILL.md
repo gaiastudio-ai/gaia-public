@@ -3,7 +3,7 @@ name: gaia-triage-findings
 description: "Scan in-progress and completed story files for development findings and triage each into a new backlog story, an existing story, or dismiss. Produces new story files with complete frontmatter (15 required fields, status: backlog, sprint_id: null). Source story findings tables stay intact for idempotent re-triage. Done-story guard (FR-FITP-1) blocks ADD TO EXISTING mutations against status: done targets with an explicit override path recorded for retrospective review. GAIA-native replacement for the legacy triage-findings XML engine workflow."
 argument-hint: "[story-key?] [--override-done-story --user <u> --date <d> --finding <fid> --reason <r>]"
 allowed-tools: [Read, Write, Bash]
-version: "1.1.0"
+version: "1.2.0"
 ---
 
 ## Setup
@@ -28,6 +28,7 @@ This skill is the native Claude Code conversion of the legacy `_gaia/lifecycle/w
 - New backlog story files MUST use the canonical filename format `{story_key}-{story_title_slug}.md`.
 - All 15 required frontmatter fields must be populated: `template`, `version`, `used_by`, `key`, `title`, `epic`, `status`, `priority`, `size`, `points`, `risk`, `sprint_id`, `date`, `author`, and at minimum one of `depends_on`/`blocks`/`traces_to` (can be empty arrays).
 - **Done-Story Immutability Guard (FR-FITP-1):** Before any ADD TO EXISTING mutation, MUST invoke `scripts/triage-guard.sh check <target_story>`. If the target story has `status: done`, the guard halts with guidance to route through `/gaia-create-story` (new story) or `/gaia-add-feature` (change request) — zero writes to the done story. An explicit override path exists (`--override-done-story` with user, date, finding ID, reason) that records the override in the triage report with `retro_flag: true` so `/gaia-retro` surfaces it. Done stories are immutable institutional artifacts; silent mutation merges retro-blind regressions back into closed work.
+- **Reproduction Required (E28-S223):** Every finding suggesting a fix MUST carry a reproduction command (a runnable command + the expected failure) in its suggested-action column before it can be promoted via CREATE STORY or ADD TO EXISTING. Findings that lack a reproduction snippet MUST be classified as **DISMISS pending reproduction** with a clear "reproduction required" warning surfaced to the user. This rule traces back to the saved memory `feedback_reproduce_before_fix_stories.md` — stale triage findings have shaped fix-stories for non-existent failures (E28-S211 finding F2, attempted fix in E28-S214). The reproduction snippet, when present, MUST be embedded into the new story's Origin section by the `/gaia-create-story` spawn (see Step 4) so future readers can re-verify the failure before re-touching the code.
 
 ## Steps
 
@@ -73,6 +74,17 @@ Present recommendations and let the user confirm or override each decision:
 - **CREATE STORY** -- generate a new backlog story file
 - **ADD TO EXISTING** -- append finding to an existing story's tasks
 - **DISMISS** -- finding is not actionable or already resolved
+
+### Step 3a --- Reproduction Required Gate (E28-S223)
+
+Before any CREATE STORY or ADD TO EXISTING recommendation is finalized, the parser MUST inspect the finding's suggested-action column for a **reproduction command** — a runnable command (or short command sequence) that produces the failure described in the finding, plus the expected failure output.
+
+Decision matrix:
+
+- **Reproduction command present** in the suggested-action column: proceed with the recommendation (CREATE STORY or ADD TO EXISTING). Capture the reproduction snippet verbatim and pass it to Step 4 so the `/gaia-create-story` spawn embeds it in the new story's `## Origin` section. For ADD TO EXISTING, append the snippet to the target story's tasks alongside the finding text.
+- **Reproduction command absent**: reclassify the finding as **DISMISS pending reproduction**. Surface a clear `reproduction required: finding {finding_id} cannot be promoted without a runnable reproduction snippet` warning to the user. The user MAY override interactively by supplying a snippet on the spot — that snippet is then captured and the finding routes back through the normal CREATE STORY / ADD TO EXISTING path.
+
+Rationale: stale triage findings have repeatedly shaped fix-stories for failures that no longer reproduce (E28-S211 finding F2, attempted fix in E28-S214). The saved memory `feedback_reproduce_before_fix_stories.md` records this anti-pattern. The Reproduction Required gate is the structural fix — triage cannot encode hallucinated failures because every promoted finding carries a reproduction snippet that the next developer can run before re-touching the code.
 
 ### Step 3b --- Done-Story Guard (ADD TO EXISTING only, FR-FITP-1)
 
@@ -173,11 +185,11 @@ If validation fails (empty, null, shell-unsafe characters), halt with guidance. 
 ```
 If collision detected, halt with guidance to delete or rename before retry. Do not spawn the subagent.
 
-7. **Spawn `/gaia-create-story`:** invoke as a subagent with origin context:
+7. **Spawn `/gaia-create-story`:** invoke as a subagent with origin context AND the reproduction snippet captured at Step 3a (when present):
 ```
-/gaia-create-story {new_story_key} with origin="triage-findings" origin_ref="{finding_id}"
+/gaia-create-story {new_story_key} with origin="triage-findings" origin_ref="{finding_id}" reproduction="{reproduction_snippet}"
 ```
-The spawned `/gaia-create-story` populates the story frontmatter with `origin: "triage-findings"` and `origin_ref: "{finding_id}"` and produces the full elaboration (AC, tasks, test scenarios). The parent MUST NOT duplicate elaboration logic -- delegation is authoritative.
+The spawned `/gaia-create-story` populates the story frontmatter with `origin: "triage-findings"` and `origin_ref: "{finding_id}"`, embeds the reproduction snippet verbatim into the new story's `## Origin` section (under a "Reproduction" subsection or fenced code block), and produces the full elaboration (AC, tasks, test scenarios). When the reproduction argument is empty (Step 3a override path with user-supplied snippet not provided), the finding cannot reach this step — Step 3a routes it to DISMISS pending reproduction. The parent MUST NOT duplicate elaboration logic -- delegation is authoritative.
 
 8. **Post-spawn verification:** after the subagent completes, verify the story file exists and frontmatter is correct:
 ```bash

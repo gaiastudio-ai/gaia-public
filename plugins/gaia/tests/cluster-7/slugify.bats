@@ -143,3 +143,44 @@ teardown() { common_teardown; }
   run grep -E '^LC_ALL=C|^export LC_ALL' "$SCRIPT"
   [ "$status" -eq 0 ]
 }
+
+# ---------------------------------------------------------------------------
+# E63-S12 — canonical Usage block for --help / -h (replaces header-dump)
+# ---------------------------------------------------------------------------
+
+@test "E63-S12 AC1: --help stdout contains literal 'Usage:'" {
+  run "$SCRIPT" --help
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -q '^Usage:'
+}
+
+@test "E63-S12 AC1: --help stdout enumerates --title and --help flags" {
+  run "$SCRIPT" --help
+  [ "$status" -eq 0 ]
+  # Test scenario #3: at least 2 matches across --title and --help
+  local match_count
+  match_count=$(echo "$output" | grep -E -c -- '(--title|--help)')
+  [ "$match_count" -ge 2 ]
+}
+
+@test "E63-S12 AC2: -h emits same block as --help (byte-for-byte)" {
+  local short_out long_out
+  short_out="$("$SCRIPT" -h)"
+  long_out="$("$SCRIPT" --help)"
+  [ "$short_out" = "$long_out" ]
+}
+
+@test "E63-S12 AC3: --help enumerates exit code 0" {
+  run "$SCRIPT" --help
+  [ "$status" -eq 0 ]
+  # Help must mention exit code 0 (success).
+  echo "$output" | grep -E -q 'exit.*0|0.*success|Exit.*0'
+}
+
+@test "E63-S12 AC4: --help merged stderr contains literal 'Usage' (defect-surface guard)" {
+  # Mirrors gaia-public/plugins/gaia/tests/cluster-7/create-story-e2e.bats AC2
+  # defect-surface check: \`script --help 2>&1 | grep -i 'usage'\`. Once this
+  # passes, slugify.sh is no longer enumerated in that test's stderr defect list.
+  run bash -c "'$SCRIPT' --help 2>&1 | grep -i 'usage'"
+  [ "$status" -eq 0 ]
+}

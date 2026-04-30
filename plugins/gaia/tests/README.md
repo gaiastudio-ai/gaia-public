@@ -5,7 +5,27 @@ script in `plugins/gaia/scripts/`. It is the binding NFR-052 enforcement
 point — 100% of documented public functions in every foundation script are
 covered by at least one bats test.
 
-## Running the suite
+## Running tests
+
+The bats suite has two equivalent invocation paths. Either one runs the same
+tests against the same scripts — pick whichever matches your environment.
+
+### Canonical: `bun test:bats`
+
+Story Definition-of-Done blocks across the project reference `bun test:bats`
+as the canonical runner. Use this when `bun` is installed locally or when
+the project's `package.json` defines a `test:bats` script.
+
+```bash
+# Full suite (canonical phrasing used by story DoD blocks)
+bun test:bats
+```
+
+### Fallback: bare `bats <path>`
+
+When `bun` is unavailable (laptop without bun, container image without
+node tooling, transient install issue), invoke `bats` directly. This is the
+exact same runner the canonical path wraps — no behavior difference.
 
 ```bash
 # Full suite
@@ -17,6 +37,29 @@ bats plugins/gaia/tests/resolve-config.bats
 # With filter
 BATS_TEST_FILTER="happy path" bats plugins/gaia/tests/resolve-config.bats
 ```
+
+### CI vs local dev
+
+- **CI** runs the canonical path (or its underlying equivalent). The
+  `bats-tests` job in `.github/workflows/plugin-ci.yml` invokes
+  `plugins/gaia/scripts/bats-budget-watch.sh`, which wraps the same `bats`
+  binary the bare-bats fallback uses — so the assertions exercised on CI
+  and locally are bit-for-bit identical regardless of which entry point a
+  developer chose.
+- **Local dev** may use either path. Bare `bats <path>` is fully acceptable
+  when `bun` is not installed; no story DoD has ever required `bun` itself,
+  only that the bats suite passes.
+
+### Why story DoD blocks keep saying "bun test:bats"
+
+Story DoD templates intentionally retain the canonical `bun test:bats`
+phrasing rather than spelling out "bun test:bats or equivalent bats
+invocation" on every line. The justification: the canonical name is short,
+greppable across the corpus, and unambiguous about which test suite is
+meant. The bare-`bats` fallback documented above is the authoritative
+escape hatch when the canonical command is not runnable — story authors do
+NOT need to rewrite DoD lines, and reviewers should treat a green bare-
+`bats` run as satisfying any DoD line that says `bun test:bats`.
 
 ## Coverage wrapper
 

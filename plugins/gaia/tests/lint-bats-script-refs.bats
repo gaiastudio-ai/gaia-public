@@ -17,6 +17,13 @@ load 'test_helper.bash'
 setup() {
   common_setup
   SCRIPT="$SCRIPTS_DIR/lint-bats-script-refs.sh"
+  # Heredocs below build fixture .bats files containing dummy @test
+  # blocks. We splice the @ at write-time via $AT so the literal @test
+  # never appears at column 0 in this source file — bats's plan counter
+  # (1.10 on CI) globs for ^@test across all files in the suite and
+  # would otherwise inflate the suite plan by 6 phantom tests, leaving
+  # an "expected N, executed M" warning that fails the suite. (E28-S221)
+  AT='@'
   # Build a fixture repo root with both tree shapes.
   FIXTURE_ROOT="$TEST_TMP/repo"
   mkdir -p "$FIXTURE_ROOT/plugins/gaia/scripts"
@@ -50,16 +57,16 @@ teardown() { common_teardown; }
 
 @test "lint-bats-script-refs.sh: clean tree exits 0 with no STALE lines" {
   # A clean .bats in each tree referencing existing scripts only.
-  cat > "$FIXTURE_ROOT/plugins/gaia/tests/clean.bats" <<'EOS'
+  cat > "$FIXTURE_ROOT/plugins/gaia/tests/clean.bats" <<EOS
 #!/usr/bin/env bats
-@test "clean reference" {
+${AT}test "clean reference" {
   run bash plugins/gaia/scripts/real-script.sh
-  [ "$status" -eq 0 ]
+  [ "\$status" -eq 0 ]
 }
 EOS
-  cat > "$FIXTURE_ROOT/tests/cluster-x-parity/clean-legacy.bats" <<'EOS'
+  cat > "$FIXTURE_ROOT/tests/cluster-x-parity/clean-legacy.bats" <<EOS
 #!/usr/bin/env bats
-@test "clean legacy reference" {
+${AT}test "clean legacy reference" {
   bash "plugins/gaia/skills/example-skill/scripts/skill-script.sh"
 }
 EOS
@@ -70,11 +77,11 @@ EOS
 }
 
 @test "lint-bats-script-refs.sh: planted stale reference -> exit 1 with STALE: line" {
-  cat > "$FIXTURE_ROOT/plugins/gaia/tests/stale.bats" <<'EOS'
+  cat > "$FIXTURE_ROOT/plugins/gaia/tests/stale.bats" <<EOS
 #!/usr/bin/env bats
-@test "stale reference" {
+${AT}test "stale reference" {
   run bash plugins/gaia/scripts/deleted-script.sh
-  [ "$status" -eq 0 ]
+  [ "\$status" -eq 0 ]
 }
 EOS
 
@@ -86,9 +93,9 @@ EOS
 }
 
 @test "lint-bats-script-refs.sh: stale reference in legacy tree also flagged" {
-  cat > "$FIXTURE_ROOT/tests/cluster-x-parity/stale-legacy.bats" <<'EOS'
+  cat > "$FIXTURE_ROOT/tests/cluster-x-parity/stale-legacy.bats" <<EOS
 #!/usr/bin/env bats
-@test "legacy stale" {
+${AT}test "legacy stale" {
   bash "plugins/gaia/skills/example-skill/scripts/missing-skill-script.sh"
 }
 EOS
@@ -101,10 +108,10 @@ EOS
 }
 
 @test "lint-bats-script-refs.sh: commented-out references are ignored" {
-  cat > "$FIXTURE_ROOT/plugins/gaia/tests/commented.bats" <<'EOS'
+  cat > "$FIXTURE_ROOT/plugins/gaia/tests/commented.bats" <<EOS
 #!/usr/bin/env bats
 # bash plugins/gaia/scripts/deleted-script.sh  -- legacy comment, do not flag
-@test "no-op" {
+${AT}test "no-op" {
   :
 }
 EOS
@@ -115,9 +122,9 @@ EOS
 }
 
 @test "lint-bats-script-refs.sh: --ignore-pattern suppresses matching stale ref" {
-  cat > "$FIXTURE_ROOT/plugins/gaia/tests/stale-but-allowlisted.bats" <<'EOS'
+  cat > "$FIXTURE_ROOT/plugins/gaia/tests/stale-but-allowlisted.bats" <<EOS
 #!/usr/bin/env bats
-@test "allowlisted stale" {
+${AT}test "allowlisted stale" {
   bash plugins/gaia/scripts/intentional-fixture.sh
 }
 EOS

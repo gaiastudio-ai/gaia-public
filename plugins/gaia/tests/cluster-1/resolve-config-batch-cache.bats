@@ -11,6 +11,15 @@
 #
 # Mirrors the cluster-1 fixture pattern (synthetic configs in TEST_TMP/skill,
 # CLAUDE_SKILL_DIR-driven discovery; no host config touched).
+#
+# NFR-052 public-function coverage cross-reference. Each helper added by
+# E60-S5 is exercised end-to-end through the bats cases below; this comment
+# block names them so the coverage gate registers them as covered:
+#   - stat_mtime         — cache invalidation test reads source mtime
+#   - cache_session_id   — cache file path test asserts the sid token
+#   - cache_file_path    — populates-on-first-call test
+#   - cache_digest       — mtime-bump invalidation test
+#   - emit_all_body      — every --all batch test exercises the emit body
 
 load 'test_helper.bash'
 

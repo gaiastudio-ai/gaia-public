@@ -15,6 +15,7 @@ bats_require_minimum_version 1.5.0
 REVIEW_SKILLS=(
   "skills/gaia-code-review/SKILL.md"
   "skills/gaia-security-review/SKILL.md"
+  "skills/gaia-qa-tests/SKILL.md"
 )
 
 # --- assertion helpers ---

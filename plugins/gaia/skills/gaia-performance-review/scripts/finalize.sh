@@ -13,7 +13,7 @@ LC_ALL=C
 export LC_ALL
 
 SCRIPT_NAME="gaia-performance-review/finalize.sh"
-WORKFLOW_NAME="performance-review-anytime"
+WORKFLOW_NAME="performance-review"
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PLUGIN_SCRIPTS_DIR="$(cd "$SCRIPT_DIR/../../../scripts" && pwd)"

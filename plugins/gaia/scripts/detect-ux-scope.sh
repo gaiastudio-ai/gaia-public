@@ -181,7 +181,7 @@ if [ -n "$EPIC_KEY" ] && [ -r "$EPICS_FILE" ]; then
     $0 ~ "(^|[^A-Za-z0-9_])" key "([^A-Za-z0-9_]|$)" { in_block = 1; lines = 0; next }
     in_block {
       lines++
-      if (tolower($0) ~ /(tags|classification):.*\<(ux|ui|design)\>/) { print "HIT"; exit }
+      if (tolower($0) ~ /(tags|classification):.*(^|[^A-Za-z0-9])(ux|ui|design)([^A-Za-z0-9]|$)/) { print "HIT"; exit }
       if (lines > 30) { in_block = 0 }
     }
   ' "$EPICS_FILE" | grep -q HIT; then

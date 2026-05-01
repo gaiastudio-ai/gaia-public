@@ -8282,3 +8282,4 @@
 {"timestamp":"2026-04-30T14:55:02.303Z","event_type":"workflow_complete","workflow":"ci-setup","pid":73840}
 {"timestamp":"2026-04-30T14:55:02.567Z","event_type":"workflow_complete","workflow":"ci-setup","pid":73923}
 {"timestamp":"2026-04-30T14:55:02.738Z","event_type":"workflow_complete","workflow":"ci-setup","pid":73987}
+{"timestamp":"2026-05-01T07:07:45.361Z","event_type":"skill_invocation","workflow":"triage-findings","pid":61020}

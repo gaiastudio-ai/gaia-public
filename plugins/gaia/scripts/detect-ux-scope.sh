@@ -83,7 +83,7 @@ extract_frontmatter() {
 
 # Extract the body (everything after the closing `---` of frontmatter).
 # If no frontmatter is present, prints the whole file.
-extract_body() {
+_extract_body() {
   awk '
     BEGIN { state = 0 }
     /^---[[:space:]]*$/ {
@@ -111,7 +111,7 @@ frontmatter=$(extract_frontmatter "$STORY_FILE") || {
   exit 2
 }
 
-body=$(extract_body "$STORY_FILE")
+body=$(_extract_body "$STORY_FILE")
 
 # Epic key (used by rule #4). Optional — absent epic just skips rule #4.
 EPIC_KEY=$(printf '%s\n' "$frontmatter" \

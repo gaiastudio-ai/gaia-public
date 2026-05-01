@@ -55,3 +55,13 @@ When the story enters review status:
 - **Review preparation:** Ensure the story file has a complete Review Gate table with all 6 rows initialized to UNVERIFIED.
 - **Review scope:** Each review workflow examines a specific dimension — code quality, security, test coverage, test quality, performance, QA scenarios. The dev agent's self-review during DoD is not a substitute for these specialized reviews.
 - **Failure response:** If any review returns FAILED, the story returns to in-progress. Read the specific findings, plan targeted fixes, and re-enter the TDD cycle for those fixes only.
+
+## Post-Completion Gate Reasoning (SKILL.md Step 14)
+
+After the dev-story subagent reports `status=done`, the orchestrator must verify that a merge commit containing the story key actually exists on the target branch before accepting the done transition. This gate exists because two prior sprints (sprint-17 / E17-S1, sprint-25 / E28-S213) saw subagents report completion while never pushing or merging — sprints closed with unmerged code. Reason about this gate as follows:
+
+- **Gate purpose:** Trust-but-verify the subagent's self-reported `done`. The gate is a final integrity check, not a duplicate review.
+- **Promotion-chain dependency:** The gate runs `verify-pr-merged.sh {story_key} {target_branch}` where `{target_branch}` is the first promotion-chain environment from `ci_cd.promotion_chain[0].branch`. If `ci_cd.promotion_chain` is absent, the script exits 3 (skip) and the gate passes silently — projects without a configured promotion chain are not penalized.
+- **Word-boundary matching:** The script uses `\b{story_key}\b` regex anchors so `E20-S1` is not falsely matched by a merge commit referencing `E20-S19`. Matching is case-insensitive to tolerate squash-merge message rewrites.
+- **Recovery path:** On exit 2 (no merge commit found), the orchestrator re-runs Steps 10–13 (commit, push, create PR, wait for CI, merge) in the main orchestrator context before advancing the story to `done`. Do not bypass the gate by hand-editing status — the gate exists precisely to catch the bypass case.
+- **Sequencing invariant:** Step 14 runs BEFORE Step 16 (Auto-Reviews / YOLO). A story can never reach the auto-review aggregator without a verified merge commit on the target branch.

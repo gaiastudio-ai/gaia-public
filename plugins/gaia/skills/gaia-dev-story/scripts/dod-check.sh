@@ -89,16 +89,21 @@ _check_command() {
   # `command -v test` returns the builtin and never the project script.
   cmd_path="$(type -P "$cmd" 2>/dev/null || true)"
   if [ -z "$cmd_path" ] || [ ! -f "$cmd_path" ] || [ ! -x "$cmd_path" ]; then
-    _emit_row "$item" "PASSED" "skipped: no '$cmd' command on PATH"
+    # E64-S2 AC1/AC2: SKIPPED is the canonical "nothing to verify" status.
+    # Emitting PASSED here historically masked the absence of a real check.
+    _emit_row "$item" "SKIPPED" "no '$cmd' command on PATH"
     return 0
   fi
   # Skip the system POSIX `test` binary (`/bin/test`, `/usr/bin/test`) —
   # running it with no args exits 1 and is never a project test runner.
   # Without this guard `_check_command "tests" "test"` would always FAIL
   # on macOS / Linux dev machines that lack a project-local `test` wrapper.
+  # E64-S2 AC1: emit SKIPPED (not PASSED) so the row reflects "no test
+  # runner detected" defensively, in case any caller routes the `tests`
+  # check through `_check_command` instead of `_check_tests`.
   case "$cmd_path" in
     /bin/test|/usr/bin/test|/usr/local/bin/test)
-      _emit_row "$item" "PASSED" "skipped: '$cmd' resolves to system POSIX builtin ($cmd_path)"
+      _emit_row "$item" "SKIPPED" "'$cmd' resolves to system POSIX builtin ($cmd_path) — no test runner detected"
       return 0
       ;;
   esac
@@ -252,18 +257,29 @@ _check_subtasks() {
     _emit_row "subtasks" "PASSED" "skipped: STORY_FILE unset"
     return 0
   fi
-  # E64-S1 AC2: only count `- [ ]` items inside the `## Tasks / Subtasks`
-  # section. Unchecked items in the `## Definition of Done` section
-  # (e.g., "PR merged to staging" pre-merge) and the `## Acceptance
-  # Criteria` section are intentionally excluded — they are not subtasks
-  # and reflect intentional pre-merge state.
+  # E64-S1 AC2 / E64-S2 AC3: only count `- [ ]` items inside the
+  # `## Tasks / Subtasks` section. Unchecked items in `## Definition of
+  # Done` (e.g., "PR merged to staging" pre-merge) and `## Acceptance
+  # Criteria` are intentionally excluded — they are not subtasks and
+  # reflect intentional pre-merge state.
+  #
+  # Heading match is anchored: literal `## ` prefix + the words
+  # "tasks / subtasks" with arbitrary case and tolerant of trailing
+  # whitespace. Lowercase-normalize the line, strip trailing whitespace,
+  # then compare for exact equality with `## tasks / subtasks`. Any other
+  # `^## ` line closes the section. Avoids the legacy fuzzy / case-
+  # sensitive `==` comparison that silently dropped sections like
+  # `## tasks / subtasks` or `## Tasks / Subtasks   ` (story scenario 4).
   local unchecked
   unchecked="$(awk '
     BEGIN { in_section = 0; count = 0 }
     {
-      if ($0 == "## Tasks / Subtasks") { in_section = 1; next }
-      if (in_section && $0 ~ /^## /) { in_section = 0 }
-      if (in_section && $0 ~ /^[[:space:]]*-[[:space:]]+\[ \]/) count++
+      line = $0
+      sub(/[[:space:]]+$/, "", line)
+      lower = tolower(line)
+      if (lower == "## tasks / subtasks") { in_section = 1; next }
+      if (in_section && line ~ /^## /) { in_section = 0 }
+      if (in_section && line ~ /^[[:space:]]*-[[:space:]]+\[ \]/) count++
     }
     END { print count }
   ' "$STORY_FILE")"

@@ -289,3 +289,97 @@ EOF
   STORY_FILE="$TEST_TMP/story.md" run "$DOD_CHECK"
   [[ "$output" == *"item: subtasks, status: FAILED"* ]]
 }
+
+# ---------------------------------------------------------------------------
+# E64-S2 / AC1 — `/bin/test` resolution must emit SKIPPED, never PASSED-skipped
+# ---------------------------------------------------------------------------
+
+@test "dod-check (E64-S2 AC1): tests row emits SKIPPED when only system /bin/test is on PATH" {
+  # Story-file scenario 2: host where `/bin/test` is on PATH but no project
+  # signal exists. The row MUST be SKIPPED with the canonical reason — never
+  # FAILED, and not silently masked as PASSED with a "skipped" output blurb.
+  _stub "build" 0 "build ok"
+  _stub "lint"  0 "lint ok"
+  rm -f "$STUB_BIN/test"  # ensure no project-local `test` wrapper
+  # Belt-and-braces: drop config / package.json / tests if a previous run leaked
+  rm -rf config package.json tests
+  run "$DOD_CHECK"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"item: tests, status: SKIPPED"* ]]
+  [[ "$output" == *"no test runner detected"* ]]
+  [[ "$output" != *"item: tests, status: FAILED"* ]]
+  [[ "$output" != *"item: tests, status: PASSED"* ]]
+}
+
+# ---------------------------------------------------------------------------
+# E64-S2 / AC3 — subtask scan tolerates mixed-case heading + trailing whitespace
+# ---------------------------------------------------------------------------
+
+@test "dod-check (E64-S2 AC3): subtask scan detects mixed-case '## tasks / subtasks' heading" {
+  # Story scenario 4: heading uses lowercase. Without case-insensitive
+  # matching the section is missed entirely and unchecked items inside it
+  # are silently ignored, producing a false PASSED. To prove the section is
+  # actually detected, the fixture has an UNCHECKED box inside the lowercase
+  # section — the scan must therefore report FAILED.
+  _stub "build" 0 "build ok"
+  _stub "test"  0 "tests ok"
+  _stub "lint"  0 "lint ok"
+  cat > story.md <<'EOF'
+---
+key: "E64-S2"
+status: in-progress
+---
+
+## tasks / subtasks
+
+- [x] Task 1
+- [ ] Task 2 unfinished
+
+## Definition of Done
+
+- [x] All tests pass
+EOF
+  STORY_FILE="$TEST_TMP/story.md" run "$DOD_CHECK"
+  [[ "$output" == *"item: subtasks, status: FAILED"* ]]
+  [[ "$output" != *"item: subtasks, status: PASSED"* ]]
+}
+
+@test "dod-check (E64-S2 AC3): subtask scan tolerates trailing whitespace on heading" {
+  _stub "build" 0 "build ok"
+  _stub "test"  0 "tests ok"
+  _stub "lint"  0 "lint ok"
+  # Heading has trailing spaces. Same trick as the mixed-case test: place an
+  # UNCHECKED box inside the section so a "section missed entirely" bug
+  # would manifest as a false PASSED.
+  printf -- '---\nkey: "E64-S2"\nstatus: in-progress\n---\n\n## Tasks / Subtasks   \n\n- [x] Task 1\n- [ ] Task 2 unfinished\n\n## Definition of Done\n\n- [x] All tests pass\n' > story.md
+  STORY_FILE="$TEST_TMP/story.md" run "$DOD_CHECK"
+  [[ "$output" == *"item: subtasks, status: FAILED"* ]]
+  [[ "$output" != *"item: subtasks, status: PASSED"* ]]
+}
+
+@test "dod-check (E64-S2 AC3): mixed-case heading + unchecked DoD remains scoped to Tasks/Subtasks" {
+  # Mixed-case heading + only-checked Tasks/Subtasks + unchecked DoD items.
+  # Even with the case-insensitive heading match in place, DoD unchecked
+  # boxes must still be excluded — guards against an over-broad fix.
+  _stub "build" 0 "build ok"
+  _stub "test"  0 "tests ok"
+  _stub "lint"  0 "lint ok"
+  cat > story.md <<'EOF'
+---
+key: "E64-S2"
+status: in-progress
+---
+
+## Tasks / SUBTASKS
+
+- [x] Task 1
+- [x] Task 2
+
+## Definition of Done
+
+- [ ] PR merged to staging
+- [ ] CI green
+EOF
+  STORY_FILE="$TEST_TMP/story.md" run "$DOD_CHECK"
+  [[ "$output" == *"item: subtasks, status: PASSED"* ]]
+}

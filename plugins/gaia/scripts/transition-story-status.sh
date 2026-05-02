@@ -221,6 +221,42 @@ locate_story_file() {
     fi
   done
 
+  # E53-S231 — deduplicate canonical matches by realpath. After E53-S225
+  # introduced epic-grouped layout, top-level legacy filenames may exist as
+  # symlinks to the canonical epic-grouped path. Both resolve to the same
+  # inode, so they are not ambiguous — collapse them. Prefer the non-symlink
+  # (canonical) path when both forms appear.
+  if [ "${#canonical[@]}" -gt 1 ]; then
+    local dedup=()
+    local seen_realpaths=""
+    local rp
+    # Pass 1: prefer non-symlink entries.
+    for m in "${canonical[@]}"; do
+      [ -L "$m" ] && continue
+      rp=$(cd "$(dirname "$m")" && /bin/pwd -P)/$(basename "$m")
+      case "$seen_realpaths" in
+        *"|$rp|"*) ;;
+        *) dedup+=( "$m" ); seen_realpaths="${seen_realpaths}|$rp|" ;;
+      esac
+    done
+    # Pass 2: include symlinks only if their target wasn't already seen.
+    for m in "${canonical[@]}"; do
+      [ -L "$m" ] || continue
+      rp=$(cd "$(dirname "$m")" && /bin/pwd -P)/$(basename "$(readlink "$m" || echo "$m")")
+      # Use realpath via cd -P fallback
+      if command -v realpath >/dev/null 2>&1; then
+        rp=$(realpath "$m")
+      else
+        rp=$(cd "$(dirname "$m")" && cd "$(dirname "$(readlink "$m")")" 2>/dev/null && /bin/pwd -P)/$(basename "$(readlink "$m")")
+      fi
+      case "$seen_realpaths" in
+        *"|$rp|"*) ;;
+        *) dedup+=( "$m" ); seen_realpaths="${seen_realpaths}|$rp|" ;;
+      esac
+    done
+    canonical=( "${dedup[@]}" )
+  fi
+
   if [ "${#canonical[@]}" -eq 0 ]; then
     # Fall back to the only match if it has any frontmatter — keeps non-template
     # fixtures working while still rejecting truly-multiple ambiguous matches.

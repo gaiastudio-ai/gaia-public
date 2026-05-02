@@ -484,6 +484,13 @@ _locate_story_file() {
   if [ ${#canonical[@]} -eq 0 ]; then
     _die_not_found "story not found: $key"
   fi
+  # Prefer non-symlink when multiple match (post-E53-S225 transition shims).
+  for m in "${canonical[@]}"; do
+    if [ ! -L "$m" ]; then
+      STORY_FILE="$m"
+      return 0
+    fi
+  done
   STORY_FILE="${canonical[0]}"
 }
 

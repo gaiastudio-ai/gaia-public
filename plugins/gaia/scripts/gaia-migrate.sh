@@ -333,22 +333,86 @@ _migrate_templates() {
 }
 
 # ---------------------------------------------------------------------------
-# Subtask 4.2 — sidecars (AC3)
+# Subtask 4.2 — sidecars (AC3) + E28-S181 schema-drift detection
 # ---------------------------------------------------------------------------
+# v2 canonical sidecar frontmatter key allowlist. v2 sidecars currently use
+# plain markdown bodies with no frontmatter (per the current ADR set), so the
+# baseline is the empty list. Any frontmatter key found in a v1 sidecar that
+# is NOT in this allowlist is treated as schema drift and surfaces a
+# `manual follow-up: verify sidecar keys` note (E28-S181 / AC-EC5). Future
+# ADRs that ratchet a v2 sidecar schema MUST extend this list.
+V2_SIDECAR_CANONICAL_KEYS=()
+
+# _extract_frontmatter_keys <file>
+# Print each top-level YAML key found in the file's frontmatter block on its
+# own line. Returns silently (no output) if the file has no frontmatter.
+# Frontmatter is the block delimited by the first two `---` lines starting
+# at line 1. Indented (nested) keys are intentionally ignored — drift is
+# evaluated at the top-level key set only.
+_extract_frontmatter_keys() {
+  local file="$1"
+  [[ -r "$file" ]] || return 0
+  awk '
+    BEGIN { in_fm = 0; opened = 0 }
+    NR == 1 {
+      if ($0 == "---") { in_fm = 1; opened = 1; next }
+      else { exit }
+    }
+    in_fm && $0 == "---" { exit }
+    in_fm && /^[A-Za-z_][A-Za-z0-9_-]*:/ {
+      key = $0
+      sub(/:.*$/, "", key)
+      print key
+    }
+  ' "$file"
+}
+
+# _is_canonical_sidecar_key <key>
+# Return 0 if <key> is in V2_SIDECAR_CANONICAL_KEYS, 1 otherwise.
+_is_canonical_sidecar_key() {
+  local needle="$1" k
+  for k in "${V2_SIDECAR_CANONICAL_KEYS[@]:-}"; do
+    [[ "$k" == "$needle" ]] && return 0
+  done
+  return 1
+}
+
 _migrate_sidecars() {
   echo
   echo "=== migrate 4.2: _memory/*-sidecar/ ==="
-  local sidecar_count=0 file_count=0
+  local sidecar_count=0 file_count=0 drift_count=0
   if [[ -d "$PROJECT_ROOT/_memory" ]]; then
     while IFS= read -r -d '' dir; do
       sidecar_count=$((sidecar_count + 1))
-      local files
-      files=$(find "$dir" -maxdepth 1 -type f -name '*.md' 2>/dev/null | wc -l | tr -d ' ')
-      file_count=$((file_count + files))
+      while IFS= read -r -d '' file; do
+        file_count=$((file_count + 1))
+        # E28-S181: extract top-level frontmatter keys and diff against
+        # the v2 canonical allowlist. Files without frontmatter are silent.
+        local keys unknown_keys=() key
+        keys="$(_extract_frontmatter_keys "$file")"
+        [[ -z "$keys" ]] && continue
+        while IFS= read -r key; do
+          [[ -z "$key" ]] && continue
+          if ! _is_canonical_sidecar_key "$key"; then
+            unknown_keys+=("$key")
+          fi
+        done <<< "$keys"
+        if [[ ${#unknown_keys[@]} -gt 0 ]]; then
+          drift_count=$((drift_count + 1))
+          local rel_path="${file#$PROJECT_ROOT/}"
+          local joined
+          joined="$(IFS=,; printf '%s' "${unknown_keys[*]}")"
+          echo "  manual follow-up: verify sidecar keys ($rel_path): unknown keys: $joined"
+        fi
+      done < <(find "$dir" -maxdepth 1 -type f -name '*.md' -print0 2>/dev/null)
     done < <(find "$PROJECT_ROOT/_memory" -maxdepth 1 -mindepth 1 -type d -name '*-sidecar' -print0 2>/dev/null)
   fi
   echo "  $sidecar_count sidecar(s), $file_count .md file(s) verified"
-  echo "  v1 and v2 sidecar layouts match (per current ADR set) — no transformation needed"
+  if [[ $drift_count -gt 0 ]]; then
+    echo "  $drift_count drifted sidecar file(s) — manual follow-up required (see lines above)"
+  else
+    echo "  v1 and v2 sidecar layouts match (per current ADR set) — no transformation needed"
+  fi
   echo "  sidecars PASS"
 }
 

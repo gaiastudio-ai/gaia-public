@@ -197,10 +197,11 @@ STORY_STATUS_LOCK="${STORY_STATUS_LOCK:-${MEMORY_PATH}/.story-status.lock}"
 locate_story_file() {
   local key="$1"
   local pattern="${IMPLEMENTATION_ARTIFACTS}/${key}-*.md"
+  local epic_pattern="${IMPLEMENTATION_ARTIFACTS}/epic-*/stories/${key}-*.md"
 
   shopt -s nullglob
   # shellcheck disable=SC2206
-  local matches=( $pattern )
+  local matches=( $pattern $epic_pattern )
   shopt -u nullglob
 
   if [ "${#matches[@]}" -eq 0 ]; then

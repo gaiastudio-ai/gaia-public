@@ -65,7 +65,7 @@ for gate in "${GATES[@]}"; do
   # names this key. Many stories also ship companion review/qa/performance
   # files that share the glob but don't contain the story frontmatter.
   shopt -s nullglob
-  matches=( "$ARTIFACTS_DIR/${gate}-"*.md "$ARTIFACTS_DIR/${gate}.md" )
+  matches=( "$ARTIFACTS_DIR/${gate}-"*.md "$ARTIFACTS_DIR/${gate}.md" "$ARTIFACTS_DIR"/epic-*/stories/"${gate}-"*.md "$ARTIFACTS_DIR"/epic-*/stories/"${gate}.md" )
   shopt -u nullglob
   story_file=""
   for m in "${matches[@]}"; do

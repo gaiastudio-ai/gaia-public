@@ -81,9 +81,10 @@ for key in "${DEP_KEYS[@]}"; do
   [ -z "$key" ] && continue
 
   # Locate "<KEY>-*.md" under IMPL_DIR. Prefer first lexicographic match.
+  # Searches both flat layout and epic-grouped layout (epic-*/stories/).
   match=""
   if [ -d "$IMPL_DIR" ]; then
-    for cand in "$IMPL_DIR/${key}-"*.md; do
+    for cand in "$IMPL_DIR/${key}-"*.md "$IMPL_DIR"/epic-*/stories/"${key}-"*.md; do
       if [ -f "$cand" ]; then
         match="$cand"
         break

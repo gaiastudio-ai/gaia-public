@@ -109,7 +109,7 @@ Re-running `/gaia:gaia-migrate apply` on a project that is already on v2 (no v1 
 
 ## Plugin component discovery rules
 
-Claude Code auto-discovers plugin components at install time from conventional subdirectories under `plugins/gaia/`. The rules below are empirical (captured against Claude Code CLI `2.1.109` on 2026-04-15) and apply to any plugin authored in this marketplace, not just `gaia`. The full long-form writeup with source evidence lives in `docs/planning-artifacts/gaia-native-conversion-prereqs.md` §2.1.
+Claude Code auto-discovers plugin components at install time from conventional subdirectories under `plugins/gaia/`. The rules below are empirical (captured against Claude Code CLI `2.1.109` on 2026-04-15) and apply to any plugin authored in this marketplace, not just `gaia`. The full long-form writeup with source evidence lives in `docs/planning-artifacts/assessments/gaia-native-conversion-prereqs.md` §2.1.
 
 **Scanned subdirectories (defaults, relative to the plugin root):**
 

@@ -14,7 +14,7 @@ setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../.." && pwd)"
   PROJECT_ROOT="$(cd "$REPO_ROOT/.." && pwd)"
 
-  ARCH="$PROJECT_ROOT/docs/planning-artifacts/architecture.md"
+  ARCH="$PROJECT_ROOT/docs/planning-artifacts/architecture/architecture.md"
   MIGRATION="$REPO_ROOT/docs/migration-guide-v2.md"
   BROWNFIELD="$REPO_ROOT/plugins/gaia/skills/gaia-brownfield/SKILL.md"
 }

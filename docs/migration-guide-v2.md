@@ -371,9 +371,9 @@ are not in the deletion manifest.
 
 **References**
 
-- ADR-048 — Engine Deletion as Program-Closing Action (`docs/planning-artifacts/architecture.md:103`)
-- NFR-050 — Zero XML Engine Files (`docs/planning-artifacts/prd.md:1708`)
-- FR-328 — Engine Deletion (`docs/planning-artifacts/prd.md:1637`)
+- ADR-048 — Engine Deletion as Program-Closing Action (`docs/planning-artifacts/architecture/architecture.md:103`)
+- NFR-050 — Zero XML Engine Files (`docs/planning-artifacts/prd/prd.md:1708`)
+- FR-328 — Engine Deletion (`docs/planning-artifacts/prd/prd.md:1637`)
 - Story: E28-S126 — Delete workflow.xml engine, protocols, and `.resolved` config files
 
 ---
@@ -459,9 +459,9 @@ The migration this guide describes is the **end-user cutover** that retires the 
 
 ### Key references
 
-- **PRD §4.27** (`docs/planning-artifacts/prd.md`) — GAIA Native Conversion Program definition
-- **ADR-041** (`docs/planning-artifacts/architecture.md` §Decision Log) — Native execution model via Claude Code Skills + Subagents + Plugins + Hooks
-- **ADR-048** (`docs/planning-artifacts/architecture.md` §Decision Log) — Engine deletion as program-closing action
+- **PRD §4.27** (`docs/planning-artifacts/prd/prd.md`) — GAIA Native Conversion Program definition
+- **ADR-041** (`docs/planning-artifacts/architecture/architecture.md` §Decision Log) — Native execution model via Claude Code Skills + Subagents + Plugins + Hooks
+- **ADR-048** (`docs/planning-artifacts/architecture/architecture.md` §Decision Log) — Engine deletion as program-closing action
 - **NFR-049** (`prd.md`) — `CLAUDE.md` ≤50 lines after migration
 - **NFR-050** (`prd.md`) — Zero XML engine files in `gaia-public/plugins/gaia/` after migration
 

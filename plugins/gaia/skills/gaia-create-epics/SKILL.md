@@ -10,7 +10,7 @@ allowed-tools: [Read, Write, Edit, Grep, Glob, Bash, Agent]
 # later steps. Falls back to FULL_LOAD when an artifact lacks parseable
 # headings.
 discover_inputs: INDEX_GUIDED
-discover_inputs_target: "docs/planning-artifacts/prd.md, docs/planning-artifacts/architecture.md, docs/test-artifacts/test-plan.md"
+discover_inputs_target: "docs/planning-artifacts/prd/prd.md, docs/planning-artifacts/architecture/architecture.md, docs/test-artifacts/test-plan.md"
 ---
 
 ## Setup
@@ -24,20 +24,20 @@ discover_inputs_target: "docs/planning-artifacts/prd.md, docs/planning-artifacts
 
 ## Mission
 
-You are orchestrating the creation of an Epics and Stories document. The epic definition and story breakdown are delegated to the **architect** subagent (Theo) for technical decomposition and the **pm** subagent (Derek) for business prioritization and user story authoring. You load the PRD, architecture, test plan, and optional UX design, validate inputs, coordinate the multi-step flow, and write the output to `docs/planning-artifacts/epics-and-stories.md`.
+You are orchestrating the creation of an Epics and Stories document. The epic definition and story breakdown are delegated to the **architect** subagent (Theo) for technical decomposition and the **pm** subagent (Derek) for business prioritization and user story authoring. You load the PRD, architecture, test plan, and optional UX design, validate inputs, coordinate the multi-step flow, and write the output to `docs/planning-artifacts/epics/epics-and-stories.md`.
 
 This skill is the native Claude Code conversion of the legacy `_gaia/lifecycle/workflows/3-solutioning/create-epics-stories` workflow (brief Cluster 6, story P6-S3 / E28-S47). The step ordering, prompts, and output path are preserved verbatim from the legacy `instructions.xml` — do not restructure, re-prompt, or reorder.
 
 ## Critical Rules
 
-- A PRD MUST exist at `docs/planning-artifacts/prd.md` before starting. If missing, fail fast with "PRD not found at docs/planning-artifacts/prd.md — run /gaia-create-prd first."
-- An architecture document MUST exist at `docs/planning-artifacts/architecture.md` before starting. If missing, fail fast with "Architecture not found at docs/planning-artifacts/architecture.md — run /gaia-create-arch first."
+- A PRD MUST exist at `docs/planning-artifacts/prd/prd.md` before starting. If missing, fail fast with "PRD not found at docs/planning-artifacts/prd/prd.md — run /gaia-create-prd first."
+- An architecture document MUST exist at `docs/planning-artifacts/architecture/architecture.md` before starting. If missing, fail fast with "Architecture not found at docs/planning-artifacts/architecture/architecture.md — run /gaia-create-arch first."
 - The architecture document MUST contain a "## Review Findings Incorporated" section. If missing, fail fast with "Architecture review findings not found — run /gaia-create-arch first to complete adversarial review and architecture refinement."
 - A test plan MUST exist at `docs/test-artifacts/test-plan.md` before starting. This is an **enforced** quality gate (ADR-042), not advisory. The gate is checked by `scripts/setup.sh` via `validate-gate.sh test_plan_exists`. If missing, HALT with "test-plan.md not found — run /gaia-test-design first." The file must be non-empty — a zero-byte file is treated as missing.
 - Epic definition and technical decomposition are delegated to the `architect` subagent (Theo) via native Claude Code subagent invocation — do NOT inline Theo's persona into this skill body. If the architect subagent (E28-S21) is not available, fail with "architect subagent not available — install E28-S21" error.
 - Story authoring and business prioritization are delegated to the `pm` subagent (Derek) via native Claude Code subagent invocation — do NOT inline Derek's persona into this skill body. If the pm subagent (E28-S21) is not available, fail with "pm subagent not available — install E28-S21" error.
 - If either the `architect` or `pm` subagent is not registered, surface a clear subagent-missing error rather than silently falling back to inline persona content.
-- If `docs/planning-artifacts/epics-and-stories.md` already exists, warn the user: "An existing epics-and-stories document was found. Continuing will overwrite it. Confirm to proceed or abort." Do not silently overwrite.
+- If `docs/planning-artifacts/epics/epics-and-stories.md` already exists, warn the user: "An existing epics-and-stories document was found. Continuing will overwrite it. Confirm to proceed or abort." Do not silently overwrite.
 - Every story must have `depends_on` and `blocks` declarations — no circular dependencies.
 - Stories must be ordered by dependency topology first, then business priority.
 
@@ -52,9 +52,9 @@ This skill is the native Claude Code conversion of the legacy `_gaia/lifecycle/w
 > (`sed -n` between heading anchors). If any artifact lacks parseable
 > headings, fall back to FULL_LOAD for that file only.
 
-- Heading-scan `docs/planning-artifacts/prd.md` to build a section index of functional requirements.
+- Heading-scan `docs/planning-artifacts/prd/prd.md` to build a section index of functional requirements.
 - GATE: verify prd.md exists. If missing, HALT — run /gaia-create-prd first.
-- Heading-scan `docs/planning-artifacts/architecture.md` to build a section index of technical components.
+- Heading-scan `docs/planning-artifacts/architecture/architecture.md` to build a section index of technical components.
 - GATE: verify architecture.md contains a "## Review Findings Incorporated" section. If missing, HALT — run /gaia-create-arch first to complete adversarial review and architecture refinement.
 - Heading-scan `docs/test-artifacts/test-plan.md` for the risk-assessment section index (high-risk areas: revenue-critical, security-sensitive, complex logic). This file was already validated by `scripts/setup.sh` via the enforced quality gate. Section bodies are loaded on demand.
 - Heading-scan `docs/planning-artifacts/ux-design.md` if available for UI-flow / component-hierarchy / interaction-pattern / accessibility section anchors. Set `has_ux_design` flag.
@@ -63,7 +63,7 @@ This skill is the native Claude Code conversion of the legacy `_gaia/lifecycle/w
 
 ### Step 2 — Detect Mode
 
-- Check `docs/planning-artifacts/prd.md` header for "Mode: Brownfield".
+- Check `docs/planning-artifacts/prd/prd.md` header for "Mode: Brownfield".
 - If brownfield mode detected: set mode to brownfield. Stories must cover gap requirements ONLY — do NOT create stories for existing implemented features.
 - If no brownfield header: set mode to greenfield. Create stories for all features from the PRD.
 
@@ -119,7 +119,7 @@ Delegate to the **pm** subagent (Derek) via `agents/pm` to set business priority
 
 ### Step 8 — Generate Output
 
-Write the epics and stories document to `docs/planning-artifacts/epics-and-stories.md`. Each story formatted as:
+Write the epics and stories document to `docs/planning-artifacts/epics/epics-and-stories.md`. Each story formatted as:
 
 ```
 ### Story {epic-N}-{story-N}: {Title}
@@ -134,9 +134,9 @@ Write the epics and stories document to `docs/planning-artifacts/epics-and-stori
 ```
 
 > After artifact write: run open-question detection snippet
-> `!${CLAUDE_PLUGIN_ROOT}/scripts/detect-open-questions.sh docs/planning-artifacts/epics-and-stories.md`
+> `!${CLAUDE_PLUGIN_ROOT}/scripts/detect-open-questions.sh docs/planning-artifacts/epics/epics-and-stories.md`
 
-> `!scripts/write-checkpoint.sh gaia-create-epics 8 project_name="$PROJECT_NAME" prd_version="$PRD_VERSION" epic_count="$EPIC_COUNT" story_count="$STORY_COUNT" --paths docs/planning-artifacts/epics-and-stories.md`
+> `!scripts/write-checkpoint.sh gaia-create-epics 8 project_name="$PROJECT_NAME" prd_version="$PRD_VERSION" epic_count="$EPIC_COUNT" story_count="$STORY_COUNT" --paths docs/planning-artifacts/epics/epics-and-stories.md`
 
 ### Step 9 — Val Auto-Fix Loop (E44-S2 / ADR-058)
 
@@ -145,17 +145,17 @@ Write the epics and stories document to `docs/planning-artifacts/epics-and-stori
 
 **Guards (run before invocation):**
 
-- Artifact-existence guard (AC-EC3): if not exists `docs/planning-artifacts/epics-and-stories.md` -> skip Val auto-review and exit (no Val invocation, no checkpoint, no iteration log).
+- Artifact-existence guard (AC-EC3): if not exists `docs/planning-artifacts/epics/epics-and-stories.md` -> skip Val auto-review and exit (no Val invocation, no checkpoint, no iteration log).
 - Val-skill-availability guard (AC-EC6): if `/gaia-val-validate` SKILL.md is not resolvable at runtime -> warn `Val auto-review unavailable: /gaia-val-validate not found`, preserve the artifact, and exit cleanly.
 
 **Loop:**
 
 1. iteration = 1.
-2. Invoke `/gaia-val-validate` with `artifact_path = docs/planning-artifacts/epics-and-stories.md`, `artifact_type = epics-and-stories`.
+2. Invoke `/gaia-val-validate` with `artifact_path = docs/planning-artifacts/epics/epics-and-stories.md`, `artifact_type = epics-and-stories`.
 3. If findings is empty: proceed past the loop.
 4. If findings contains only INFO: log informational notes, proceed past the loop.
 5. If findings contains CRITICAL or WARNING:
-     a. Apply a fix to `docs/planning-artifacts/epics-and-stories.md` addressing the findings.
+     a. Apply a fix to `docs/planning-artifacts/epics/epics-and-stories.md` addressing the findings.
      b. Append an iteration log record to checkpoint `custom.val_loop_iterations`.
      c. iteration += 1.
      d. If iteration <= 3: go to step 2.
@@ -165,14 +165,14 @@ YOLO INVARIANT: the iteration-3 prompt MUST NOT be auto-answered under YOLO. Thi
 
 > Val auto-review per E44-S2 pattern (ADR-058, architecture.md §10.31.2). Concurrent invocations of this skill are safe per E44-S5 AC-EC5: each invocation has its own iteration counter (centralized in the canonical pattern), so loop state is per-invocation, not shared.
 
-> `!scripts/write-checkpoint.sh gaia-create-epics 9 project_name="$PROJECT_NAME" prd_version="$PRD_VERSION" stage=val-auto-review --paths docs/planning-artifacts/epics-and-stories.md`
+> `!scripts/write-checkpoint.sh gaia-create-epics 9 project_name="$PROJECT_NAME" prd_version="$PRD_VERSION" stage=val-auto-review --paths docs/planning-artifacts/epics/epics-and-stories.md`
 
 ### Step 10 — Brownfield: Generate Onboarding Knowledge Base (optional)
 
 Skip this step if mode is greenfield.
 
 - Generate onboarding doc as a knowledge base index linking to ALL artifacts.
-- Write to `docs/planning-artifacts/brownfield-onboarding.md`.
+- Write to `docs/planning-artifacts/assessments/brownfield-onboarding.md`.
 
 > `!scripts/write-checkpoint.sh gaia-create-epics 10 project_name="$PROJECT_NAME" prd_version="$PRD_VERSION" epics_mode=brownfield brownfield_onboarding_written="$BROWNFIELD_ONBOARDING_WRITTEN"`
 
@@ -246,7 +246,7 @@ Skip this step if mode is greenfield.
   See docs/implementation-artifacts/E42-S10-port-gaia-create-epics-31-item-checklist-to-v2.md.
 -->
 
-- [script-verifiable] SV-01 — Output file saved to docs/planning-artifacts/epics-and-stories.md
+- [script-verifiable] SV-01 — Output file saved to docs/planning-artifacts/epics/epics-and-stories.md
 - [script-verifiable] SV-02 — Output artifact is non-empty
 - [script-verifiable] SV-03 — Epics section present (## Epic N: headings)
 - [script-verifiable] SV-04 — Stories section present (### Story E{N}-S{N}: headings)

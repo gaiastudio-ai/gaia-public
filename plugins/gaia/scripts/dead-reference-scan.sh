@@ -236,7 +236,7 @@ is_allowlisted() {
   # describing how to clean up legacy V1 (workflow.xml-engine-era) checkpoints, so
   # its prose intentionally names workflow.xml as the historical engine the
   # checkpoints belong to. The fixture is a CI-stable copy of the canonical plan
-  # at docs/planning-artifacts/v1-checkpoint-deletion-plan.md (allowlisted by the
+  # at docs/planning-artifacts/assessments/v1-checkpoint-deletion-plan.md (allowlisted by the
   # docs/ rule above). The fixture's bats test (e29-s7-v1-checkpoint-deletion-plan.bats)
   # asserts these exact tokens are present, so scrubbing them would break the gate.
   [[ "$path" == */plugins/gaia/tests/fixtures/e29-s7-deletion-plan/* ]] && return 0

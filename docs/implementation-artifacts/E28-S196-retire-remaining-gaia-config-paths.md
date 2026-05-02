@@ -13,7 +13,7 @@ risk: "medium"
 sprint_id: null
 priority_flag: "post-release-followup"
 origin: "audit-followup"
-origin_ref: "E28-S190 findings B3 continuation + E28-S194 Finding F2 + Theo architect review at docs/planning-artifacts/E28-S196-scope-architect-review.md + Derek PM review at docs/planning-artifacts/E28-S196-scope-pm-review.md"
+origin_ref: "E28-S190 findings B3 continuation + E28-S194 Finding F2 + Theo architect review at docs/planning-artifacts/reviews/E28-S196-scope-architect-review.md + Derek PM review at docs/planning-artifacts/reviews/E28-S196-scope-pm-review.md"
 depends_on: ["E28-S190", "E28-S194"]
 blocks: ["gaia-migrate-end-to-end", "plugin-adoption"]
 traces_to: ["ADR-041", "ADR-042", "ADR-044", "ADR-048", "FR-323", "FR-329"]
@@ -126,7 +126,7 @@ As a **user who has run `/gaia:gaia-migrate apply` on a real v1 project**, I wan
   - [x] 6.2 Verify 0 B3 failures.
 
 - [x] **Task 7 — ADR-041 amendment (AC: 18)**
-  - [x] 7.1 Edit `docs/planning-artifacts/architecture.md` to add the `knowledge/` subsection using Theo's drafted text.
+  - [x] 7.1 Edit `docs/planning-artifacts/architecture/architecture.md` to add the `knowledge/` subsection using Theo's drafted text.
 
 ## Dev Notes
 
@@ -199,7 +199,7 @@ As a **user who has run `/gaia:gaia-migrate apply` on a real v1 project**, I wan
 - `plugins/gaia/tests/knowledge-paths-guard.bats` (+15 new tests)
 
 **Modified docs (1):**
-- `docs/planning-artifacts/architecture.md` (ADR-041 amendment)
+- `docs/planning-artifacts/architecture/architecture.md` (ADR-041 amendment)
 
 ## Review Gate
 

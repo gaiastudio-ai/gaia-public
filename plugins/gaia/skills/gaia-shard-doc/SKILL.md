@@ -69,7 +69,7 @@ The skill runs five steps in strict order, mirroring the legacy `shard-doc.xml`:
 
 ## Step 4 — Write Shards
 
-- Create the output directory — same path as the source file with the extension stripped (e.g., `docs/planning-artifacts/prd.md` → `docs/planning-artifacts/prd/`). Use `!` inline bash for `mkdir -p` per ADR-042.
+- Create the output directory — same path as the source file with the extension stripped (e.g., `docs/planning-artifacts/prd/prd.md` → `docs/planning-artifacts/prd/`). Use `!` inline bash for `mkdir -p` per ADR-042.
 - Write each shard file: the section heading becomes the first line of the shard, and every line from that heading through the line before the next split-level heading goes into the shard.
 - Write `index.md` with a table of contents linking every shard with its heading text, sorted by the numeric prefix.
 

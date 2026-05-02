@@ -68,7 +68,7 @@ failed_skills: 6
 bucket_B5_other: 6
 
 gaia-add-feature: setup_exit=1, bucket=B5
-  "HALT: prd.md not found at docs/planning-artifacts/prd.md"
+  "HALT: prd.md not found at docs/planning-artifacts/prd/prd.md"
 ```
 
 **After fix:**

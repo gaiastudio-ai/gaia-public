@@ -8,7 +8,7 @@ allowed-tools: [Read, Write, Edit, Grep, Glob, Bash]
 # and architecture (the requirement and component sections that motivate
 # the new test cases). Never full-load prd.md or architecture.md here.
 discover_inputs: SELECTIVE_LOAD
-discover_inputs_target: "docs/planning-artifacts/prd.md, docs/planning-artifacts/architecture.md"
+discover_inputs_target: "docs/planning-artifacts/prd/prd.md, docs/planning-artifacts/architecture/architecture.md"
 ---
 
 ## Setup
@@ -116,10 +116,10 @@ inheritance case this sub-step is skipped entirely.
 
 #### Step 2c — Load Named Diff Sections
 
-- Load ONLY the named diff sections of `docs/planning-artifacts/prd.md`
+- Load ONLY the named diff sections of `docs/planning-artifacts/prd/prd.md`
   corresponding to the supplied FR/NFR IDs (do NOT read the full PRD).
 - Load ONLY the named diff sections of
-  `docs/planning-artifacts/architecture.md` that correspond to the
+  `docs/planning-artifacts/architecture/architecture.md` that correspond to the
   affected components (do NOT read the full architecture document).
 - Record: `new_requirements`, `change_description`, `affected_test_areas`.
 

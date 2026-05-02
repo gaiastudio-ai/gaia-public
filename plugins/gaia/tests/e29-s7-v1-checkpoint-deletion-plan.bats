@@ -8,7 +8,7 @@
 # of the deletion plan against a fixture copy shipped under
 # tests/fixtures/e29-s7-deletion-plan/. The canonical (living) plan resides
 # in the user's project tree at
-# docs/planning-artifacts/v1-checkpoint-deletion-plan.md
+# docs/planning-artifacts/assessments/v1-checkpoint-deletion-plan.md
 # (which is outside this marketplace repo per gaia-public/docs/INDEX.md;
 # project planning artifacts are not vendored here). When the project-tree
 # plan is available — i.e., when this test is run from inside a checked-out
@@ -17,7 +17,7 @@
 #
 # E29-S7 Acceptance Criteria covered:
 #
-#   AC1: Plan file exists at docs/planning-artifacts/v1-checkpoint-deletion-plan.md.
+#   AC1: Plan file exists at docs/planning-artifacts/assessments/v1-checkpoint-deletion-plan.md.
 #   AC2: Inventory section enumerates V1-shaped checkpoints (schema markers /
 #        directory shape) currently on disk.
 #   AC3: Recommended sunset window is dated relative to the V1 sunset
@@ -43,7 +43,7 @@ PLAN_FIXTURE="$BATS_TEST_DIRNAME/fixtures/e29-s7-deletion-plan/v1-checkpoint-del
 # workspace alongside the gaia-public repo. Resolved by walking up from
 # tests/ -> plugins/gaia/ -> plugins/ -> gaia-public/ -> GAIA-Framework/.
 WORKSPACE_ROOT="$(cd "$BATS_TEST_DIRNAME/../../../.." && pwd)"
-WORKSPACE_PLAN="$WORKSPACE_ROOT/docs/planning-artifacts/v1-checkpoint-deletion-plan.md"
+WORKSPACE_PLAN="$WORKSPACE_ROOT/docs/planning-artifacts/assessments/v1-checkpoint-deletion-plan.md"
 
 # ---------------------------------------------------------------------------
 # Internal helpers — leading-underscore prefix per NFR-052 allowlist.

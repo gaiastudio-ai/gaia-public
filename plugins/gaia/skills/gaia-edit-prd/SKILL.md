@@ -15,13 +15,13 @@ allowed-tools: [Read, Write, Edit, Grep, Glob, Bash, Agent]
 
 ## Mission
 
-This skill orchestrates edits to an existing Product Requirements Document (PRD). PRD authoring and reasoning is delegated to the **pm** subagent (Derek), who evaluates change impact, validates consistency, and produces the updated artifact. The skill loads the current PRD, coordinates the multi-step edit flow, detects cascade impacts on downstream artifacts, and writes the output to `docs/planning-artifacts/prd.md`.
+This skill orchestrates edits to an existing Product Requirements Document (PRD). PRD authoring and reasoning is delegated to the **pm** subagent (Derek), who evaluates change impact, validates consistency, and produces the updated artifact. The skill loads the current PRD, coordinates the multi-step edit flow, detects cascade impacts on downstream artifacts, and writes the output to `docs/planning-artifacts/prd/prd.md`.
 
 This skill is the native Claude Code conversion of the legacy `_gaia/lifecycle/workflows/2-planning/edit-prd` workflow (brief Cluster 5, story P5-S2 / E28-S41). The step ordering, cascade-aware semantics, and output path are preserved verbatim from the legacy `instructions.xml` — do not restructure, re-prompt, or reorder.
 
 ## Critical Rules
 
-- A PRD MUST already exist at `docs/planning-artifacts/prd.md` before starting. If missing, fail fast with "No PRD found at docs/planning-artifacts/prd.md — run /gaia-create-prd first."
+- A PRD MUST already exist at `docs/planning-artifacts/prd/prd.md` before starting. If missing, fail fast with "No PRD found at docs/planning-artifacts/prd/prd.md — run /gaia-create-prd first."
 - Preserve existing content not being changed — edits are surgical, not wholesale rewrites.
 - Add a version note documenting what changed and why after every edit session.
 - Update "Review Findings Incorporated" section after adversarial review (if triggered).
@@ -38,8 +38,8 @@ This skill is the native Claude Code conversion of the legacy `_gaia/lifecycle/w
 
 ### Step 1 — Load PRD
 
-- Read the current PRD at `docs/planning-artifacts/prd.md`.
-- If the file does not exist, fail fast: "No PRD found at docs/planning-artifacts/prd.md — run /gaia-create-prd first."
+- Read the current PRD at `docs/planning-artifacts/prd/prd.md`.
+- If the file does not exist, fail fast: "No PRD found at docs/planning-artifacts/prd/prd.md — run /gaia-create-prd first."
 - Display the current structure summary to the user: list all section headers, requirement count (FR-### and NFR-### IDs), and last version note date.
 
 ### Step 2 — Identify Changes
@@ -64,13 +64,13 @@ Delegate to the **pm** subagent (Derek) via `agents/pm` to apply the edits:
 
 ### Step 4 — Save Updated PRD
 
-Write the updated PRD to `docs/planning-artifacts/prd.md` with the version note prepended.
+Write the updated PRD to `docs/planning-artifacts/prd/prd.md` with the version note prepended.
 
 ### Step 5 — Adversarial Review
 
 - Read `${CLAUDE_PLUGIN_ROOT}/knowledge/adversarial-triggers.yaml` to evaluate trigger rules. (This policy table ships inside the plugin under ADR-041's `knowledge/` convention; the legacy v1 location `_gaia/_config/adversarial-triggers.yaml` is retired and no longer used.) Determine the current `change_type`: if invoked with a change_type context (e.g., from add-feature triage), use that value. If no context is available, infer from the change scope: minor edits map to "low-risk-enhancement", significant feature additions map to "feature".
 - Look up the trigger rule for `change_type` + artifact "prd". If adversarial is false for this combination: skip adversarial review — mark "Review Findings Incorporated" as "Adversarial review not triggered — change type: {change_type} per adversarial-triggers.yaml". Proceed to Step 7.
-- If adversarial is true: spawn a subagent to run the adversarial review task against `docs/planning-artifacts/prd.md`.
+- If adversarial is true: spawn a subagent to run the adversarial review task against `docs/planning-artifacts/prd/prd.md`.
 - When subagent returns: verify `adversarial-review-prd-*.md` exists in `docs/planning-artifacts/`.
 
 ### Step 6 — Incorporate Review Findings
@@ -78,13 +78,13 @@ Write the updated PRD to `docs/planning-artifacts/prd.md` with the version note 
 - Read `docs/planning-artifacts/adversarial-review-prd-*.md` — extract critical and high severity findings.
 - For each critical/high finding: add or refine requirement in the PRD.
 - Update the "## Review Findings Incorporated" section — append new entries with amendment date.
-- Write the updated PRD to `docs/planning-artifacts/prd.md`.
+- Write the updated PRD to `docs/planning-artifacts/prd/prd.md`.
 
 ### Step 7 — Architecture Cascade Check
 
 This is the cascade-aware behavior preserved from the legacy edit-prd workflow — the key semantic that distinguishes editing from creation.
 
-- Read `docs/planning-artifacts/architecture.md` section headers.
+- Read `docs/planning-artifacts/architecture/architecture.md` section headers.
 - Compare PRD changes against architecture scope.
 - Classify cascade impact:
   - **NONE:** Requirements-only changes — architecture unaffected.

@@ -33,7 +33,7 @@ author: "sm"
 
 E28-S191 fixed the B1/B2/B4 path-resolution bundle. Re-running `scripts/audit-v2-migration.sh` after the fix showed 0 B1/B2/B3/B4 failures — and exposed **8 residual B5 skill-contract bugs** that B1 had been masking. These are pre-existing defects in individual skill setup.sh / finalize.sh scripts that break the skill against a fresh v2 fixture.
 
-Per the Derek PM review (docs/planning-artifacts/E28-S196-scope-pm-review.md), classifying these 8 residuals is itself a release-blocker — the go/no-go decision for early-adopter release can't be made until each one is either fixed, deprecated, or explicitly accepted as documented degraded behavior.
+Per the Derek PM review (docs/planning-artifacts/reviews/E28-S196-scope-pm-review.md), classifying these 8 residuals is itself a release-blocker — the go/no-go decision for early-adopter release can't be made until each one is either fixed, deprecated, or explicitly accepted as documented degraded behavior.
 
 This is an **investigation story**, not a code-change story. Deliverable is a findings document + per-bug classification + fix-story backlog. Same pattern as E28-S190.
 
@@ -103,7 +103,7 @@ As a **release engineer deciding go/no-go on early-adopter release**, I want **e
 - **One exception:** if during classification you find a trivial one-line fix (e.g., a typo in a gate name) AND you can ship it alongside a bats test AND the fix is literally one line, it's fine to land it in this story with a clear explanation in Findings. Otherwise defer to a fix story.
 - Do NOT run `/gaia-migrate apply` against the reporter's workspace. Use /tmp/ fixtures only.
 - E28-S195 (promote audit harness to CI gate) is the story that comes AFTER this one — once B5 fixes land.
-- The PM review has the full "five go/no-go criteria" at `docs/planning-artifacts/E28-S196-scope-pm-review.md` — AC6 should answer against those criteria directly.
+- The PM review has the full "five go/no-go criteria" at `docs/planning-artifacts/reviews/E28-S196-scope-pm-review.md` — AC6 should answer against those criteria directly.
 
 ## Findings
 

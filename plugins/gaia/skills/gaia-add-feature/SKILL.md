@@ -111,9 +111,9 @@ classification:
 
 | Artifact | patch | enhancement | feature |
 |----------|-------|-------------|---------|
-| PRD (`docs/planning-artifacts/prd.md`) | -- | -- | YES |
-| Architecture (`docs/planning-artifacts/architecture.md`) | -- | -- | YES |
-| Epics & Stories (`docs/planning-artifacts/epics-and-stories.md`) | -- | YES | YES |
+| PRD (`docs/planning-artifacts/prd/prd.md`) | -- | -- | YES |
+| Architecture (`docs/planning-artifacts/architecture/architecture.md`) | -- | -- | YES |
+| Epics & Stories (`docs/planning-artifacts/epics/epics-and-stories.md`) | -- | YES | YES |
 | Test Plan (`docs/test-artifacts/test-plan.md`) | -- | YES | YES |
 | Threat Model (`docs/planning-artifacts/threat-model.md`) | -- | -- | YES |
 | Traceability (`docs/test-artifacts/traceability-matrix.md`) | -- | YES | YES |
@@ -143,7 +143,7 @@ means the artifact IS updated via the appropriate sub-workflow.
 - Generate `feature_id` in the format `AF-{date}-{N}` where `{date}` is the
   current date (`AF-{YYYY-MM-DD}-{N}`, e.g. `AF-2026-04-26-1`) and `{N}`
   is a monotonically increasing integer for that date. To resolve `{N}`,
-  scan `docs/planning-artifacts/epics-and-stories.md` and any prior
+  scan `docs/planning-artifacts/epics/epics-and-stories.md` and any prior
   `docs/planning-artifacts/assessment-AF-{date}-*.md` artifacts; use the
   highest existing index for today plus one, or `1` if none exist.
 - Classify the change as **patch**, **enhancement**, or **feature** based

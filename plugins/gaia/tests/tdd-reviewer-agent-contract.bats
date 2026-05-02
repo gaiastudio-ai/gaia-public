@@ -4,7 +4,7 @@
 # Story: E57-S3 — TDD review subagent contract (new tdd-reviewer.md)
 #
 # Acceptance Criteria covered:
-#   AC1 — ADR memo at docs/planning-artifacts/adr-memo-tdd-reviewer-subagent.md
+#   AC1 — ADR memo at docs/planning-artifacts/decisions/adr-memo-tdd-reviewer-subagent.md
 #         documents Option A vs Option B and records the chosen path
 #         with rationale.
 #   AC2 — Chosen subagent file frontmatter has `context: fork` and
@@ -42,14 +42,14 @@ setup() {
   AGENT_FILE="$PUBLIC_ROOT/plugins/gaia/agents/tdd-reviewer.md"
 
   # ADR memo locations — the canonical authored location is the workspace
-  # path docs/planning-artifacts/adr-memo-tdd-reviewer-subagent.md (one
+  # path docs/planning-artifacts/decisions/adr-memo-tdd-reviewer-subagent.md (one
   # level above gaia-public/). On CI the workspace tree is not present;
   # the fixture under tests/fixtures/ is the CI-stable mirror so the same
   # content checks run in both environments. Resolution order:
   #   1. Workspace path (when running inside GAIA-Framework/).
   #   2. Fixture under tests/fixtures/e57-s3-adr-memo/ (CI-stable).
   WORKSPACE_ROOT="$(cd "$BATS_TEST_DIRNAME/../../../.." && pwd 2>/dev/null || echo "")"
-  WORKSPACE_MEMO="$WORKSPACE_ROOT/docs/planning-artifacts/adr-memo-tdd-reviewer-subagent.md"
+  WORKSPACE_MEMO="$WORKSPACE_ROOT/docs/planning-artifacts/decisions/adr-memo-tdd-reviewer-subagent.md"
   FIXTURE_MEMO="$BATS_TEST_DIRNAME/fixtures/e57-s3-adr-memo/adr-memo-tdd-reviewer-subagent.md"
   if [ -f "$WORKSPACE_MEMO" ]; then
     ADR_MEMO="$WORKSPACE_MEMO"

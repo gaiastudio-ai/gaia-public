@@ -182,7 +182,7 @@ Phase 3B is the **judgment layer**. The fork subagent reads `analysis-results.js
 
 The fork extends Phase 3B's findings with architecture and design checks; findings flow into the Phase 3B category buckets.
 
-- **Architecture conformance.** Fork reads `docs/planning-artifacts/architecture.md`. For each File List entry, verify component placement follows the documented hierarchy, dependency direction matches the architecture, and any ADRs referenced by the story exist with status Accepted. Findings under `category: architecture`.
+- **Architecture conformance.** Fork reads `docs/planning-artifacts/architecture/architecture.md`. For each File List entry, verify component placement follows the documented hierarchy, dependency direction matches the architecture, and any ADRs referenced by the story exist with status Accepted. Findings under `category: architecture`.
 - **Design fidelity.** If the story frontmatter has a `figma:` block, fork compares design-token references in the changed code against `docs/planning-artifacts/design-system/design-tokens.json` and classifies as matched / drifted / missing. Findings under `category: fidelity`. If no `figma:` block: skip silently (no Warning, no finding).
 
 ### Phase 5 — Verdict

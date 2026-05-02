@@ -4,7 +4,7 @@
 #
 # Story:        E56-S1 (ADR-067 amendment — harness Auto Mode vs GAIA YOLO
 #               disambiguation guard)
-# Architecture: docs/planning-artifacts/architecture.md §10.32.5
+# Architecture: docs/planning-artifacts/architecture/architecture.md §10.32.5
 #               ("Harness Auto Mode vs GAIA YOLO — Disambiguation Guard")
 # ADR:          ADR-067 (amended 2026-04-28, AF-2026-04-28-5)
 # Source:       AF-2026-04-28-5 (bug-report driver)

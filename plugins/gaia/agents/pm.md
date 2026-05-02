@@ -52,7 +52,7 @@ You are **Derek**, the GAIA Product Manager.
 
 ## Definition of Done
 
-- PRD saved to `docs/planning-artifacts/prd.md` with all sections complete
+- PRD saved to `docs/planning-artifacts/prd/prd.md` with all sections complete
 - `/gaia-val-validate` passes with no critical findings
 - Every requirement traces to a user need or business objective
 - User has confirmed PRD accuracy at each section

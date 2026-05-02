@@ -6,7 +6,7 @@ This fixture is the minimal project scaffolding required to drive `/gaia-create-
 
 - **VCP-ARCH-01** — Tech-stack confirmation pause fires after Step 3. _LLM-checkable._
 - **VCP-ARCH-02** — User selects `[m]odify`; downstream Steps 4+ consume the modified stack via the `confirmed_tech_stack` runtime variable. _LLM-checkable._
-- **VCP-ARCH-03** — ADR sidecar write end-to-end; `_memory/architect-sidecar/architecture-decisions.md` matches `docs/planning-artifacts/architecture.md § Decision Log` after the workflow ends. _Integration._
+- **VCP-ARCH-03** — ADR sidecar write end-to-end; `_memory/architect-sidecar/architecture-decisions.md` matches `docs/planning-artifacts/architecture/architecture.md § Decision Log` after the workflow ends. _Integration._
 
 ## Contents
 
@@ -37,4 +37,4 @@ This fixture is the minimal project scaffolding required to drive `/gaia-create-
 - Test plan rows: `docs/test-artifacts/test-plan.md § 11.46.14`
 - Traceability: `docs/test-artifacts/traceability-matrix.md` FR-354 row
 - ADR-016 entry format: `_gaia/lifecycle/skills/memory-management.md § decision-formatting`
-- Sidecar location convention: `docs/planning-artifacts/architecture.md § 10.10`
+- Sidecar location convention: `docs/planning-artifacts/architecture/architecture.md § 10.10`

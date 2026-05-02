@@ -16,7 +16,7 @@ You are generating Acceptance Test-Driven Development (ATDD) artifacts for the s
 The skill supports two invocation modes:
 
 1. **Single-story mode** — `/gaia-atdd E1-S1` — generate ATDD for one explicit story key. This is the original legacy behavior.
-2. **Batch mode** (argumentless invocation, FR-351) — `/gaia-atdd` — scan `docs/planning-artifacts/epics-and-stories.md` for stories whose risk column is exactly `high`, present an `[all / select / skip]` menu, and generate ATDD artifacts for the chosen subset. When zero high-risk stories are discovered, exit gracefully with the message "No high-risk stories found — nothing to generate" (exit code 0).
+2. **Batch mode** (argumentless invocation, FR-351) — `/gaia-atdd` — scan `docs/planning-artifacts/epics/epics-and-stories.md` for stories whose risk column is exactly `high`, present an `[all / select / skip]` menu, and generate ATDD artifacts for the chosen subset. When zero high-risk stories are discovered, exit gracefully with the message "No high-risk stories found — nothing to generate" (exit code 0).
 
 This skill is the native Claude Code conversion of the legacy `_gaia/testing/workflows/atdd/` workflow (brief Cluster 4, story E28-S83). Batch mode and the optional Step 5b red-phase execution are restored under E46-S3 / FR-351.
 
@@ -24,8 +24,8 @@ This skill is the native Claude Code conversion of the legacy `_gaia/testing/wor
 
 - Knowledge fragments are bundled in this skill's `knowledge/` directory -- load them JIT when referenced by a step.
 - The `story-key` argument is **optional** — when present it MUST follow the `E{number}-S{number}` format (e.g., `E1-S1`, `E28-S83`). When malformed (empty string, missing epic prefix like "S83" without "E{n}-" prefix), exit with a clear validation error message naming the invalid argument.
-- When a story-key is supplied and the key is not found in `docs/planning-artifacts/epics-and-stories.md`, exit with error: "Story {key} not found in epics-and-stories.md" and a non-zero exit code. Do NOT fall back to batch mode (AC-EC3) — the user explicitly asked for one story.
-- When no story-key is supplied, engage **batch mode** (argumentless invocation): scan `docs/planning-artifacts/epics-and-stories.md` for high-risk entries via the bundled `scripts/discover-stories.sh` helper. If `epics-and-stories.md` is missing or unreadable, print "Cannot read docs/planning-artifacts/epics-and-stories.md — halting" and exit non-zero (AC-EC1).
+- When a story-key is supplied and the key is not found in `docs/planning-artifacts/epics/epics-and-stories.md`, exit with error: "Story {key} not found in epics-and-stories.md" and a non-zero exit code. Do NOT fall back to batch mode (AC-EC3) — the user explicitly asked for one story.
+- When no story-key is supplied, engage **batch mode** (argumentless invocation): scan `docs/planning-artifacts/epics/epics-and-stories.md` for high-risk entries via the bundled `scripts/discover-stories.sh` helper. If `epics-and-stories.md` is missing or unreadable, print "Cannot read docs/planning-artifacts/epics/epics-and-stories.md — halting" and exit non-zero (AC-EC1).
 - A story file MUST exist at `docs/implementation-artifacts/{story_key}-*.md` before proceeding. If the story file is not found for the given key, exit with error: "Story file not found for {story_key}".
 - The story file MUST contain an `## Acceptance Criteria` section with at least one AC entry. If no acceptance criteria are found or the section is empty, exit gracefully with the message: "No acceptance criteria found for {story_key}" and write no ATDD artifact.
 - Each acceptance criterion maps to exactly one failing test skeleton — maintain a strict 1:1 AC-to-test mapping.
@@ -41,7 +41,7 @@ This skill is the native Claude Code conversion of the legacy `_gaia/testing/wor
 
 - If a story key was provided as an argument (e.g., `/gaia-atdd E1-S1`), use it directly.
 - Validate story key format: must match `E{number}-S{number}` pattern. If malformed, exit with error: "Invalid story key format: {story_key}. Expected format: E{n}-S{n}".
-- When a story-key is supplied and it does not appear in `docs/planning-artifacts/epics-and-stories.md`, exit with "Story {key} not found in epics-and-stories.md" and a non-zero exit code (AC-EC3). Do NOT auto-engage batch mode as a fallback.
+- When a story-key is supplied and it does not appear in `docs/planning-artifacts/epics/epics-and-stories.md`, exit with "Story {key} not found in epics-and-stories.md" and a non-zero exit code (AC-EC3). Do NOT auto-engage batch mode as a fallback.
 - If no story key was provided, switch to **batch mode** (Step 1b) — do NOT exit.
 
 > `!scripts/write-checkpoint.sh gaia-atdd 1 story_key="$STORY_KEY" test_file_path="docs/test-artifacts/atdd-$STORY_KEY.md" stage=input-validated`
@@ -50,9 +50,9 @@ This skill is the native Claude Code conversion of the legacy `_gaia/testing/wor
 
 When invoked without a story-key, run batch discovery:
 
-- Invoke `!${CLAUDE_PLUGIN_ROOT}/skills/gaia-atdd/scripts/discover-stories.sh --epics docs/planning-artifacts/epics-and-stories.md --format=menu` to render the discovery menu.
+- Invoke `!${CLAUDE_PLUGIN_ROOT}/skills/gaia-atdd/scripts/discover-stories.sh --epics docs/planning-artifacts/epics/epics-and-stories.md --format=menu` to render the discovery menu.
 - The script:
-  - Halts with "Cannot read docs/planning-artifacts/epics-and-stories.md — halting" and exit code 1 when the epics file is missing or unreadable (AC-EC1).
+  - Halts with "Cannot read docs/planning-artifacts/epics/epics-and-stories.md — halting" and exit code 1 when the epics file is missing or unreadable (AC-EC1).
   - Filters rows where the Risk column is exactly `high` (per Dev Notes — exact-value match, not substring). Medium and low risk rows are excluded.
   - Builds a discovery result object per story `{key, title, risk, epic, ac_count}` and surfaces them as a numbered menu listing key, title, and risk.
   - Skips stories whose source file has zero acceptance criteria with a warning "Story {key} has no acceptance criteria — skipping" (AC-EC8) — `ac_count = 0` drives the skip.

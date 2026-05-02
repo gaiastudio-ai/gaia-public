@@ -79,8 +79,8 @@ Each phase is independent in its write targets but must run sequentially because
    - `has_infra` + `has_app_code` → `platform`
    - `has_infra` + no `has_app_code` → `infrastructure`
    - no `has_infra` → `application` (default)
-6. Generate the brownfield assessment artifact by reading the assessment template, capturing component inventory, technical debt, migration constraints, coexistence strategy, and adoption path. Include `{project_type}` in the output. Write to `docs/planning-artifacts/brownfield-assessment.md`.
-7. Write the enhanced project documentation — all standard sections plus detected capability flags, `{project_type}`, testing infrastructure summary, and CI/CD pipeline summary. Write to `docs/planning-artifacts/project-documentation.md`.
+6. Generate the brownfield assessment artifact by reading the assessment template, capturing component inventory, technical debt, migration constraints, coexistence strategy, and adoption path. Include `{project_type}` in the output. Write to `docs/planning-artifacts/assessments/brownfield-assessment.md`.
+7. Write the enhanced project documentation — all standard sections plus detected capability flags, `{project_type}`, testing infrastructure summary, and CI/CD pipeline summary. Write to `docs/planning-artifacts/assessments/project-documentation.md`.
 
 Checkpoint after Phase 1 via `!${CLAUDE_PLUGIN_ROOT}/scripts/checkpoint.sh`.
 
@@ -91,11 +91,11 @@ Spawn the following subagents in parallel (single message, multiple `Agent` tool
 - **If `{has_apis}`** — API Documenter subagent. Scan for routes, controllers, and specs. Validate existing OpenAPI specs against routes or generate a new OpenAPI 3.x spec from code. Document all endpoints with method, path, handler, auth, parameters, request/response schemas, error formats. Include a Mermaid API flow diagram. List undocumented endpoints as gaps. Output to `docs/planning-artifacts/api-documentation.md`.
 - **If `{has_frontend}`** — UX Assessor subagent. Scan UI frameworks, components, design patterns, styling. Document UI patterns, navigation structure (Mermaid sitemap), interaction patterns, accessibility (WCAG, ARIA, keyboard nav). Propose improvements for gaps only. Output to `docs/planning-artifacts/ux-design.md`.
 - **If `{has_events}`** — Event Cataloger subagent. Scan messaging infrastructure, produced/consumed events with schemas, external events, delivery guarantees (retry, DLQ, idempotency). Include Mermaid event flow diagrams (2–3 key flows). Output to `docs/planning-artifacts/event-catalog.md`.
-- **Always** — Dependency Mapper subagent. Document external service dependencies, infrastructure dependencies, key library dependencies (ORM, auth lib — check version currency and CVE risk). Build a Mermaid dependency graph. Document contracts, SLAs, fallback strategies. Identify dependency risks. Output to `docs/planning-artifacts/dependency-map.md`. After writing, run the shared `review-dependency-audit` task to generate a dependency audit report at `docs/test-artifacts/dependency-audit-{date}.md`.
+- **Always** — Dependency Mapper subagent. Document external service dependencies, infrastructure dependencies, key library dependencies (ORM, auth lib — check version currency and CVE risk). Build a Mermaid dependency graph. Document contracts, SLAs, fallback strategies. Identify dependency risks. Output to `docs/planning-artifacts/assessments/dependency-map.md`. After writing, run the shared `review-dependency-audit` task to generate a dependency audit report at `docs/test-artifacts/dependency-audit-{date}.md`.
 
 **Post-subagent validation:** verify each expected output file exists. If any subagent failed to write its output file, the orchestrator (this skill) MUST write a stub file on the subagent's behalf using the paths declared in the legacy `output.artifacts` contract. Dependency-audit goes to `docs/test-artifacts/`; all other Phase 2 artifacts go to `docs/planning-artifacts/`. Do NOT use hardcoded paths.
 
-After all subagents return, write a subagent summary at `docs/planning-artifacts/brownfield-subagent-summary.md` (which subagents ran, artifacts produced, file paths, any errors). Pause for user review in `normal` mode before continuing.
+After all subagents return, write a subagent summary at `docs/planning-artifacts/assessments/brownfield-subagent-summary.md` (which subagents ran, artifacts produced, file paths, any errors). Pause for user review in `normal` mode before continuing.
 
 ## Phase 3 — Deep Analysis Multi-Scan Subagents (Infra-Aware)
 
@@ -276,11 +276,11 @@ If `prd.md` already exists, warn the user: `A PRD already exists. Continuing wil
 
 YAML frontmatter MUST include `mode: brownfield`, `baseline_version: {version from package.json or inferred}`, `focus: gap-filling`. Add `Mode: Brownfield — gaps only` to the header. Include a Priority Matrix section mapping each gap to priority / effort / impact.
 
-Write to `docs/planning-artifacts/prd.md`.
+Write to `docs/planning-artifacts/prd/prd.md`.
 
 ### 8b — Adversarial Review & PRD Refinement
 
-Spawn a subagent that runs the shared adversarial-review task against the PRD. Target `docs/planning-artifacts/prd.md`; target label `prd`. When the subagent returns, verify `adversarial-review-prd-{date}.md` exists in `docs/planning-artifacts/`. Extract critical and high severity findings. For each critical/high finding, add a new requirement or refine an existing requirement in the PRD. Add a `## Review Findings Incorporated` section to the PRD listing each finding, its severity, and how it was addressed.
+Spawn a subagent that runs the shared adversarial-review task against the PRD. Target `docs/planning-artifacts/prd/prd.md`; target label `prd`. When the subagent returns, verify `adversarial-review-prd-{date}.md` exists in `docs/planning-artifacts/`. Extract critical and high severity findings. For each critical/high finding, add a new requirement or refine an existing requirement in the PRD. Add a `## Review Findings Incorporated` section to the PRD listing each finding, its severity, and how it was addressed.
 
 ### 8c — Code-Verified Review
 
@@ -342,7 +342,7 @@ After all Tier 1 extractions complete, output a summary: `Seeded {N} entries for
 
 ## Output — Primary Artifact
 
-Write the final brownfield onboarding report to `docs/planning-artifacts/brownfield-onboarding.md`. This is the primary output artifact (preserved verbatim from the legacy workflow's `output.primary` contract for NFR-053 parity). It summarizes:
+Write the final brownfield onboarding report to `docs/planning-artifacts/assessments/brownfield-onboarding.md`. This is the primary output artifact (preserved verbatim from the legacy workflow's `output.primary` contract for NFR-053 parity). It summarizes:
 
 - Project discovery findings (`{project_type}`, capability flags, tech stack)
 - Links to all generated secondary artifacts
@@ -355,13 +355,13 @@ Write the final brownfield onboarding report to `docs/planning-artifacts/brownfi
 
 The full artifact set emitted by this skill (preserved from the legacy `output.artifacts` contract):
 
-- `docs/planning-artifacts/project-documentation.md` (Phase 1)
+- `docs/planning-artifacts/assessments/project-documentation.md` (Phase 1)
 - `docs/planning-artifacts/api-documentation.md` (Phase 2, if `{has_apis}`)
 - `docs/planning-artifacts/ux-design.md` (Phase 2, if `{has_frontend}`)
 - `docs/planning-artifacts/event-catalog.md` (Phase 2, if `{has_events}`)
-- `docs/planning-artifacts/dependency-map.md` (Phase 2)
+- `docs/planning-artifacts/assessments/dependency-map.md` (Phase 2)
 - `docs/test-artifacts/dependency-audit-{date}.md` (Phase 2)
-- `docs/planning-artifacts/brownfield-subagent-summary.md` (Phase 2)
+- `docs/planning-artifacts/assessments/brownfield-subagent-summary.md` (Phase 2)
 - `docs/planning-artifacts/brownfield-scan-doc-code.md` (Phase 3)
 - `docs/planning-artifacts/brownfield-scan-hardcoded.md` (Phase 3)
 - `docs/planning-artifacts/brownfield-scan-integration-seam.md` (Phase 3)
@@ -374,11 +374,11 @@ The full artifact set emitted by this skill (preserved from the legacy `output.a
 - `docs/test-artifacts/nfr-assessment.md` (Phase 6 — gated)
 - `docs/test-artifacts/performance-test-plan-{date}.md` (Phase 6 — gated)
 - `docs/planning-artifacts/consolidated-gaps.md` (Phase 7)
-- `docs/planning-artifacts/prd.md` (Phase 8a)
+- `docs/planning-artifacts/prd/prd.md` (Phase 8a)
 - `docs/planning-artifacts/adversarial-review-prd-{date}.md` (Phase 8b)
-- `docs/planning-artifacts/architecture.md` (Phase 9a)
-- `docs/planning-artifacts/epics-and-stories.md` (downstream, via next-step chain — see below)
-- `docs/planning-artifacts/brownfield-onboarding.md` (primary)
+- `docs/planning-artifacts/architecture/architecture.md` (Phase 9a)
+- `docs/planning-artifacts/epics/epics-and-stories.md` (downstream, via next-step chain — see below)
+- `docs/planning-artifacts/assessments/brownfield-onboarding.md` (primary)
 
 The `{date}` placeholder is substituted with the current date in `YYYY-MM-DD` form at write time, preserving the legacy substitution pattern.
 

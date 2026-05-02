@@ -169,7 +169,7 @@ Story creation is delegated to `/gaia-create-story` via subagent spawn. This rep
 For each CREATE STORY decision:
 
 1. Determine the correct epic from the source story's `epic` field.
-2. Scan `${CLAUDE_PROJECT_ROOT}/docs/planning-artifacts/epics-and-stories.md` and `${CLAUDE_PROJECT_ROOT}/docs/implementation-artifacts/` for all existing stories in that epic.
+2. Scan `${CLAUDE_PROJECT_ROOT}/docs/planning-artifacts/epics/epics-and-stories.md` and `${CLAUDE_PROJECT_ROOT}/docs/implementation-artifacts/` for all existing stories in that epic.
 3. Find the highest story number and assign the next sequential key.
 4. Update `epics-and-stories.md` with the new story entry under the correct epic.
 

@@ -230,7 +230,7 @@ LLM-cannot-override invariant: a high-confidence deterministic finding cannot be
 
 The fork extends Phase 3B's findings with architecture and design checks; findings flow into the Phase 3B category buckets.
 
-- **Performance-architecture conformance.** Fork reads `docs/planning-artifacts/architecture.md`. For each File List entry, verify component placement follows the documented hierarchy (e.g., DB-access modules below the handler tier; caching layers as documented), dependency direction matches the architecture, and any ADRs referenced by the story exist with status Accepted. Findings under `category: architecture`.
+- **Performance-architecture conformance.** Fork reads `docs/planning-artifacts/architecture/architecture.md`. For each File List entry, verify component placement follows the documented hierarchy (e.g., DB-access modules below the handler tier; caching layers as documented), dependency direction matches the architecture, and any ADRs referenced by the story exist with status Accepted. Findings under `category: architecture`.
 - **Design fidelity.** If the story frontmatter has a `figma:` block, fork compares design-token references in the changed code against `docs/planning-artifacts/design-system/design-tokens.json` (relevant when bundle-bloat findings touch design-token import paths). Findings under `category: fidelity`. If no `figma:` block: skip silently (no Warning, no finding).
 
 ### Phase 5 — Verdict

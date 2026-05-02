@@ -14,7 +14,7 @@
 #
 # Refs: docs/implementation-artifacts/E43-S7-*.md,
 #       docs/test-artifacts/test-plan.md §11.46.2 VCP-CPT-06, VCP-CPT-10,
-#       docs/planning-artifacts/architecture.md §10.31.3 (ADR-059).
+#       docs/planning-artifacts/architecture/architecture.md §10.31.3 (ADR-059).
 #
 # NFR-052 coverage signal — every public function in resume-discovery.sh is
 # exercised through the script's main entry point in these tests. The

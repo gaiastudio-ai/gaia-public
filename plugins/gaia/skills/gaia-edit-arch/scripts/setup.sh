@@ -65,7 +65,7 @@ fi
 
 # ---------- 2b. Guard: architecture.md must already exist ----------
 PROJECT_ROOT="${PROJECT_ROOT:-$(cd "$SKILL_DIR/../../../../.." && pwd)}"
-ARCH_PATH="$PROJECT_ROOT/docs/planning-artifacts/architecture.md"
+ARCH_PATH="$PROJECT_ROOT/docs/planning-artifacts/architecture/architecture.md"
 
 if [ ! -f "$ARCH_PATH" ]; then
   log "architecture.md not found at $ARCH_PATH — edit-arch requires an existing architecture (non-fatal in setup)"

@@ -8,7 +8,7 @@
 # edits — one engine token-burn path per ADR-042 / NFR-048.
 #
 # Refs: FR-325, FR-328, NFR-048, ADR-042, ADR-048
-# Brief: P2-S6 (docs/creative-artifacts/gaia-native-conversion-feature-brief-2026-04-14.md)
+# Brief: P2-S6 (docs/creative-artifacts/narratives/gaia-native-conversion-feature-brief-2026-04-14.md)
 #
 # Invocation contract (stable for E28-S17 bats-core authors):
 #

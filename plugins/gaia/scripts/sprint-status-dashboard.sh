@@ -7,7 +7,7 @@
 # sprint-status.yaml for write under any code path.
 #
 # Refs: FR-323, FR-325, NFR-048, NFR-053, ADR-041, ADR-042
-# Brief: P8-S2 (docs/creative-artifacts/gaia-native-conversion-feature-brief-2026-04-14.md)
+# Brief: P8-S2 (docs/creative-artifacts/narratives/gaia-native-conversion-feature-brief-2026-04-14.md)
 #
 # Invocation:
 #   sprint-status-dashboard.sh [--help]

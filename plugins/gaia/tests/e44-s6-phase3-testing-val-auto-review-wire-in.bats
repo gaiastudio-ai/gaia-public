@@ -6,7 +6,7 @@
 # plus an additive note in /gaia-val-validate documenting that the skill
 # does not self-invoke (Task 4 / AC5):
 #
-#   - gaia-readiness-check  -> docs/planning-artifacts/readiness-report.md
+#   - gaia-readiness-check  -> docs/planning-artifacts/assessments/readiness-report.md
 #                                                           (artifact_type=readiness)
 #   - gaia-test-design      -> docs/test-artifacts/test-plan.md
 #                                                           (artifact_type=test-plan)
@@ -109,8 +109,8 @@ teardown() { common_teardown; }
 # AC1/AC2/AC3 — Correct artifact_path per skill
 # ---------------------------------------------------------------------------
 
-@test "AC1: gaia-readiness-check references docs/planning-artifacts/readiness-report.md" {
-  grep -q 'docs/planning-artifacts/readiness-report.md' "$SKILLS_DIR/gaia-readiness-check/SKILL.md"
+@test "AC1: gaia-readiness-check references docs/planning-artifacts/assessments/readiness-report.md" {
+  grep -q 'docs/planning-artifacts/assessments/readiness-report.md' "$SKILLS_DIR/gaia-readiness-check/SKILL.md"
 }
 
 @test "AC2: gaia-test-design references docs/test-artifacts/test-plan.md" {

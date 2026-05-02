@@ -47,7 +47,7 @@ run_deploy_gates() {
   # but traceability-matrix.md is intentionally ABSENT
   # E28-S152: readiness-report.md now lives under PLANNING_ARTIFACTS
   cp "$FIXTURES_DIR/fixture-ci-setup.md" "$TMP_DIR/docs/test-artifacts/ci-setup.md"
-  cp "$FIXTURES_DIR/fixture-readiness-report.md" "$TMP_DIR/docs/planning-artifacts/readiness-report.md"
+  cp "$FIXTURES_DIR/fixture-readiness-report.md" "$TMP_DIR/docs/planning-artifacts/assessments/readiness-report.md"
   # traceability-matrix.md is NOT copied — intentionally missing
 
   # And validate-gate.sh exists and is executable
@@ -71,7 +71,7 @@ run_deploy_gates() {
   # but ci-setup.md is intentionally ABSENT
   # E28-S152: readiness-report.md now lives under PLANNING_ARTIFACTS
   cp "$FIXTURES_DIR/fixture-traceability-matrix.md" "$TMP_DIR/docs/test-artifacts/traceability-matrix.md"
-  cp "$FIXTURES_DIR/fixture-readiness-report.md" "$TMP_DIR/docs/planning-artifacts/readiness-report.md"
+  cp "$FIXTURES_DIR/fixture-readiness-report.md" "$TMP_DIR/docs/planning-artifacts/assessments/readiness-report.md"
   # ci-setup.md is NOT copied — intentionally missing
 
   # And validate-gate.sh exists and is executable
@@ -95,7 +95,7 @@ run_deploy_gates() {
   # readiness-report.md under PLANNING_ARTIFACTS (E28-S152).
   cp "$FIXTURES_DIR/fixture-traceability-matrix.md" "$TMP_DIR/docs/test-artifacts/traceability-matrix.md"
   cp "$FIXTURES_DIR/fixture-ci-setup.md" "$TMP_DIR/docs/test-artifacts/ci-setup.md"
-  cp "$FIXTURES_DIR/fixture-readiness-report.md" "$TMP_DIR/docs/planning-artifacts/readiness-report.md"
+  cp "$FIXTURES_DIR/fixture-readiness-report.md" "$TMP_DIR/docs/planning-artifacts/assessments/readiness-report.md"
 
   # And validate-gate.sh exists and is executable
   [ -x "$GATE_SCRIPT" ]

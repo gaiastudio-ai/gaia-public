@@ -41,7 +41,7 @@ setup() {
   STORY_KEY="TSS-E2E-01"
   STORY_FILE="$TEST_TMP/docs/implementation-artifacts/${STORY_KEY}-fixture.md"
   SPRINT_YAML="$TEST_TMP/docs/implementation-artifacts/sprint-status.yaml"
-  EPICS_MD="$TEST_TMP/docs/planning-artifacts/epics-and-stories.md"
+  EPICS_MD="$TEST_TMP/docs/planning-artifacts/epics/epics-and-stories.md"
   INDEX_YAML="$TEST_TMP/docs/implementation-artifacts/story-index.yaml"
   LOCK_FILE="$TEST_TMP/_memory/.story-status.lock"
 

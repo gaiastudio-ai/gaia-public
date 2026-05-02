@@ -233,7 +233,7 @@ LLM-cannot-override invariant: a high-confidence deterministic finding cannot be
 
 The fork extends Phase 3B's findings with architecture and design checks; findings flow into the Phase 3B category buckets.
 
-- **Security-architecture conformance.** Fork reads `docs/planning-artifacts/architecture.md` and (when present) `docs/planning-artifacts/threat-model.md`. For each File List entry, verify authn/authz boundaries align with the documented gateway/middleware pattern, secret-storage references match the documented vault path, and any ADRs referenced by the story exist with status Accepted. Findings under `category: architecture`.
+- **Security-architecture conformance.** Fork reads `docs/planning-artifacts/architecture/architecture.md` and (when present) `docs/planning-artifacts/threat-model.md`. For each File List entry, verify authn/authz boundaries align with the documented gateway/middleware pattern, secret-storage references match the documented vault path, and any ADRs referenced by the story exist with status Accepted. Findings under `category: architecture`.
 - **Threat-model cross-reference.** When threat-model context was provided, findings that match a modeled threat carry an optional `threat_ref` field (e.g., `threat_ref: "T3"`). Format the cross-reference inline as `(see T3 in threat model)`.
 - **Design fidelity.** If the story frontmatter has a `figma:` block, fork compares design-token references in the changed code against `docs/planning-artifacts/design-system/design-tokens.json`. Findings under `category: fidelity`. If no `figma:` block: skip silently (no Warning, no finding).
 

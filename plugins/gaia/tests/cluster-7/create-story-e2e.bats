@@ -193,7 +193,7 @@ _sha256() {
 _e2e_build_project_root() {
   local root="$TEST_TMP/proj"
   mkdir -p "$root/docs/planning-artifacts" "$root/docs/implementation-artifacts" "$root/config"
-  cat > "$root/docs/planning-artifacts/epics-and-stories.md" <<'EPICS'
+  cat > "$root/docs/planning-artifacts/epics/epics-and-stories.md" <<'EPICS'
 # Epics and Stories — synthetic e2e fixture
 
 ## Epic E99: E2E fixture epic (gaia-create-story integration)
@@ -246,7 +246,7 @@ _e2e_run_chain() {
   local title="Synthetic e2e fixture story"
   local epic="E99"
   local story_key="E99-S1"
-  local epics_file="$root/docs/planning-artifacts/epics-and-stories.md"
+  local epics_file="$root/docs/planning-artifacts/epics/epics-and-stories.md"
   local config_file="$root/config/project-config.yaml"
   local out_dir="$root/docs/implementation-artifacts"
 

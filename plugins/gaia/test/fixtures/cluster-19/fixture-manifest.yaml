@@ -106,17 +106,17 @@ fixtures:
 
   # Quality gates — consumed by E28-S137
   # Oracle: test/fixtures/parity-baseline/traces/quality-gates.jsonl
-  - path: quality-gate-enforcement/create-epics-stories/docs/planning-artifacts/architecture.md
+  - path: quality-gate-enforcement/create-epics-stories/docs/planning-artifacts/architecture/architecture.md
     sha256: ef335700cfebdc88d40f066b8f5152954b3e3f54ed4d5b66f4be7b99873eb3b1
     origin: synthesized
     immutable: true
     authored_by: E28-S137
-  - path: quality-gate-enforcement/implementation-readiness/docs/planning-artifacts/architecture.md
+  - path: quality-gate-enforcement/implementation-readiness/docs/planning-artifacts/architecture/architecture.md
     sha256: a28bd802e382d1e42cf9c7dc836a215e7fe1ac4856bcce401b9003dc0e22d36c
     origin: synthesized
     immutable: true
     authored_by: E28-S137
-  - path: quality-gate-enforcement/implementation-readiness/docs/planning-artifacts/epics-and-stories.md
+  - path: quality-gate-enforcement/implementation-readiness/docs/planning-artifacts/epics/epics-and-stories.md
     sha256: 971c34559b3f299c57c5cab937b71344c4b73a5f8f4b510bdf78b1db99ba5477
     origin: synthesized
     immutable: true
@@ -151,12 +151,12 @@ fixtures:
     origin: synthesized
     immutable: true
     authored_by: E28-S137
-  - path: quality-gate-enforcement/deployment-checklist/docs/planning-artifacts/readiness-report.md
+  - path: quality-gate-enforcement/deployment-checklist/docs/planning-artifacts/assessments/readiness-report.md
     sha256: 01cffffb0085a94958f4fc8052ae564ddd7462fd5f5c6d139cbe2f34328cc3c5
     origin: synthesized
     immutable: true
     authored_by: E28-S137
-  - path: quality-gate-enforcement/brownfield-onboarding/docs/planning-artifacts/architecture.md
+  - path: quality-gate-enforcement/brownfield-onboarding/docs/planning-artifacts/architecture/architecture.md
     sha256: a7c7a48a21df08689c0558e2f62e072421cd9aa1d17231c1addaef83f9989b87
     origin: synthesized
     immutable: true

@@ -15,13 +15,13 @@ allowed-tools: [Read, Write, Edit, Grep, Glob, Bash, Agent]
 
 ## Mission
 
-This skill orchestrates edits to an existing System Architecture document. Architecture authoring and reasoning is delegated to the **architect** subagent (Theo), who evaluates change impact, validates consistency, records ADRs, and produces the updated artifact. The skill loads the current architecture, coordinates the multi-step edit flow, detects cascade impacts on downstream artifacts, and writes the output to `docs/planning-artifacts/architecture.md`.
+This skill orchestrates edits to an existing System Architecture document. Architecture authoring and reasoning is delegated to the **architect** subagent (Theo), who evaluates change impact, validates consistency, records ADRs, and produces the updated artifact. The skill loads the current architecture, coordinates the multi-step edit flow, detects cascade impacts on downstream artifacts, and writes the output to `docs/planning-artifacts/architecture/architecture.md`.
 
 This skill is the native Claude Code conversion of the legacy `_gaia/lifecycle/workflows/3-solutioning/edit-architecture` workflow (brief Cluster 6, story P6-S2 / E28-S46). The step ordering, cascade-aware semantics, and output path are preserved verbatim from the legacy `instructions.xml` — do not restructure, re-prompt, or reorder.
 
 ## Critical Rules
 
-- An architecture document MUST already exist at `docs/planning-artifacts/architecture.md` before starting. If missing, fail fast with "No architecture document found at docs/planning-artifacts/architecture.md — run /gaia-create-arch first."
+- An architecture document MUST already exist at `docs/planning-artifacts/architecture/architecture.md` before starting. If missing, fail fast with "No architecture document found at docs/planning-artifacts/architecture/architecture.md — run /gaia-create-arch first."
 - Preserve existing content not being changed — edits are surgical, not wholesale rewrites. No silent drops, reorders, or modifications to unchanged sections.
 - Record every significant decision as a new ADR with auto-incremented ID in the architecture document's Decision Log table.
 - Add a version note documenting what changed, why, and the CR/reference after every edit session.
@@ -33,8 +33,8 @@ This skill is the native Claude Code conversion of the legacy `_gaia/lifecycle/w
 
 ### Step 1 — Load Existing Architecture
 
-- Read the current architecture document at `docs/planning-artifacts/architecture.md`.
-- If the file does not exist, fail fast: "No architecture document found at docs/planning-artifacts/architecture.md — run /gaia-create-arch first."
+- Read the current architecture document at `docs/planning-artifacts/architecture/architecture.md`.
+- If the file does not exist, fail fast: "No architecture document found at docs/planning-artifacts/architecture/architecture.md — run /gaia-create-arch first."
 - Count existing ADRs in Section 2 (Architecture Decisions) — note highest ADR ID for auto-increment.
 - Identify existing Version History entries — note last version number for auto-increment.
 - Display current structure summary to user: section headers, ADR count, current version.
@@ -109,17 +109,17 @@ Delegate to the **architect** subagent (Theo) via `agents/architect` to record a
 ### Step 6 — Save and Review Gate
 
 - Generate a diff summary showing exactly what changed (sections modified, ADRs added/superseded, version bump).
-- Write updated architecture document to `docs/planning-artifacts/architecture.md` with all edits applied, new ADRs appended, version incremented, and version note added.
+- Write updated architecture document to `docs/planning-artifacts/architecture/architecture.md` with all edits applied, new ADRs appended, version incremented, and version note added.
 - Read `${CLAUDE_PLUGIN_ROOT}/knowledge/adversarial-triggers.yaml` to evaluate trigger rules. (This policy table ships inside the plugin under ADR-041's `knowledge/` convention; the legacy v1 location `_gaia/_config/adversarial-triggers.yaml` is retired and no longer used.) Determine the current `change_type`: if this workflow was invoked with a change_type context (e.g., from add-feature triage), use that value. If no context is available, infer from the change scope and driver: adversarial-finding or technical-discovery maps to "feature", change-request depends on the CR classification.
 - Look up the trigger rule for `change_type` + artifact "architecture". If adversarial is false for this combination: skip adversarial review — mark "Review Findings Incorporated" as "Adversarial review not triggered — change type: {change_type} per adversarial-triggers.yaml". Proceed to Step 7.
-- If adversarial is true and magnitude meets or exceeds threshold: spawn a subagent to run the adversarial review task against `docs/planning-artifacts/architecture.md`, focused on changed sections.
+- If adversarial is true and magnitude meets or exceeds threshold: spawn a subagent to run the adversarial review task against `docs/planning-artifacts/architecture/architecture.md`, focused on changed sections.
 - When subagent returns: verify `adversarial-review-architecture-*.md` exists in `docs/planning-artifacts/`.
 - Read findings — extract critical and high severity items.
 - For each critical/high finding: incorporate into architecture document.
 - Update "Review Findings Incorporated" section — append new entries with amendment date.
 - Write the final architecture document.
 
-> `!scripts/write-checkpoint.sh gaia-edit-arch 6 project_name="$PROJECT_NAME" edit_scope=save arch_version_new="$ARCH_VERSION_NEW" --paths docs/planning-artifacts/architecture.md`
+> `!scripts/write-checkpoint.sh gaia-edit-arch 6 project_name="$PROJECT_NAME" edit_scope=save arch_version_new="$ARCH_VERSION_NEW" --paths docs/planning-artifacts/architecture/architecture.md`
 
 ### Step 7 — Val Auto-Fix Loop (E44-S2 / ADR-058)
 
@@ -128,17 +128,17 @@ Delegate to the **architect** subagent (Theo) via `agents/architect` to record a
 
 **Guards (run before invocation):**
 
-- Artifact-existence guard (AC-EC3): if not exists `docs/planning-artifacts/architecture.md` -> skip Val auto-review and exit (no Val invocation, no checkpoint, no iteration log).
+- Artifact-existence guard (AC-EC3): if not exists `docs/planning-artifacts/architecture/architecture.md` -> skip Val auto-review and exit (no Val invocation, no checkpoint, no iteration log).
 - Val-skill-availability guard (AC-EC6): if `/gaia-val-validate` SKILL.md is not resolvable at runtime -> warn `Val auto-review unavailable: /gaia-val-validate not found`, preserve the artifact, and exit cleanly.
 
 **Loop:**
 
 1. iteration = 1.
-2. Invoke `/gaia-val-validate` with `artifact_path = docs/planning-artifacts/architecture.md`, `artifact_type = architecture`, `model: claude-opus-4-7`, `effort: high` (ADR-074 contract C2 — Val opus pin). [Val opus-pin contract — see plugins/gaia/agents/validator.md §Val Operations]. **Non-opus mismatch guard (AC3):** if a test fixture or downstream override forces a non-opus model, emit the canonical WARNING `Val dispatch on non-opus model — forcing opus per ADR-074 contract C2` and force `model: claude-opus-4-7` before invoking Val.
+2. Invoke `/gaia-val-validate` with `artifact_path = docs/planning-artifacts/architecture/architecture.md`, `artifact_type = architecture`, `model: claude-opus-4-7`, `effort: high` (ADR-074 contract C2 — Val opus pin). [Val opus-pin contract — see plugins/gaia/agents/validator.md §Val Operations]. **Non-opus mismatch guard (AC3):** if a test fixture or downstream override forces a non-opus model, emit the canonical WARNING `Val dispatch on non-opus model — forcing opus per ADR-074 contract C2` and force `model: claude-opus-4-7` before invoking Val.
 3. If findings is empty: proceed past the loop.
 4. If findings contains only INFO: log informational notes, proceed past the loop.
 5. If findings contains CRITICAL or WARNING:
-     a. Apply a fix to `docs/planning-artifacts/architecture.md` addressing the findings.
+     a. Apply a fix to `docs/planning-artifacts/architecture/architecture.md` addressing the findings.
      b. Append an iteration log record to checkpoint `custom.val_loop_iterations`.
      c. iteration += 1.
      d. If iteration <= 3: go to step 2.
@@ -146,9 +146,9 @@ Delegate to the **architect** subagent (Theo) via `agents/architect` to record a
 
 YOLO INVARIANT: the iteration-3 prompt MUST NOT be auto-answered under YOLO. This wire-in does not introduce a YOLO bypass branch. See ADR-057 FR-YOLO-2(e) and ADR-058 for the hard-gate contract.
 
-> Val auto-review per E44-S2 pattern (ADR-058, architecture.md §10.31.2). Step 6 may have written the artifact twice — once initially and once again after the in-step adversarial subagent incorporated critical/high findings — but Val MUST be invoked exactly ONCE here against the FINAL post-incorporation written state of `docs/planning-artifacts/architecture.md` (story E44-S5 AC8 / AC-EC4). The adversarial incorporation completes inside Step 6 BEFORE the Step 6 checkpoint emits and BEFORE Step 7 is entered, so the artifact this loop reads is always the final state.
+> Val auto-review per E44-S2 pattern (ADR-058, architecture.md §10.31.2). Step 6 may have written the artifact twice — once initially and once again after the in-step adversarial subagent incorporated critical/high findings — but Val MUST be invoked exactly ONCE here against the FINAL post-incorporation written state of `docs/planning-artifacts/architecture/architecture.md` (story E44-S5 AC8 / AC-EC4). The adversarial incorporation completes inside Step 6 BEFORE the Step 6 checkpoint emits and BEFORE Step 7 is entered, so the artifact this loop reads is always the final state.
 
-> `!scripts/write-checkpoint.sh gaia-edit-arch 7 project_name="$PROJECT_NAME" edit_scope=val-auto-review arch_version_new="$ARCH_VERSION_NEW" stage=val-auto-review --paths docs/planning-artifacts/architecture.md`
+> `!scripts/write-checkpoint.sh gaia-edit-arch 7 project_name="$PROJECT_NAME" edit_scope=val-auto-review arch_version_new="$ARCH_VERSION_NEW" stage=val-auto-review --paths docs/planning-artifacts/architecture/architecture.md`
 
 ### Step 8 — Cascade Impact Analysis
 
@@ -218,7 +218,7 @@ This is the cascade-aware behavior preserved from the legacy edit-architecture w
   See docs/implementation-artifacts/E42-S9-port-gaia-edit-arch-25-item-checklist-to-v2.md.
 -->
 
-- [script-verifiable] SV-01 — Output file saved to docs/planning-artifacts/architecture.md
+- [script-verifiable] SV-01 — Output file saved to docs/planning-artifacts/architecture/architecture.md
 - [script-verifiable] SV-02 — Output artifact is non-empty
 - [script-verifiable] SV-03 — Unchanged sections preserved (System Overview still present)
 - [script-verifiable] SV-04 — Architecture version incremented (version marker present)

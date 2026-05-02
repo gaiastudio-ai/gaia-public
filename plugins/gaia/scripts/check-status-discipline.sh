@@ -14,7 +14,7 @@
 #   1. Story frontmatter `status:` line in
 #      `docs/implementation-artifacts/E*-S*-*.md`
 #   2. `docs/implementation-artifacts/sprint-status.yaml` per-story `status:` keys
-#   3. `docs/planning-artifacts/epics-and-stories.md` per-story `**Status:** ...`
+#   3. `docs/planning-artifacts/epics/epics-and-stories.md` per-story `**Status:** ...`
 #      indicators
 #
 # Legitimate-transition heuristic
@@ -163,7 +163,7 @@ classify_path() {
   case "$p" in
     docs/implementation-artifacts/E*-S*-*.md) printf 'story_frontmatter' ;;
     docs/implementation-artifacts/sprint-status.yaml) printf 'sprint_status' ;;
-    docs/planning-artifacts/epics-and-stories.md) printf 'epics_md' ;;
+    docs/planning-artifacts/epics/epics-and-stories.md) printf 'epics_md' ;;
     *) printf 'other' ;;
   esac
 }

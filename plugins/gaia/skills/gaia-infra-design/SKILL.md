@@ -15,23 +15,23 @@ allowed-tools: [Read, Write, Edit, Grep, Glob, Bash, Agent]
 
 ## Mission
 
-You are orchestrating the creation of an Infrastructure Design document. The infrastructure authoring is delegated to the **devops** subagent (Soren), who designs deployment topology, environment layout, IaC structure, and observability plans. You load the architecture document, validate inputs, coordinate the multi-step flow, and write the output to `docs/planning-artifacts/infrastructure-design.md`.
+You are orchestrating the creation of an Infrastructure Design document. The infrastructure authoring is delegated to the **devops** subagent (Soren), who designs deployment topology, environment layout, IaC structure, and observability plans. You load the architecture document, validate inputs, coordinate the multi-step flow, and write the output to `docs/planning-artifacts/assessments/infrastructure-design.md`.
 
 This skill is the native Claude Code conversion of the legacy `_gaia/lifecycle/workflows/3-solutioning/infrastructure-design` workflow (brief Cluster 6, story P6-S5 / E28-S49). The step ordering, prompts, and output path are preserved verbatim from the legacy `instructions.xml` — do not restructure, re-prompt, or reorder.
 
 ## Critical Rules
 
-- An architecture document MUST exist at `docs/planning-artifacts/architecture.md` before starting. If missing, fail fast with "Architecture doc not found at docs/planning-artifacts/architecture.md — run /gaia-create-arch first."
+- An architecture document MUST exist at `docs/planning-artifacts/architecture/architecture.md` before starting. If missing, fail fast with "Architecture doc not found at docs/planning-artifacts/architecture/architecture.md — run /gaia-create-arch first."
 - Every significant infrastructure decision must be recorded in the devops-sidecar memory.
 - Every environment must have a defined purpose and access policy.
 - Infrastructure authoring is delegated to the `devops` subagent (Soren) via native Claude Code subagent invocation — do NOT inline Soren's persona into this skill body. If the devops subagent (E28-S21) is not available, fail with "devops subagent not available — install E28-S21" error.
-- If `docs/planning-artifacts/infrastructure-design.md` already exists, warn the user: "An existing infrastructure design document was found. Continuing will overwrite it. Confirm to proceed or abort." Do not silently overwrite.
+- If `docs/planning-artifacts/assessments/infrastructure-design.md` already exists, warn the user: "An existing infrastructure design document was found. Continuing will overwrite it. Confirm to proceed or abort." Do not silently overwrite.
 
 ## Steps
 
 ### Step 1 — Load Architecture
 
-- Read `docs/planning-artifacts/architecture.md`.
+- Read `docs/planning-artifacts/architecture/architecture.md`.
 - Extract component inventory, service boundaries, data stores.
 - Identify compute, storage, and networking requirements.
 
@@ -83,12 +83,12 @@ Delegate to the **devops** subagent (Soren) via `agents/devops` to define observ
 ### Step 6 — Generate Output
 
 - Record key decisions in devops-sidecar memory.
-- Write the infrastructure design document to `docs/planning-artifacts/infrastructure-design.md` with: environment matrix, deployment topology, IaC structure, observability plan, and decision rationale.
+- Write the infrastructure design document to `docs/planning-artifacts/assessments/infrastructure-design.md` with: environment matrix, deployment topology, IaC structure, observability plan, and decision rationale.
 
 > After artifact write: run open-question detection snippet
-> `!${CLAUDE_PLUGIN_ROOT}/scripts/detect-open-questions.sh docs/planning-artifacts/infrastructure-design.md`
+> `!${CLAUDE_PLUGIN_ROOT}/scripts/detect-open-questions.sh docs/planning-artifacts/assessments/infrastructure-design.md`
 
-> `!scripts/write-checkpoint.sh gaia-infra-design 6 project_name="$PROJECT_NAME" target_environments="$TARGET_ENVIRONMENTS" iac_stack="$IAC_STACK" stage=output --paths docs/planning-artifacts/infrastructure-design.md`
+> `!scripts/write-checkpoint.sh gaia-infra-design 6 project_name="$PROJECT_NAME" target_environments="$TARGET_ENVIRONMENTS" iac_stack="$IAC_STACK" stage=output --paths docs/planning-artifacts/assessments/infrastructure-design.md`
 
 ### Step 7 — Val Auto-Fix Loop (E44-S2 / ADR-058)
 
@@ -97,17 +97,17 @@ Delegate to the **devops** subagent (Soren) via `agents/devops` to define observ
 
 **Guards (run before invocation):**
 
-- Artifact-existence guard (AC-EC3): if not exists `docs/planning-artifacts/infrastructure-design.md` -> skip Val auto-review and exit (no Val invocation, no checkpoint, no iteration log).
+- Artifact-existence guard (AC-EC3): if not exists `docs/planning-artifacts/assessments/infrastructure-design.md` -> skip Val auto-review and exit (no Val invocation, no checkpoint, no iteration log).
 - Val-skill-availability guard (AC-EC6): if `/gaia-val-validate` SKILL.md is not resolvable at runtime -> warn `Val auto-review unavailable: /gaia-val-validate not found`, preserve the artifact, and exit cleanly.
 
 **Loop:**
 
 1. iteration = 1.
-2. Invoke `/gaia-val-validate` with `artifact_path = docs/planning-artifacts/infrastructure-design.md`, `artifact_type = infrastructure-design`.
+2. Invoke `/gaia-val-validate` with `artifact_path = docs/planning-artifacts/assessments/infrastructure-design.md`, `artifact_type = infrastructure-design`.
 3. If findings is empty: proceed past the loop.
 4. If findings contains only INFO: log informational notes, proceed past the loop.
 5. If findings contains CRITICAL or WARNING:
-     a. Apply a fix to `docs/planning-artifacts/infrastructure-design.md` addressing the findings.
+     a. Apply a fix to `docs/planning-artifacts/assessments/infrastructure-design.md` addressing the findings.
      b. Append an iteration log record to checkpoint `custom.val_loop_iterations`.
      c. iteration += 1.
      d. If iteration <= 3: go to step 2.
@@ -115,9 +115,9 @@ Delegate to the **devops** subagent (Soren) via `agents/devops` to define observ
 
 YOLO INVARIANT: the iteration-3 prompt MUST NOT be auto-answered under YOLO. This wire-in does not introduce a YOLO bypass branch. See ADR-057 FR-YOLO-2(e) and ADR-058 for the hard-gate contract.
 
-> Val auto-review per E44-S2 pattern (ADR-058, architecture.md §10.31.2). Per story E44-S5 Task 6.2, Val's scope here is the artifact file ONLY (`docs/planning-artifacts/infrastructure-design.md`). The devops-sidecar memory writes performed in Step 6 are out of scope for Val per the E44-S1 contract (sibling pattern with threat-model AC-EC10).
+> Val auto-review per E44-S2 pattern (ADR-058, architecture.md §10.31.2). Per story E44-S5 Task 6.2, Val's scope here is the artifact file ONLY (`docs/planning-artifacts/assessments/infrastructure-design.md`). The devops-sidecar memory writes performed in Step 6 are out of scope for Val per the E44-S1 contract (sibling pattern with threat-model AC-EC10).
 
-> `!scripts/write-checkpoint.sh gaia-infra-design 7 project_name="$PROJECT_NAME" target_environments="$TARGET_ENVIRONMENTS" iac_stack="$IAC_STACK" stage=val-auto-review --paths docs/planning-artifacts/infrastructure-design.md`
+> `!scripts/write-checkpoint.sh gaia-infra-design 7 project_name="$PROJECT_NAME" target_environments="$TARGET_ENVIRONMENTS" iac_stack="$IAC_STACK" stage=val-auto-review --paths docs/planning-artifacts/assessments/infrastructure-design.md`
 
 ## Validation
 
@@ -166,7 +166,7 @@ YOLO INVARIANT: the iteration-3 prompt MUST NOT be auto-answered under YOLO. Thi
   See docs/implementation-artifacts/E42-S12-port-gaia-infra-design-25-item-checklist-to-v2.md.
 -->
 
-- [script-verifiable] SV-01 — Output file saved to docs/planning-artifacts/infrastructure-design.md
+- [script-verifiable] SV-01 — Output file saved to docs/planning-artifacts/assessments/infrastructure-design.md
 - [script-verifiable] SV-02 — Output artifact is non-empty
 - [script-verifiable] SV-03 — Environments section present (## Environments heading)
 - [script-verifiable] SV-04 — Environments include dev, staging, and production

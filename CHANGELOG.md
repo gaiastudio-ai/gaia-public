@@ -558,7 +558,7 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) for t
 
 - **E28-S28** Fix architecture version drift. Realigned downstream E28 story copy in
   `E28-S3-refresh-gaia-ground-truth.md` to reference `Architecture v1.20.0`, matching the
-  authoritative on-disk frontmatter in `docs/planning-artifacts/architecture.md`. Resolution
+  authoritative on-disk frontmatter in `docs/planning-artifacts/architecture/architecture.md`. Resolution
   direction: Option B (revert story copy) — rejected Option A (bump arch to v1.21.0) because
   no real ADR delta justified a version bump. Ground-truth planning-baseline entry updated to
   record the resolution. This change is framework-internal (no public marketplace impact) but

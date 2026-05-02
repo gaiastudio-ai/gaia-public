@@ -15,8 +15,8 @@
 #     6.10 integration note (rather than duplicating slug-comparison logic).
 #
 # Contract source:
-#   - docs/planning-artifacts/feature-create-story-hardening.md#Work-Item-6.10
-#   - docs/planning-artifacts/architecture.md §Decision Log — ADR-074
+#   - docs/planning-artifacts/intakes/feature-create-story-hardening.md#Work-Item-6.10
+#   - docs/planning-artifacts/architecture/architecture.md §Decision Log — ADR-074
 #     (deterministic-script lift)
 #   - Sibling: gaia-public/plugins/gaia/skills/gaia-create-story/scripts/slugify.sh
 #

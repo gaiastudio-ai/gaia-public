@@ -16,7 +16,7 @@
 #
 # Refs: docs/implementation-artifacts/E43-S3-*.md,
 #       docs/test-artifacts/test-plan.md §11.46.2,
-#       docs/planning-artifacts/architecture.md §10.31.3 (ADR-059).
+#       docs/planning-artifacts/architecture/architecture.md §10.31.3 (ADR-059).
 
 load 'test_helper.bash'
 
@@ -205,9 +205,9 @@ PHASE2_STEPS=(14 12)
   for n in $(seq 1 12); do
     # Steps 10 (Generate Output) and 11 (Val Auto-Fix Loop) emit --paths.
     if [ "$n" = "10" ] || [ "$n" = "11" ]; then
-      "$SCRIPT" "$slug" "$n" project_name=acme ux_slug=web prd_path=docs/planning-artifacts/prd.md --paths "$artifact"
+      "$SCRIPT" "$slug" "$n" project_name=acme ux_slug=web prd_path=docs/planning-artifacts/prd/prd.md --paths "$artifact"
     else
-      "$SCRIPT" "$slug" "$n" project_name=acme ux_slug=web prd_path=docs/planning-artifacts/prd.md
+      "$SCRIPT" "$slug" "$n" project_name=acme ux_slug=web prd_path=docs/planning-artifacts/prd/prd.md
     fi
     sleep 0.002
   done

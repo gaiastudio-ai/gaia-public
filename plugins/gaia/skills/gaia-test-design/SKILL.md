@@ -25,8 +25,8 @@ This skill is the native Claude Code conversion of the legacy `_gaia/testing/wor
 - Start with risk assessment -- not all areas need equal coverage.
 - Define quality gates for the CI pipeline.
 - The test plan template MUST exist at `${CLAUDE_PLUGIN_ROOT}/skills/gaia-test-design/test-plan-template.md` and be non-empty. If the template file is empty (0 bytes) or missing, halt with: "Test plan template not found or empty -- cannot produce test plan without template."
-- If architecture.md is missing at `docs/planning-artifacts/architecture.md`: proceed with reduced risk context, log a WARNING ("Architecture document not found -- producing test plan with generic risk ratings"), and use generic risk ratings instead of architecture-informed ones.
-- If prd.md is missing at `docs/planning-artifacts/prd.md`: proceed with reduced context, log a WARNING ("PRD not found -- test plan scope may be incomplete").
+- If architecture.md is missing at `docs/planning-artifacts/architecture/architecture.md`: proceed with reduced risk context, log a WARNING ("Architecture document not found -- producing test plan with generic risk ratings"), and use generic risk ratings instead of architecture-informed ones.
+- If prd.md is missing at `docs/planning-artifacts/prd/prd.md`: proceed with reduced context, log a WARNING ("PRD not found -- test plan scope may be incomplete").
 - Test planning is delegated to the test-architect subagent (Sable) via native Claude Code subagent invocation -- do NOT inline Sable's persona into this skill body. If the test-architect subagent is not available or not registered, halt with: "test-architect subagent not available -- ensure E28-S21 agents are installed."
 - Template resolution: load `test-plan-template.md` from this skill directory. If `custom/templates/test-plan-template.md` exists and is non-empty, use the custom template instead -- the custom template takes full precedence over the bundled default (ADR-020 / FR-101).
 - Output ALL artifacts to `docs/test-artifacts/`.
@@ -36,8 +36,8 @@ This skill is the native Claude Code conversion of the legacy `_gaia/testing/wor
 
 ### Step 1 -- Load Project Context
 
-- Read `docs/planning-artifacts/architecture.md` if available -- extract system components, their interactions, and high-risk areas.
-- Read `docs/planning-artifacts/prd.md` if available -- extract requirements (functional and non-functional).
+- Read `docs/planning-artifacts/architecture/architecture.md` if available -- extract system components, their interactions, and high-risk areas.
+- Read `docs/planning-artifacts/prd/prd.md` if available -- extract requirements (functional and non-functional).
 - Read `docs/planning-artifacts/project-context.md` if available -- extract project-level context.
 - If architecture.md is missing: log WARNING and proceed with generic risk context. Do not halt.
 - If prd.md is missing: log WARNING and proceed with reduced scope context. Do not halt.
@@ -61,7 +61,7 @@ Delegate to the **test-architect** subagent (Sable) via `agents/test-architect` 
 
 This step is **optional** -- activate only when brownfield indicators are present.
 
-- If PRD contains "Mode: Brownfield" or project has `docs/planning-artifacts/brownfield-assessment.md`: activate this step.
+- If PRD contains "Mode: Brownfield" or project has `docs/planning-artifacts/assessments/brownfield-assessment.md`: activate this step.
 - Identify integration boundaries: where new code calls legacy code and vice versa.
 - Load knowledge fragment: `knowledge/contract-testing.md` for consumer-driven contract patterns
 - For each boundary: define contract test (input/output schema validation between old and new).

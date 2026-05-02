@@ -103,8 +103,8 @@ SETUP_EOF
     --out "$TEST_TMP/audit.csv"
   [ "$status" -eq 0 ]
   # The 5 required prereq artifacts must now exist under the project root.
-  [ -s "$PROJECT_ROOT/docs/planning-artifacts/prd.md" ]
-  [ -s "$PROJECT_ROOT/docs/planning-artifacts/epics-and-stories.md" ]
+  [ -s "$PROJECT_ROOT/docs/planning-artifacts/prd/prd.md" ]
+  [ -s "$PROJECT_ROOT/docs/planning-artifacts/epics/epics-and-stories.md" ]
   [ -s "$PROJECT_ROOT/docs/test-artifacts/test-plan.md" ]
   [ -s "$PROJECT_ROOT/docs/test-artifacts/traceability-matrix.md" ]
   [ -s "$PROJECT_ROOT/docs/test-artifacts/ci-setup.md" ]
@@ -187,7 +187,7 @@ SETUP_EOF
   [ "$status" -eq 1 ]
   # Prereq artifacts must NOT be auto-created by minimal mode.
   [ ! -f "$PROJECT_ROOT/docs/test-artifacts/test-plan.md" ]
-  [ ! -f "$PROJECT_ROOT/docs/planning-artifacts/prd.md" ]
+  [ ! -f "$PROJECT_ROOT/docs/planning-artifacts/prd/prd.md" ]
   # fake-skill must have failed — land in a bucket other than OK.
   run grep '^fake-skill,' "$TEST_TMP/audit.csv"
   [ "$status" -eq 0 ]
@@ -207,7 +207,7 @@ SETUP_EOF
     --out "$TEST_TMP/audit-explicit.csv"
   [ "$status" -eq 1 ]
   [ ! -f "$PROJECT_ROOT/docs/test-artifacts/test-plan.md" ]
-  [ ! -f "$PROJECT_ROOT/docs/planning-artifacts/prd.md" ]
+  [ ! -f "$PROJECT_ROOT/docs/planning-artifacts/prd/prd.md" ]
 }
 
 @test "E28-S200: unknown --fixture-mode value rejected with exit 2" {
@@ -268,7 +268,7 @@ SETUP_EOF
   [ "$status" -eq 0 ]
   # Enriched mode pre-creates prereq artifacts — assert side-effect.
   [ -s "$PROJECT_ROOT/docs/test-artifacts/test-plan.md" ]
-  [ -s "$PROJECT_ROOT/docs/planning-artifacts/prd.md" ]
+  [ -s "$PROJECT_ROOT/docs/planning-artifacts/prd/prd.md" ]
   # Summary line must report enriched fixture mode.
   [[ "$output" == *"fixture_mode: enriched"* ]]
 }

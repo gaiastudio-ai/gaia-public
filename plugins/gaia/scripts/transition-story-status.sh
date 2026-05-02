@@ -52,7 +52,7 @@
 #   with identical inputs yields a byte-identical entry block.
 #
 #   Consumer:        plugins/gaia/skills/gaia-create-story/SKILL.md (E63-S11)
-#   Source spec:     docs/planning-artifacts/feature-create-story-hardening.md#Work-Item-6.9
+#   Source spec:     docs/planning-artifacts/intakes/feature-create-story-hardening.md#Work-Item-6.9
 #   Contract source: ADR-074 contract C3 — sole-writer discipline for story-index.yaml
 #
 # Refs: AF-2026-04-28-3, AF-2026-04-28-7, FR-338, NFR-056, ADR-042, ADR-074.

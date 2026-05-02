@@ -18,7 +18,7 @@ version: "0.1.0"
 - **Opal — Operator (internal, AML exception queue).** Scenarios: triages flagged payments in
   real time. Goals: resolve exceptions with full context. Tech proficiency: expert.
 
-Each persona traces back to a PRD user definition (see `docs/planning-artifacts/prd.md` ## User
+Each persona traces back to a PRD user definition (see `docs/planning-artifacts/prd/prd.md` ## User
 Personas).
 
 ## Information Architecture

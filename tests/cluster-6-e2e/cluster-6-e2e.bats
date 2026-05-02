@@ -28,11 +28,11 @@ setup() {
            "$TEST_TMP/config"
 
   # Seed prerequisite artifacts so gate validation passes
-  echo "# Architecture" > "$TEST_TMP/docs/planning-artifacts/architecture.md"
+  echo "# Architecture" > "$TEST_TMP/docs/planning-artifacts/architecture/architecture.md"
   echo "# Test Plan" > "$TEST_TMP/docs/test-artifacts/test-plan.md"
   echo "# Traceability Matrix" > "$TEST_TMP/docs/test-artifacts/traceability-matrix.md"
   echo "# CI Setup" > "$TEST_TMP/docs/test-artifacts/ci-setup.md"
-  echo "# PRD" > "$TEST_TMP/docs/planning-artifacts/prd.md"
+  echo "# PRD" > "$TEST_TMP/docs/planning-artifacts/prd/prd.md"
 
   # Copy fixture config
   cp "$REPO_ROOT/tests/cluster-6-parity/fixture/config/project-config.yaml" \

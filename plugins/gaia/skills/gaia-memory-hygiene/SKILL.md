@@ -111,12 +111,12 @@ For each sidecar in the master list, process one at a time (**JIT — release pr
 
 Attempt to read each reference artifact (record which exist and which are missing):
 
-- `docs/planning-artifacts/architecture.md` — for architectural decision validation
-- `docs/planning-artifacts/prd.md` — for product decision validation
-- `docs/planning-artifacts/infrastructure-design.md` — for infrastructure validation
+- `docs/planning-artifacts/architecture/architecture.md` — for architectural decision validation
+- `docs/planning-artifacts/prd/prd.md` — for product decision validation
+- `docs/planning-artifacts/assessments/infrastructure-design.md` — for infrastructure validation
 - `docs/test-artifacts/test-plan.md` — for test strategy validation
 - `docs/implementation-artifacts/sprint-status.yaml` — for sprint references and current sprint ID
-- `docs/planning-artifacts/epics-and-stories.md` — for story / epic key validation
+- `docs/planning-artifacts/epics/epics-and-stories.md` — for story / epic key validation
 
 For each artifact that exists: retain key sections for comparison in Steps 4, 5, 6, and 8.
 

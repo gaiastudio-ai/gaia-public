@@ -5,7 +5,7 @@
 # (E44-S2 / ADR-058) into the 3 Phase 2 / product-brief artifact-producing
 # skills:
 #
-#   - gaia-create-prd      -> docs/planning-artifacts/prd.md       (artifact_type=prd)
+#   - gaia-create-prd      -> docs/planning-artifacts/prd/prd.md       (artifact_type=prd)
 #   - gaia-create-ux       -> docs/planning-artifacts/ux-design.md (artifact_type=ux-design)
 #   - gaia-product-brief   -> docs/creative-artifacts/product-brief-{slug}.md
 #                                                                  (artifact_type=product-brief)
@@ -83,7 +83,7 @@ teardown() { common_teardown; }
 }
 
 @test "AC1: gaia-create-prd references prd.md artifact_path" {
-  grep -q 'docs/planning-artifacts/prd.md' "$SKILLS_DIR/gaia-create-prd/SKILL.md"
+  grep -q 'docs/planning-artifacts/prd/prd.md' "$SKILLS_DIR/gaia-create-prd/SKILL.md"
 }
 
 @test "AC1: gaia-create-ux references ux-design.md artifact_path" {

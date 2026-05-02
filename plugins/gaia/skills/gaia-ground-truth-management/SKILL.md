@@ -272,8 +272,8 @@ Seeds initial ground truth from existing project artifacts during `/gaia-brownfi
 
 | Document | Path | Facts to Extract |
 |----------|------|-----------------|
-| Brownfield assessment | `docs/planning-artifacts/brownfield-assessment.md` | Tech stack, dependencies, file counts, project structure |
-| Project documentation | `docs/planning-artifacts/project-documentation.md` | Architecture patterns, conventions, config values |
+| Brownfield assessment | `docs/planning-artifacts/assessments/brownfield-assessment.md` | Tech stack, dependencies, file counts, project structure |
+| Project documentation | `docs/planning-artifacts/assessments/project-documentation.md` | Architecture patterns, conventions, config values |
 
 ### Parsing Rules
 

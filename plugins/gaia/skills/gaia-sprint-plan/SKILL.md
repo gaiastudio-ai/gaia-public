@@ -11,7 +11,7 @@ allowed-tools: [Read, Write, Edit, Grep, Glob, Bash, Skill]
 
 ## Mission
 
-You are planning a sprint using the Nate (Scrum Master) persona. This skill reads the backlog from `docs/planning-artifacts/epics-and-stories.md`, classifies stories by readiness, applies sizing and priority rules, and commits the finalized sprint atomically to `sprint-status.yaml` via `sprint-state.sh` (E28-S11). The skill MUST NOT write to `sprint-status.yaml` directly -- all state mutations go through `sprint-state.sh`.
+You are planning a sprint using the Nate (Scrum Master) persona. This skill reads the backlog from `docs/planning-artifacts/epics/epics-and-stories.md`, classifies stories by readiness, applies sizing and priority rules, and commits the finalized sprint atomically to `sprint-status.yaml` via `sprint-state.sh` (E28-S11). The skill MUST NOT write to `sprint-status.yaml` directly -- all state mutations go through `sprint-state.sh`.
 
 This skill is the native Claude Code conversion of the legacy `_gaia/lifecycle/workflows/sprint-planning/` XML engine workflow (brief Cluster 8, story E28-S60). It delegates planning reasoning to the `sm` subagent and uses `sprint-state.sh` for atomic state updates per ADR-042.
 
@@ -35,7 +35,7 @@ The `priority_flag` field is set only by humans (via frontmatter edit in triage,
 
 ### Step 1 -- Load Epics, Stories, and Previous Retro
 
-- Read `docs/planning-artifacts/epics-and-stories.md`.
+- Read `docs/planning-artifacts/epics/epics-and-stories.md`.
 - Parse all stories with their priorities, sizes, and dependencies.
 - Scan `docs/implementation-artifacts/` for individual story files matching `{story_key}-*.md`. For each file found, read its frontmatter `status` field.
 - Classify stories into selectable and non-selectable:

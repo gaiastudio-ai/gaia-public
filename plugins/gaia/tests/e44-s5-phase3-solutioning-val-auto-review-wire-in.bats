@@ -5,17 +5,17 @@
 # (E44-S2 / ADR-058) into the 6 Phase 3 Solutioning artifact-producing
 # skills:
 #
-#   - gaia-create-arch     -> docs/planning-artifacts/architecture.md
+#   - gaia-create-arch     -> docs/planning-artifacts/architecture/architecture.md
 #                                                          (artifact_type=architecture)
-#   - gaia-edit-arch       -> docs/planning-artifacts/architecture.md
+#   - gaia-edit-arch       -> docs/planning-artifacts/architecture/architecture.md
 #                                                          (artifact_type=architecture)
 #   - gaia-review-api      -> docs/planning-artifacts/api-design-review-{date}.md
 #                                                          (artifact_type=api-design-review)
-#   - gaia-create-epics    -> docs/planning-artifacts/epics-and-stories.md
+#   - gaia-create-epics    -> docs/planning-artifacts/epics/epics-and-stories.md
 #                                                          (artifact_type=epics-and-stories)
 #   - gaia-threat-model    -> docs/planning-artifacts/threat-model.md
 #                                                          (artifact_type=threat-model)
-#   - gaia-infra-design    -> docs/planning-artifacts/infrastructure-design.md
+#   - gaia-infra-design    -> docs/planning-artifacts/assessments/infrastructure-design.md
 #                                                          (artifact_type=infrastructure-design)
 #
 # Story acceptance criteria covered (script-verifiable subset):
@@ -123,28 +123,28 @@ teardown() { common_teardown; }
 # AC4 — Correct artifact_path per skill
 # ---------------------------------------------------------------------------
 
-@test "AC4: gaia-create-arch references docs/planning-artifacts/architecture.md artifact_path" {
-  grep -q 'docs/planning-artifacts/architecture.md' "$SKILLS_DIR/gaia-create-arch/SKILL.md"
+@test "AC4: gaia-create-arch references docs/planning-artifacts/architecture/architecture.md artifact_path" {
+  grep -q 'docs/planning-artifacts/architecture/architecture.md' "$SKILLS_DIR/gaia-create-arch/SKILL.md"
 }
 
-@test "AC4: gaia-edit-arch references docs/planning-artifacts/architecture.md artifact_path" {
-  grep -q 'docs/planning-artifacts/architecture.md' "$SKILLS_DIR/gaia-edit-arch/SKILL.md"
+@test "AC4: gaia-edit-arch references docs/planning-artifacts/architecture/architecture.md artifact_path" {
+  grep -q 'docs/planning-artifacts/architecture/architecture.md' "$SKILLS_DIR/gaia-edit-arch/SKILL.md"
 }
 
 @test "AC4: gaia-review-api references api-design-review-{date} artifact_path" {
   grep -qE 'api-design-review-\{date\}' "$SKILLS_DIR/gaia-review-api/SKILL.md"
 }
 
-@test "AC4: gaia-create-epics references docs/planning-artifacts/epics-and-stories.md artifact_path" {
-  grep -q 'docs/planning-artifacts/epics-and-stories.md' "$SKILLS_DIR/gaia-create-epics/SKILL.md"
+@test "AC4: gaia-create-epics references docs/planning-artifacts/epics/epics-and-stories.md artifact_path" {
+  grep -q 'docs/planning-artifacts/epics/epics-and-stories.md' "$SKILLS_DIR/gaia-create-epics/SKILL.md"
 }
 
 @test "AC4: gaia-threat-model references docs/planning-artifacts/threat-model.md artifact_path" {
   grep -q 'docs/planning-artifacts/threat-model.md' "$SKILLS_DIR/gaia-threat-model/SKILL.md"
 }
 
-@test "AC4: gaia-infra-design references docs/planning-artifacts/infrastructure-design.md artifact_path" {
-  grep -q 'docs/planning-artifacts/infrastructure-design.md' "$SKILLS_DIR/gaia-infra-design/SKILL.md"
+@test "AC4: gaia-infra-design references docs/planning-artifacts/assessments/infrastructure-design.md artifact_path" {
+  grep -q 'docs/planning-artifacts/assessments/infrastructure-design.md' "$SKILLS_DIR/gaia-infra-design/SKILL.md"
 }
 
 # ---------------------------------------------------------------------------

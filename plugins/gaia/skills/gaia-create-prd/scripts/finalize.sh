@@ -33,7 +33,7 @@
 #                 AC-EC3 fires — a single "no artifact to validate"
 #                 violation is emitted and the script exits non-zero.
 #                 When unset, the script looks for
-#                 docs/planning-artifacts/prd.md relative to the
+#                 docs/planning-artifacts/prd/prd.md relative to the
 #                 current working directory. If neither is present,
 #                 the checklist run is skipped (classic Cluster 5
 #                 behaviour — observability still runs, exit 0).
@@ -57,7 +57,7 @@ die() { log "$*"; exit 1; }
 # ---------- 0. Resolve artifact path ----------
 # PRD_ARTIFACT wins when set (test fixtures + explicit invocation). If
 # it is set but the file is missing, AC-EC3 fires. If unset, fall back
-# to docs/planning-artifacts/prd.md. If neither is present the
+# to docs/planning-artifacts/prd/prd.md. If neither is present the
 # checklist is simply skipped (observability still runs).
 ARTIFACT=""
 ARTIFACT_REQUESTED=0
@@ -65,8 +65,8 @@ if [ -n "${PRD_ARTIFACT:-}" ]; then
   ARTIFACT_REQUESTED=1
   ARTIFACT="$PRD_ARTIFACT"
 else
-  if [ -f "docs/planning-artifacts/prd.md" ]; then
-    ARTIFACT="docs/planning-artifacts/prd.md"
+  if [ -f "docs/planning-artifacts/prd/prd.md" ]; then
+    ARTIFACT="docs/planning-artifacts/prd/prd.md"
   fi
 fi
 
@@ -232,7 +232,7 @@ if [ "$ARTIFACT_REQUESTED" -eq 1 ] && [ ! -f "$ARTIFACT" ]; then
   log "no artifact to validate at $ARTIFACT"
   printf '\nChecklist violations:\n' >&2
   printf '  - no artifact to validate (expected %s)\n' "$ARTIFACT" >&2
-  printf 'Remediation: rerun /gaia-create-prd to produce docs/planning-artifacts/prd.md, then rerun finalize.sh.\n' >&2
+  printf 'Remediation: rerun /gaia-create-prd to produce docs/planning-artifacts/prd/prd.md, then rerun finalize.sh.\n' >&2
   CHECKLIST_STATUS=1
 elif [ -n "$ARTIFACT" ] && [ -f "$ARTIFACT" ]; then
   log "running 36-item checklist against $ARTIFACT"
@@ -241,7 +241,7 @@ elif [ -n "$ARTIFACT" ] && [ -f "$ARTIFACT" ]; then
   # --- Script-verifiable items (24) ---
 
   # Envelope (SV-01..SV-03)
-  item_check "SV-01" "Output artifact exists at docs/planning-artifacts/prd.md" \
+  item_check "SV-01" "Output artifact exists at docs/planning-artifacts/prd/prd.md" \
     "$([ -f "$ARTIFACT" ] && echo pass || echo fail)"
   item_check "SV-02" "Output artifact is non-empty" "$(file_nonempty "$ARTIFACT")"
 
@@ -337,7 +337,7 @@ EOF
     CHECKLIST_STATUS=0
   fi
 else
-  log "no PRD artifact found (PRD_ARTIFACT unset and no docs/planning-artifacts/prd.md) — skipping checklist run"
+  log "no PRD artifact found (PRD_ARTIFACT unset and no docs/planning-artifacts/prd/prd.md) — skipping checklist run"
   CHECKLIST_STATUS=0
 fi
 

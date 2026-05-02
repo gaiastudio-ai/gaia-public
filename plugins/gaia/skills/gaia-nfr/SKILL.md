@@ -24,7 +24,7 @@ This skill is the native Claude Code conversion of the legacy `_gaia/testing/wor
 - A story key or project context MUST be available. If no story key is provided as an argument and no project context can be loaded, prompt: "Provide a story key or confirm project-level assessment."
 - Assess all dimensions: performance, security, reliability, and scalability.
 - Per-dimension justification is a **hard output requirement**: every risk rating MUST be accompanied by a justification that explicitly explains **why** the chosen risk level (high, medium, or low) was selected. Justification is a required output, not an optional nudge -- a rating without a "why high/medium/low" justification is incomplete and MUST be rewritten.
-- Migration-assessment activation trigger (Step 6): activate the migration assessment step when **(a)** the PRD contains "Mode: Brownfield" OR **(b)** `docs/planning-artifacts/brownfield-assessment.md` exists. If neither indicator is present, skip Step 6 entirely.
+- Migration-assessment activation trigger (Step 6): activate the migration assessment step when **(a)** the PRD contains "Mode: Brownfield" OR **(b)** `docs/planning-artifacts/assessments/brownfield-assessment.md` exists. If neither indicator is present, skip Step 6 entirely.
 - Output MUST be written to `docs/test-artifacts/nfr-assessment.md`.
 - Sprint-status.yaml is NEVER written by this skill (Sprint-Status Write Safety rule).
 
@@ -33,8 +33,8 @@ This skill is the native Claude Code conversion of the legacy `_gaia/testing/wor
 ### Step 1 -- Load NFRs
 
 - Load knowledge fragment: `knowledge/risk-governance.md` for risk-based assessment methodology
-- Read NFRs from PRD at `docs/planning-artifacts/prd.md` if available.
-- Read NFRs from architecture document at `docs/planning-artifacts/architecture.md` if available.
+- Read NFRs from PRD at `docs/planning-artifacts/prd/prd.md` if available.
+- Read NFRs from architecture document at `docs/planning-artifacts/architecture/architecture.md` if available.
 - If neither document exists, proceed with generic NFR assessment based on common patterns.
 - Extract: response time targets, throughput requirements, availability SLAs, security requirements, data protection obligations.
 
@@ -72,7 +72,7 @@ This skill is the native Claude Code conversion of the legacy `_gaia/testing/wor
 
 This step is **optional** -- activate only when brownfield indicators are present.
 
-**Activation trigger (explicit):** activate Step 6 when **(a)** the PRD contains "Mode: Brownfield" OR **(b)** `docs/planning-artifacts/brownfield-assessment.md` exists. Both conditions are independent triggers -- either one activates the migration assessment. If neither indicator is present, skip Step 6 entirely.
+**Activation trigger (explicit):** activate Step 6 when **(a)** the PRD contains "Mode: Brownfield" OR **(b)** `docs/planning-artifacts/assessments/brownfield-assessment.md` exists. Both conditions are independent triggers -- either one activates the migration assessment. If neither indicator is present, skip Step 6 entirely.
 
 When active, evaluate each of the following migration risk dimensions and rate each one (high/medium/low) with a justification that explains **why** the chosen level was selected. Justification is a required output for every sub-dimension, not optional.
 

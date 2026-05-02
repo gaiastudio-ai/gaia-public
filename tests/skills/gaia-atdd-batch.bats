@@ -36,7 +36,7 @@ setup() {
            "$TEST_TMP/docs/test-artifacts" \
            "$TEST_TMP/docs/implementation-artifacts"
 
-  EPICS_FILE="$TEST_TMP/docs/planning-artifacts/epics-and-stories.md"
+  EPICS_FILE="$TEST_TMP/docs/planning-artifacts/epics/epics-and-stories.md"
   TEST_ARTIFACTS="$TEST_TMP/docs/test-artifacts"
 }
 

@@ -26,14 +26,14 @@ This skill is the native Claude Code conversion of the legacy add-stories workfl
 - New stories MUST follow the exact format used in existing epics-and-stories.md.
 - Story and epic IDs must not collide with existing IDs -- auto-increment from highest existing.
 - Append to existing content -- never overwrite or reorder existing stories or epics.
-- The epics-and-stories document MUST exist at `docs/planning-artifacts/epics-and-stories.md` before starting. If missing, fail fast with "epics-and-stories.md not found -- run /gaia-create-epics first."
+- The epics-and-stories document MUST exist at `docs/planning-artifacts/epics/epics-and-stories.md` before starting. If missing, fail fast with "epics-and-stories.md not found -- run /gaia-create-epics first."
 - The `sprint-status.yaml` MUST be re-read immediately before writing (Sprint-Status Write Safety rule).
 
 ## Steps
 
 ### Step 1 -- Load and Analyze Existing State
 
-- Read `docs/planning-artifacts/epics-and-stories.md` in full.
+- Read `docs/planning-artifacts/epics/epics-and-stories.md` in full.
 - Read `docs/implementation-artifacts/sprint-status.yaml` in full.
 - Parse all existing epic IDs and names.
 - Parse all existing story IDs per epic -- identify highest ID per epic and overall.
@@ -50,8 +50,8 @@ This skill is the native Claude Code conversion of the legacy add-stories workfl
 - Otherwise ask: What new stories need to be added? Describe the feature or requirements.
 - Ask: Do these belong to an existing epic, or is a new epic needed?
 - Ask: Is this linked to a change request? If so, provide the CR ID.
-- Read relevant sections of `docs/planning-artifacts/prd.md` for context -- focus on NEW requirements if prd_diff is available.
-- Read relevant sections of `docs/planning-artifacts/architecture.md` for technical context -- focus on changes if arch_diff is available.
+- Read relevant sections of `docs/planning-artifacts/prd/prd.md` for context -- focus on NEW requirements if prd_diff is available.
+- Read relevant sections of `docs/planning-artifacts/architecture/architecture.md` for technical context -- focus on changes if arch_diff is available.
 
 ### Step 3 -- Epic Decision
 
@@ -98,7 +98,7 @@ This skill is the native Claude Code conversion of the legacy add-stories workfl
 - If new epic created: append entire epic section at end of document with all new stories.
 - If adding to existing epic: append new stories after the last story in that epic.
 - Add change log entry: date, feature name, CR ID (if applicable), epics affected, stories added.
-- Write the updated `docs/planning-artifacts/epics-and-stories.md`.
+- Write the updated `docs/planning-artifacts/epics/epics-and-stories.md`.
 - Recount epic overview table story counts and update in-place.
 
 ### Step 8 -- Inline Validation

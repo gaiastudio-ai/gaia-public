@@ -32,7 +32,7 @@ Count confirmed: **exactly 8 non-OK / non-NO-SCRIPTS rows**, matching the F1–F
 | # | Skill | Phase | Exit | Stderr summary |
 |---|---|---|---|---|
 | 1 | `gaia-add-feature` | setup | 1 | `validate-gate: unknown gate type: prd_exists` → generic HALT message |
-| 2 | `gaia-add-stories` | setup | 1 | `epics_and_stories_exists failed — expected: docs/planning-artifacts/epics-and-stories.md` |
+| 2 | `gaia-add-stories` | setup | 1 | `epics_and_stories_exists failed — expected: docs/planning-artifacts/epics/epics-and-stories.md` |
 | 3 | `gaia-create-story` | setup | 1 | same as #2 |
 | 4 | `gaia-ci-edit` | finalize | 1 | `validate-gate.sh: ci_setup_exists gate failed — CI setup output not found` |
 | 5 | `gaia-ci-setup` | finalize | 1 | same as #4 |
@@ -163,9 +163,9 @@ The harness currently only requires `--project-root` (a pre-migrated project dir
 Suggested enrichment (new optional flag or auto-populate mode):
 - Add `--fixture-mode=minimal|enriched` flag
 - In `enriched` mode, before running skills, touch (or `echo "[fixture]"`) the following files in `$PROJECT_ROOT`:
-  - `docs/planning-artifacts/prd.md`
-  - `docs/planning-artifacts/epics-and-stories.md`
-  - `docs/planning-artifacts/readiness-report.md`
+  - `docs/planning-artifacts/prd/prd.md`
+  - `docs/planning-artifacts/epics/epics-and-stories.md`
+  - `docs/planning-artifacts/assessments/readiness-report.md`
   - `docs/test-artifacts/test-plan.md`
   - `docs/test-artifacts/traceability-matrix.md`
   - `docs/test-artifacts/ci-setup.md`
@@ -209,7 +209,7 @@ No EnvContract, AcceptedDegradation, or Deprecate stories needed.
 
 ## 6. Go / No-Go Recommendation (AC6)
 
-Answering against the five go/no-go criteria in `docs/planning-artifacts/E28-S196-scope-pm-review.md`:
+Answering against the five go/no-go criteria in `docs/planning-artifacts/reviews/E28-S196-scope-pm-review.md`:
 
 | Criterion | Status | Notes |
 |---|---|---|

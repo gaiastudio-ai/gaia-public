@@ -141,7 +141,7 @@ count_files_touched() {
 
 @test "create-prd: checkpoint captures medium-workflow state mid-draft" {
   local prd
-  prd=$(seed_file "$TEST_TMP/docs/planning-artifacts/prd.md" \
+  prd=$(seed_file "$TEST_TMP/docs/planning-artifacts/prd/prd.md" \
     "# PRD — in-progress draft\n## Goals\nTBD\n")
 
   run "$CHECKPOINT_SH" write \
@@ -164,7 +164,7 @@ count_files_touched() {
   # Simulate Step 3 writing a partial PRD and a checkpoint.
   local prd expected
   expected="# PRD\n## Goals\nLaunch Q2\n## Users\nInternal devs\n"
-  prd=$(seed_file "$TEST_TMP/docs/planning-artifacts/prd.md" "$expected")
+  prd=$(seed_file "$TEST_TMP/docs/planning-artifacts/prd/prd.md" "$expected")
 
   "$CHECKPOINT_SH" write \
     --workflow "create-prd" \

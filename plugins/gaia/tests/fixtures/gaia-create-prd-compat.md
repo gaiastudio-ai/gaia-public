@@ -43,4 +43,4 @@
 #   PRD authoring delegated to pm subagent (Derek) — no inline persona.
 #   Subagent file: agents/pm.md
 #
-# Output path: docs/planning-artifacts/prd.md
+# Output path: docs/planning-artifacts/prd/prd.md

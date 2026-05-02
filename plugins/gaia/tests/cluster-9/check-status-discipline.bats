@@ -183,7 +183,7 @@ write_marker() {
 }
 
 @test "Scenario 7: epics-and-stories.md status edit without marker → non-zero" {
-  local rel="docs/planning-artifacts/epics-and-stories.md"
+  local rel="docs/planning-artifacts/epics/epics-and-stories.md"
   seed_initial_commit "$rel" "$(epics_and_stories_md 'ready-for-dev')"
   modify_staged_file "$rel" "$(epics_and_stories_md 'in-progress')"
   rm -f "$STATUS_TRANSITION_MARKER"

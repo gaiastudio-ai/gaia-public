@@ -4,8 +4,8 @@
 # Purpose:
 #   Reject any /gaia-dev-story Step 4 plan that is missing a required
 #   section. The canonical 9-section list is sourced from FR-DSH-4
-#   (docs/planning-artifacts/prd.md §4.36) and ADR-073
-#   (docs/planning-artifacts/architecture.md Decision Log).
+#   (docs/planning-artifacts/prd/prd.md §4.36) and ADR-073
+#   (docs/planning-artifacts/architecture/architecture.md Decision Log).
 #
 # Canonical sections (top-to-bottom; first miss wins):
 #   1. Context

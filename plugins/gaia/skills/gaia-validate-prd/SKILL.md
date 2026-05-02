@@ -29,8 +29,8 @@ This skill acts as a backward-compatible redirect: it accepts the same invocatio
 
 ### Step 1 — Resolve PRD Artifact Path
 
-- Locate the PRD at `docs/planning-artifacts/prd.md`.
-- If the file does not exist, fail fast: "No PRD found at docs/planning-artifacts/prd.md — run /gaia-create-prd first."
+- Locate the PRD at `docs/planning-artifacts/prd/prd.md`.
+- If the file does not exist, fail fast: "No PRD found at docs/planning-artifacts/prd/prd.md — run /gaia-create-prd first."
 - Pass the resolved PRD path through to the redirect target.
 
 ### Step 2 — Redirect to gaia-val-validate
@@ -38,7 +38,7 @@ This skill acts as a backward-compatible redirect: it accepts the same invocatio
 Invoke the `gaia-val-validate` skill, forwarding the PRD artifact path unchanged:
 
 ```
-/gaia-val-validate docs/planning-artifacts/prd.md
+/gaia-val-validate docs/planning-artifacts/prd/prd.md
 ```
 
 All validation logic — completeness checks, structural validation, quality checks, consistency checks, and report generation — is handled by `gaia-val-validate` via the validator subagent (Val, scaffolded by E28-S21). No validation steps are duplicated here.

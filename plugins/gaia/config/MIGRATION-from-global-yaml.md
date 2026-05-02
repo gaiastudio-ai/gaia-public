@@ -73,7 +73,7 @@ The shared default (`framework_version`, `date`) passes through unchanged; the o
 | 21 | `val_integration` | moved-to-project-config | Per-project Val agent knobs (ADR-042). |
 | 22 | `ci_cd` | moved-to-project-config | Per-project CI/CD promotion chain (ADR-048). |
 | 23 | `test_execution_bridge` | moved-to-project-config | Team-wide test bridge enablement (FR-194/FR-197/NFR-034/ADR-028). Same enablement across all teammates so CI and local runs behave identically. |
-| 24 | `adr_registry` | stays-in-global | Pointer to the canonical ADR registry (table in `docs/planning-artifacts/architecture.md`) and the standalone-memo glob. Per-project but encoded as repo-relative paths; the field exists so tooling can locate the registry without hardcoding the path. Added by ADR-068. |
+| 24 | `adr_registry` | stays-in-global | Pointer to the canonical ADR registry (table in `docs/planning-artifacts/architecture/architecture.md`) and the standalone-memo glob. Per-project but encoded as repo-relative paths; the field exists so tooling can locate the registry without hardcoding the path. Added by ADR-068. |
 
 ## Fields new to `project-config.yaml` (no predecessor in `global.yaml`)
 
@@ -116,7 +116,7 @@ Each key's default resolves relative to `project_root` and matches the live valu
 
 ### Override semantics
 
-The four keys follow the `project > global` precedence rule per [ADR-044 §10.26.3 (Config Split — Local vs Shared)](../../../docs/planning-artifacts/architecture.md#10263-foundation-scripts-adr-042). When `project-config.yaml` declares any of these keys, the project value overrides the framework default; when absent, `resolve-config.sh` composes the default under `project_root` (`{project_root}/docs/<dir>`). The same precedence governs every other shared/local pair documented above — artifact paths are not a special case.
+The four keys follow the `project > global` precedence rule per [ADR-044 §10.26.3 (Config Split — Local vs Shared)](../../../docs/planning-artifacts/architecture/architecture.md#10263-foundation-scripts-adr-042). When `project-config.yaml` declares any of these keys, the project value overrides the framework default; when absent, `resolve-config.sh` composes the default under `project_root` (`{project_root}/docs/<dir>`). The same precedence governs every other shared/local pair documented above — artifact paths are not a special case.
 
 The resolver emits the merged value verbatim. An override of `planning_artifacts: planning/` flows through unchanged — the resolver does NOT re-prefix it with `project_root`. Operators are responsible for choosing values that make sense in their project layout (relative to `project_root` is the convention; absolute paths work but discourage portability).
 

@@ -24,7 +24,7 @@
 #
 # Refs: docs/implementation-artifacts/E43-S5-*.md,
 #       docs/test-artifacts/test-plan.md §11.46.2,
-#       docs/planning-artifacts/architecture.md §10.31.3 (ADR-059).
+#       docs/planning-artifacts/architecture/architecture.md §10.31.3 (ADR-059).
 
 load 'test_helper.bash'
 
@@ -220,7 +220,7 @@ PHASE3_TEST_STEPS=(9 7 5 5 6 9 5 8)
     "gaia-atdd|5|story_key|E1-S1|test_file_path|docs/test-artifacts/atdd-E1-S1.md" \
     "gaia-trace|6|trace_matrix_path|docs/test-artifacts/traceability-matrix.md|coverage_metrics|full" \
     "gaia-review-a11y|5|a11y_scope|component|report_path|docs/test-artifacts/a11y.md" \
-    "gaia-val-validate|8|artifact_path|docs/planning-artifacts/prd.md|iteration_number|1"; do
+    "gaia-val-validate|8|artifact_path|docs/planning-artifacts/prd/prd.md|iteration_number|1"; do
     local slug expected k1 v1 k2 v2
     IFS='|' read -r slug expected k1 v1 k2 v2 <<<"$spec"
     local artifact="$TEST_TMP/$slug.md"

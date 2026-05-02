@@ -85,6 +85,6 @@ The chosen agent file uses `name: tdd-reviewer` and persona name **Tex** (TDD re
 - `gaia-public/plugins/gaia/agents/_SCHEMA.md` — frontmatter schema (`name`, `context`, `allowed-tools`).
 - `gaia-public/plugins/gaia/agents/validator.md` — reference fork-context, read-only review agent.
 - `gaia-public/plugins/gaia/agents/qa.md` — Vera, test-generation persona left intact under Option A.
-- `docs/planning-artifacts/architecture.md` §Decision Log — ADR-037, ADR-063, ADR-067.
+- `docs/planning-artifacts/architecture/architecture.md` §Decision Log — ADR-037, ADR-063, ADR-067.
 - `docs/test-artifacts/test-plan.md` §11.51 — TC-TDR-05/06/07/08.
 - `docs/test-artifacts/atdd-E57-S3.md` — failing test scenarios for this story.

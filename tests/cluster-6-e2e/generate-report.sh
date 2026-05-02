@@ -51,7 +51,7 @@ mkdir -p "$REPORT_TMP/memory" "$REPORT_TMP/checkpoints" "$REPORT_TMP/config" \
 echo "# Test Plan" > "$REPORT_TMP/docs/test-artifacts/test-plan.md"
 echo "# Traceability Matrix" > "$REPORT_TMP/docs/test-artifacts/traceability-matrix.md"
 echo "# CI Setup" > "$REPORT_TMP/docs/test-artifacts/ci-setup.md"
-echo "# Architecture" > "$REPORT_TMP/docs/planning-artifacts/architecture.md"
+echo "# Architecture" > "$REPORT_TMP/docs/planning-artifacts/architecture/architecture.md"
 
 cp "$REPO_ROOT/tests/cluster-6-parity/fixture/config/project-config.yaml" \
    "$REPORT_TMP/config/project-config.yaml" 2>/dev/null || true

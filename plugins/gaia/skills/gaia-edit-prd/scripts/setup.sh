@@ -65,7 +65,7 @@ fi
 
 # ---------- 2b. Guard: prd.md must already exist ----------
 PROJECT_ROOT="${PROJECT_ROOT:-$(cd "$SKILL_DIR/../../../../.." && pwd)}"
-PRD_PATH="$PROJECT_ROOT/docs/planning-artifacts/prd.md"
+PRD_PATH="$PROJECT_ROOT/docs/planning-artifacts/prd/prd.md"
 
 if [ ! -f "$PRD_PATH" ]; then
   log "prd.md not found at $PRD_PATH — edit-prd requires an existing PRD (non-fatal in setup)"

@@ -86,7 +86,7 @@ When triggered with sprint mode (e.g., `/gaia sprint`), auto-orchestrate the ful
 
 When triggered with story creation mode (e.g., `/gaia story [count] [parallel]`), create multiple story files in parallel:
 
-1. **Identify stories:** read `docs/planning-artifacts/epics-and-stories.md` and scan `docs/implementation-artifacts/` for existing story files. Build a candidate list of story keys without files. Sort by priority (P0 → P1 → P2), then dependency topology, then epic order.
+1. **Identify stories:** read `docs/planning-artifacts/epics/epics-and-stories.md` and scan `docs/implementation-artifacts/` for existing story files. Build a candidate list of story keys without files. Sort by priority (P0 → P1 → P2), then dependency topology, then epic order.
 2. **Worker pool:** process candidates in batches of `parallel_count` (default 4). For each batch, spawn up to `parallel_count` create-story subagents in a single Task-tool batch in YOLO mode, wait for all to return, then move to the next batch.
 3. **Validation sweep:** for any story left in `backlog` after create-story, spawn `val-validate-artifact` as a direct subagent. Auto-fix CRITICAL/WARNING findings and re-validate up to 3 attempts. Set `ready-for-dev` on success or `validating` on failure.
 4. **Summary:** display a story creation report in the conversation with counts of ready-for-dev, validating, and failed stories and the next recommended step (`/gaia-sprint-plan`).

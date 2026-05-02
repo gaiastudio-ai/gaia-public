@@ -21,7 +21,7 @@ This skill is the native Claude Code conversion of the legacy `_gaia/lifecycle/w
 
 ## Critical Rules
 
-- An architecture document MUST exist at `docs/planning-artifacts/architecture.md` before starting. If missing, fail fast with "Architecture doc not found at docs/planning-artifacts/architecture.md — run /gaia-create-arch first."
+- An architecture document MUST exist at `docs/planning-artifacts/architecture/architecture.md` before starting. If missing, fail fast with "Architecture doc not found at docs/planning-artifacts/architecture/architecture.md — run /gaia-create-arch first."
 - Use STRIDE methodology for threat identification — all six categories must be evaluated for every component and data flow.
 - Use DREAD scoring for risk prioritization — all five dimensions must be rated for every identified threat.
 - Record all threat model decisions in security-sidecar memory.
@@ -32,7 +32,7 @@ This skill is the native Claude Code conversion of the legacy `_gaia/lifecycle/w
 
 ### Step 1 — Load Architecture
 
-- Read `docs/planning-artifacts/architecture.md`.
+- Read `docs/planning-artifacts/architecture/architecture.md`.
 - Extract system components, data flows, and trust boundaries.
 - Identify external interfaces, APIs, and user-facing endpoints.
 

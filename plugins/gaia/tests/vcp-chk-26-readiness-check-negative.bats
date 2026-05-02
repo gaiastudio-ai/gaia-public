@@ -26,8 +26,8 @@ setup() {
   # noise).
   export PROJECT_ROOT="$TEST_TMP/project"
   mkdir -p "$PROJECT_ROOT/docs/planning-artifacts" "$PROJECT_ROOT/docs/test-artifacts"
-  : > "$PROJECT_ROOT/docs/planning-artifacts/prd.md"
-  : > "$PROJECT_ROOT/docs/planning-artifacts/architecture.md"
+  : > "$PROJECT_ROOT/docs/planning-artifacts/prd/prd.md"
+  : > "$PROJECT_ROOT/docs/planning-artifacts/architecture/architecture.md"
   : > "$PROJECT_ROOT/docs/test-artifacts/test-plan.md"
 }
 

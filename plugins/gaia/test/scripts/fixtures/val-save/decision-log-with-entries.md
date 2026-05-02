@@ -12,7 +12,7 @@
 - **Sprint:** sprint-20
 - **Type:** validation
 - **Status:** active
-- **Related:** docs/planning-artifacts/prd.md
+- **Related:** docs/planning-artifacts/prd/prd.md
 
 Validated the PRD document structure. Found 2 structural issues (missing stakeholder section, incomplete NFR list). Both marked as WARNING findings.
 
@@ -23,6 +23,6 @@ Validated the PRD document structure. Found 2 structural issues (missing stakeho
 - **Sprint:** sprint-20
 - **Type:** validation
 - **Status:** active
-- **Related:** docs/planning-artifacts/architecture.md, ADR-041
+- **Related:** docs/planning-artifacts/architecture/architecture.md, ADR-041
 
 Cross-referenced architecture document against codebase. All file paths verified. 3 INFO findings logged for documentation improvements.

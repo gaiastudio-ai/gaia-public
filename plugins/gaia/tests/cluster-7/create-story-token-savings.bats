@@ -50,8 +50,8 @@
 #
 # Spec references
 # ---------------
-#   - docs/planning-artifacts/feature-create-story-hardening.md (Work Item 6)
-#   - docs/planning-artifacts/architecture.md §Decision Log — ADR-074
+#   - docs/planning-artifacts/intakes/feature-create-story-hardening.md (Work Item 6)
+#   - docs/planning-artifacts/architecture/architecture.md §Decision Log — ADR-074
 #   - docs/implementation-artifacts/E63-S11-*.md — this story
 
 load 'test_helper.bash'

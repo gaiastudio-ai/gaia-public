@@ -205,7 +205,7 @@ setup() {
   # Create traceability and readiness but NOT ci-setup
   # E28-S152: readiness-report.md lives under PLANNING_ARTIFACTS
   echo "# Trace" > "$tmpdir/docs/test-artifacts/traceability-matrix.md"
-  echo "# Ready" > "$tmpdir/docs/planning-artifacts/readiness-report.md"
+  echo "# Ready" > "$tmpdir/docs/planning-artifacts/assessments/readiness-report.md"
   run env TEST_ARTIFACTS="$tmpdir/docs/test-artifacts" \
       PLANNING_ARTIFACTS="$tmpdir/docs/planning-artifacts" \
       "$VALIDATE_GATE" ci_setup_exists
@@ -236,7 +236,7 @@ setup() {
   # E28-S152: readiness-report.md lives under PLANNING_ARTIFACTS
   echo "# Trace" > "$tmpdir/docs/test-artifacts/traceability-matrix.md"
   echo "# CI" > "$tmpdir/docs/test-artifacts/ci-setup.md"
-  echo "# Ready" > "$tmpdir/docs/planning-artifacts/readiness-report.md"
+  echo "# Ready" > "$tmpdir/docs/planning-artifacts/assessments/readiness-report.md"
   run env TEST_ARTIFACTS="$tmpdir/docs/test-artifacts" \
       PLANNING_ARTIFACTS="$tmpdir/docs/planning-artifacts" \
       "$VALIDATE_GATE" --multi traceability_exists,ci_setup_exists,readiness_report_exists

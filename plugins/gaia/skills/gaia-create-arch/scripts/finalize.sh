@@ -34,7 +34,7 @@
 #                          not exist, AC4 fires — a single "no artifact to
 #                          validate" violation is emitted and the script
 #                          exits non-zero. When unset, the script looks for
-#                          docs/planning-artifacts/architecture.md relative
+#                          docs/planning-artifacts/architecture/architecture.md relative
 #                          to the current working directory. If neither is
 #                          present, the checklist run is skipped (classic
 #                          Cluster 6 behaviour — observability still runs,
@@ -59,7 +59,7 @@ die() { log "$*"; exit 1; }
 # ---------- 0. Resolve artifact path ----------
 # ARCHITECTURE_ARTIFACT wins when set (test fixtures + explicit invocation).
 # If it is set but the file is missing, AC4 fires. If unset, fall back
-# to docs/planning-artifacts/architecture.md. If neither is present the
+# to docs/planning-artifacts/architecture/architecture.md. If neither is present the
 # checklist is simply skipped (observability still runs).
 ARTIFACT=""
 ARTIFACT_REQUESTED=0
@@ -67,8 +67,8 @@ if [ -n "${ARCHITECTURE_ARTIFACT:-}" ]; then
   ARTIFACT_REQUESTED=1
   ARTIFACT="$ARCHITECTURE_ARTIFACT"
 else
-  if [ -f "docs/planning-artifacts/architecture.md" ]; then
-    ARTIFACT="docs/planning-artifacts/architecture.md"
+  if [ -f "docs/planning-artifacts/architecture/architecture.md" ]; then
+    ARTIFACT="docs/planning-artifacts/architecture/architecture.md"
   fi
 fi
 
@@ -202,7 +202,7 @@ if [ "$ARTIFACT_REQUESTED" -eq 1 ] && [ ! -f "$ARTIFACT" ]; then
   log "no artifact to validate at $ARTIFACT"
   printf '\nChecklist violations:\n' >&2
   printf '  - no artifact to validate (expected %s)\n' "$ARTIFACT" >&2
-  printf 'Remediation: rerun /gaia-create-arch to produce docs/planning-artifacts/architecture.md, then rerun finalize.sh.\n' >&2
+  printf 'Remediation: rerun /gaia-create-arch to produce docs/planning-artifacts/architecture/architecture.md, then rerun finalize.sh.\n' >&2
   CHECKLIST_STATUS=1
 elif [ -n "$ARTIFACT" ] && [ -f "$ARTIFACT" ]; then
   log "running 33-item checklist against $ARTIFACT"
@@ -211,7 +211,7 @@ elif [ -n "$ARTIFACT" ] && [ -f "$ARTIFACT" ]; then
   # --- Script-verifiable items (25) ---
 
   # Envelope (SV-01..SV-03)
-  item_check "SV-01" "Output file exists at docs/planning-artifacts/architecture.md" \
+  item_check "SV-01" "Output file exists at docs/planning-artifacts/architecture/architecture.md" \
     "$([ -f "$ARTIFACT" ] && echo pass || echo fail)"
   item_check "SV-02" "Output artifact is non-empty" "$(file_nonempty "$ARTIFACT")"
 
@@ -314,7 +314,7 @@ EOF
     CHECKLIST_STATUS=0
   fi
 else
-  log "no architecture artifact found (ARCHITECTURE_ARTIFACT unset and no docs/planning-artifacts/architecture.md) — skipping checklist run"
+  log "no architecture artifact found (ARCHITECTURE_ARTIFACT unset and no docs/planning-artifacts/architecture/architecture.md) — skipping checklist run"
   CHECKLIST_STATUS=0
 fi
 

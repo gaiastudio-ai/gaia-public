@@ -20,7 +20,7 @@
 #
 # Refs: docs/implementation-artifacts/E46-S4-*.md
 #       docs/test-artifacts/test-plan.md §11.46.12
-#       docs/planning-artifacts/prd.md §4.33 FR-352
+#       docs/planning-artifacts/prd/prd.md §4.33 FR-352
 
 load 'test_helper.bash'
 

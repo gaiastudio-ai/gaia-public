@@ -107,7 +107,7 @@ Compose the `project-documentation.md` artifact under `docs/planning-artifacts/`
 
 ### Step 5 — Generate Output
 
-Write the composed artifact using the Write tool to `docs/planning-artifacts/project-documentation.md` (resolve the absolute path from `resolve-config.sh` output — specifically the `PLANNING_ARTIFACTS` env variable exported by `setup.sh`).
+Write the composed artifact using the Write tool to `docs/planning-artifacts/assessments/project-documentation.md` (resolve the absolute path from `resolve-config.sh` output — specifically the `PLANNING_ARTIFACTS` env variable exported by `setup.sh`).
 
 Do NOT overwrite silently if the file already exists — include a header comment: `<!-- generated-by: gaia-document-project; date: YYYY-MM-DD; mode: full-scan -->`.
 

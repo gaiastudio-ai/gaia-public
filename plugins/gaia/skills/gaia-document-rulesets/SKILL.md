@@ -75,7 +75,7 @@ If no frontmatter match is found, detect the artifact type from the file path ba
 
 ### Path-Based Detection Algorithm
 
-1. Extract the basename from the artifact path (e.g., `docs/planning-artifacts/prd.md` -> `prd.md`)
+1. Extract the basename from the artifact path (e.g., `docs/planning-artifacts/prd/prd.md` -> `prd.md`)
 2. Match basename against the mapping table above (case-insensitive)
 3. If a match is found, return the corresponding ruleset ID
 4. If no match is found, return `unknown` — skip document-specific rules, run factual claim verification only

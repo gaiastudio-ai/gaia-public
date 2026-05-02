@@ -43,7 +43,7 @@ This skill is the native Claude Code conversion of the legacy val-validate-artif
 
 Example invocation (conceptual — actual call shape is the upstream skill invoking this skill):
 
-- `artifact_path = "docs/planning-artifacts/prd.md"`
+- `artifact_path = "docs/planning-artifacts/prd/prd.md"`
 - `artifact_type = "prd"`
 
 ### Response Schema
@@ -64,17 +64,17 @@ Canonical JSON example (one entry per severity level):
     {
       "severity": "CRITICAL",
       "description": "Referenced file not found: plugins/gaia/skills/gaia-missing/SKILL.md",
-      "location": "docs/planning-artifacts/architecture.md:142"
+      "location": "docs/planning-artifacts/architecture/architecture.md:142"
     },
     {
       "severity": "WARNING",
       "description": "Stated component count (18 skills) does not match filesystem enumeration (17 skills).",
-      "location": "docs/planning-artifacts/prd.md#section-4.33"
+      "location": "docs/planning-artifacts/prd/prd.md#section-4.33"
     },
     {
       "severity": "INFO",
       "description": "Ground truth not available — cross-reference verification skipped.",
-      "location": "docs/planning-artifacts/prd.md"
+      "location": "docs/planning-artifacts/prd/prd.md"
     }
   ]
 }
@@ -214,7 +214,7 @@ The iteration log is the structured, per-iteration record stream emitted by the 
         "findings": [
           {"severity": "CRITICAL", "description": "referenced file not found: docs/missing.md", "location": "prd.md:42"}
         ],
-        "fix_diff_summary": "patched prd.md:42 → corrected path to docs/planning-artifacts/prd.md",
+        "fix_diff_summary": "patched prd.md:42 → corrected path to docs/planning-artifacts/prd/prd.md",
         "revalidation_outcome": "findings_present",
         "token_estimate": 4820,
         "user_decision": null,

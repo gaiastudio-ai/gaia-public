@@ -36,7 +36,7 @@ This skill is the native Claude Code conversion of the legacy `_gaia/testing/wor
 - Identify which pages and components to test from the story context or architecture.
 - **Declare target WCAG level (mandatory user prompt — no silent default).** Prompt the user inline: `Select WCAG level: A, AA, or AAA`. Wait for the user's response before proceeding. The selected level propagates to Step 2 rule set configuration (`wcag2a` for A, `wcag2aa` for AA, `wcag2aaa` for AAA — Level AAA inherits A and AA criteria). YOLO mode handling: when YOLO mode is active, auto-select `AA` (the sensible default) without prompting and emit the log line `YOLO: auto-selected WCAG 2.1 Level AA` so the auto-selection is auditable in the report.
 - Document user personas including users with disabilities (screen reader users, keyboard-only users, low vision users, cognitive disabilities).
-- If architecture.md is available at `docs/planning-artifacts/architecture.md`, extract frontend components and routes.
+- If architecture.md is available at `docs/planning-artifacts/architecture/architecture.md`, extract frontend components and routes.
 - If story file is available, extract UI components from acceptance criteria and subtasks.
 
 ### Step 2 -- Automated Checks

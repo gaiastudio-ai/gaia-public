@@ -21,9 +21,9 @@ missing three items across three categories for VCP-CHK-26:
 
 ## Completeness
 
-- PRD: docs/planning-artifacts/prd.md exists and is complete.
-- Architecture: docs/planning-artifacts/architecture.md exists and is complete.
-- Epics/Stories: docs/planning-artifacts/epics-and-stories.md exists.
+- PRD: docs/planning-artifacts/prd/prd.md exists and is complete.
+- Architecture: docs/planning-artifacts/architecture/architecture.md exists and is complete.
+- Epics/Stories: docs/planning-artifacts/epics/epics-and-stories.md exists.
 - Test plan: docs/test-artifacts/test-plan.md exists.
 
 ## Consistency
@@ -58,4 +58,4 @@ for the VCP-CHK-26 negative fixture.
 
 ## Output Verification
 
-- Output file saved to docs/planning-artifacts/readiness-report.md.
+- Output file saved to docs/planning-artifacts/assessments/readiness-report.md.

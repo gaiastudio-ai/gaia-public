@@ -16,7 +16,7 @@
 #
 # Refs: docs/implementation-artifacts/E43-S2-*.md,
 #       docs/test-artifacts/test-plan.md §11.46.2,
-#       docs/planning-artifacts/architecture.md §10.31.3 (ADR-059).
+#       docs/planning-artifacts/architecture/architecture.md §10.31.3 (ADR-059).
 
 load 'test_helper.bash'
 

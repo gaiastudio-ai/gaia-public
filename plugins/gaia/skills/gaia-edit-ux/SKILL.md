@@ -102,7 +102,7 @@ Delegate to the **ux-designer** subagent (Christy) via `agents/ux-designer` to a
 
 This is the cascade-aware behavior preserved from the legacy edit-ux-design workflow — the key semantic that distinguishes editing from creation.
 
-- Read `docs/planning-artifacts/architecture.md` section headers.
+- Read `docs/planning-artifacts/architecture/architecture.md` section headers.
 - Compare UX design changes against architecture scope and downstream artifacts (epics-and-stories.md, test-plan.md).
 - Classify cascade impact:
   - **NONE:** UX-only changes — architecture and stories unaffected.

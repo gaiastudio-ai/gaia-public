@@ -58,12 +58,13 @@ IMPL_DIR="$PROJECT_ROOT/docs/implementation-artifacts"
 TEST_DIR="$PROJECT_ROOT/docs/test-artifacts"
 
 # Locate the story file: docs/implementation-artifacts/{story_key}-*.md
+# Also searches epic-grouped layout: docs/implementation-artifacts/epic-*/stories/{story_key}-*.md
 shopt -s nullglob
-STORY_MATCHES=( "$IMPL_DIR/${STORY_KEY}-"*.md )
+STORY_MATCHES=( "$IMPL_DIR/${STORY_KEY}-"*.md "$IMPL_DIR"/epic-*/stories/"${STORY_KEY}-"*.md )
 shopt -u nullglob
 
 if [ "${#STORY_MATCHES[@]}" -eq 0 ]; then
-  die "story file not found: $IMPL_DIR/${STORY_KEY}-*.md" 2
+  die "story file not found: $IMPL_DIR/${STORY_KEY}-*.md (also checked epic-*/stories/)" 2
 fi
 
 STORY_FILE="${STORY_MATCHES[0]}"

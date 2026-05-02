@@ -145,7 +145,7 @@ story_risk() {
   local matches=()
   shopt -s nullglob nocaseglob
   # shellcheck disable=SC2206
-  matches=( "${IMPLEMENTATION_ARTIFACTS}/${key}-"*.md )
+  matches=( "${IMPLEMENTATION_ARTIFACTS}/${key}-"*.md "${IMPLEMENTATION_ARTIFACTS}"/epic-*/stories/"${key}-"*.md )
   shopt -u nullglob nocaseglob
   [[ ${#matches[@]} -eq 0 ]] && return 0
   local story_file="${matches[0]}"

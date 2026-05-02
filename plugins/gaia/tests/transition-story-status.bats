@@ -35,7 +35,7 @@ setup() {
 
   TEST_TMP="$BATS_TEST_TMPDIR/tss-$$"
   mkdir -p "$TEST_TMP/docs/implementation-artifacts"
-  mkdir -p "$TEST_TMP/docs/planning-artifacts"
+  mkdir -p "$TEST_TMP/docs/planning-artifacts/epics"
   mkdir -p "$TEST_TMP/_memory"
 
   STORY_KEY="TSS-E2E-01"

@@ -98,11 +98,11 @@ PROJECT_ROOT="${PROJECT_PATH:-$(pwd)}"
 IMPL_DIR="$PROJECT_ROOT/docs/implementation-artifacts"
 
 shopt -s nullglob
-STORY_MATCHES=( "$IMPL_DIR/${STORY_KEY}-"*.md )
+STORY_MATCHES=( "$IMPL_DIR/${STORY_KEY}-"*.md "$IMPL_DIR"/epic-*/stories/"${STORY_KEY}-"*.md )
 shopt -u nullglob
 
 if [ "${#STORY_MATCHES[@]}" -eq 0 ]; then
-  die "story file not found: $IMPL_DIR/${STORY_KEY}-*.md"
+  die "story file not found: $IMPL_DIR/${STORY_KEY}-*.md (also checked epic-*/stories/)"
 fi
 
 STORY_FILE="${STORY_MATCHES[0]}"

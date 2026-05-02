@@ -458,10 +458,11 @@ _locate_story_file() {
   local project_path="${PROJECT_PATH:-.}"
   local impl_artifacts="${IMPLEMENTATION_ARTIFACTS:-${project_path}/docs/implementation-artifacts}"
   local pattern="${impl_artifacts}/${key}-*.md"
+  local epic_pattern="${impl_artifacts}/epic-*/stories/${key}-*.md"
 
   shopt -s nullglob
   # shellcheck disable=SC2206
-  local matches=( $pattern )
+  local matches=( $pattern $epic_pattern )
   shopt -u nullglob
 
   if [ ${#matches[@]} -eq 0 ]; then

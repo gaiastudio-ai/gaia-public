@@ -265,11 +265,12 @@ STORY_FILE=""
 locate_story_file() {
   local key="$1"
   local pattern="${IMPLEMENTATION_ARTIFACTS}/${key}-*.md"
+  local epic_pattern="${IMPLEMENTATION_ARTIFACTS}/epic-*/stories/${key}-*.md"
 
   local matches=()
   shopt -s nullglob
   # shellcheck disable=SC2206
-  matches=( $pattern )
+  matches=( $pattern $epic_pattern )
   shopt -u nullglob
 
   if [ "${#matches[@]}" -eq 0 ]; then
@@ -719,7 +720,7 @@ reconcile_locate_story_file() {
   local matches=()
   shopt -s nullglob nocaseglob
   # shellcheck disable=SC2206
-  matches=( "${IMPLEMENTATION_ARTIFACTS}/${key}-"*.md )
+  matches=( "${IMPLEMENTATION_ARTIFACTS}/${key}-"*.md "${IMPLEMENTATION_ARTIFACTS}"/epic-*/stories/"${key}-"*.md )
   shopt -u nullglob nocaseglob
 
   if [ "${#matches[@]}" -eq 0 ]; then

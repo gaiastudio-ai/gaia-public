@@ -3,6 +3,17 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.134.0] — 2026-05-03
+
+### Added
+
+- (E53-S233) teach validate-gate.sh to accept sharded planning-artifact layouts (#408)
+- (E38-S10) add inject subcommand to sprint-state.sh (#405)
+
+### Fixed
+
+- (E29-S8) substitute {project-root} placeholder in v1->v2 migrator (#406)
+
 ## [1.133.0] — 2026-05-03
 
 ### Added

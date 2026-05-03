@@ -418,6 +418,7 @@ _migrate_sidecars() {
 
 # ---------------------------------------------------------------------------
 # E28-S191 / B4 — required-field preservation
+# E29-S8        — placeholder substitution at the migration boundary
 # ---------------------------------------------------------------------------
 # The resolver validates 7 required fields: project_root, project_path,
 # memory_path, checkpoint_path, installed_path, framework_version, date.
@@ -425,6 +426,33 @@ _migrate_sidecars() {
 # post-migration. We therefore MUST copy the 7 fields into the v2 team-shared
 # file (config/project-config.yaml) BEFORE the destructive delete runs, so
 # resolve-config's required-field check keeps passing on v2 projects.
+#
+# Placeholder substitution (E29-S8 — post-mortem of PR #387 + cleanup PR #404):
+# v1 configs frequently used the literal token `{project-root}` in
+# path-bearing fields. The v1 XML engine substituted that token at runtime
+# using its template-resolution layer; the v2 native plugin has NO such
+# runtime substitution. Without explicit substitution here, the literal
+# string `{project-root}` would propagate forward into project-config.yaml
+# and break every downstream v2 script:
+#   * PR #387 swept a literal `gaia-public/{project-root}/_memory/...`
+#     directory into commit 767b29e because checkpoint.sh ran `mkdir -p`
+#     against an unsubstituted path.
+#   * 14 story files were misfiled into `gaia-public/docs/...-artifacts/`
+#     because `implementation_artifacts: "{project-root}/docs/..."`
+#     resolved as a relative path from the working directory.
+# This helper now substitutes the literal token `{project-root}` with the
+# absolute `$PROJECT_ROOT` before extracted values are appended to the v2
+# config. Substitution is exact-token (only literal `{project-root}` is
+# replaced); values that do not contain the placeholder pass through
+# byte-identical. See AC1, AC2, AC5 of E29-S8.
+#
+# $PROJECT_ROOT is required to be set AND absolute before substitution
+# runs. If unset or relative, this helper aborts non-zero so the
+# destructive `_gaia/` delete in subtask 4.5 cannot run on a half-migrated
+# config (AC6 of E29-S8).
+#
+# A complementary defense-in-depth guard at the resolver layer
+# (resolve-config.sh) is captured as the companion story E29-S9.
 #
 # If any required field is missing or unparseable from the v1 source, ABORT
 # before the destructive delete — the caller sees a clear "required field
@@ -436,6 +464,23 @@ _derive_required_fields() {
   local v1="$1" v2="$2"
   [ -f "$v1" ] || { echo "ERROR: v1 source missing: $v1" >&2; return 1; }
   [ -f "$v2" ] || { echo "ERROR: v2 target missing: $v2" >&2; return 1; }
+
+  # E29-S8 — PROJECT_ROOT precondition guard. Substitution requires an
+  # absolute path; aborting here BEFORE any destructive write protects
+  # subtask 4.5's `_gaia/` delete from running on a half-migrated config.
+  if [ -z "${PROJECT_ROOT:-}" ]; then
+    echo "ERROR: PROJECT_ROOT is unset — cannot substitute {project-root} placeholder" >&2
+    echo "       _derive_required_fields requires an absolute --project-root (E29-S8 AC6)" >&2
+    return 1
+  fi
+  case "$PROJECT_ROOT" in
+    /*) : ;;  # absolute, OK
+    *)
+      echo "ERROR: PROJECT_ROOT is relative ('$PROJECT_ROOT') — must be absolute" >&2
+      echo "       _derive_required_fields refuses to substitute relative paths (E29-S8 AC6)" >&2
+      return 1
+      ;;
+  esac
 
   # E28-S200 — artifact-dir keys joined the resolver's required-fields list.
   # The 3 paths (test_artifacts, planning_artifacts, implementation_artifacts)
@@ -463,8 +508,20 @@ _derive_required_fields() {
     printf '%s' "$v"
   }
 
+  # E29-S8 — substitute the literal token `{project-root}` with the absolute
+  # $PROJECT_ROOT. Bash parameter expansion `${var//pattern/replacement}`
+  # is an exact-string replacement (no regex) — values without the literal
+  # token pass through byte-identical (AC2). Substitution applies to BOTH
+  # the missing-field probe loop AND the write loop so the validation gate
+  # below sees the post-substitution value (AC1).
+  _substitute_placeholders() {
+    local v="$1"
+    printf '%s' "${v//\{project-root\}/$PROJECT_ROOT}"
+  }
+
   for field in "${required[@]}"; do
     value=$(_extract_key "$v1" "$field")
+    value=$(_substitute_placeholders "$value")
     if [ -z "$value" ]; then
       missing="${missing}${field} "
     fi
@@ -477,15 +534,17 @@ _derive_required_fields() {
     return 1
   fi
 
-  # All 7 fields resolved — append them to the v2 file. Each field is emitted
-  # on its own line with a leading comment block so it's obvious where they
-  # came from.
+  # All required fields resolved — append them to the v2 file. Each field is
+  # emitted on its own line with a leading comment block so it's obvious
+  # where they came from.
   {
     echo ""
     echo "# Required fields preserved from v1 _gaia/_config/global.yaml"
     echo "# (resolver required-field list — see resolve-config.sh)"
+    echo "# {project-root} placeholders substituted with PROJECT_ROOT (E29-S8)"
     for field in "${required[@]}"; do
       value=$(_extract_key "$v1" "$field")
+      value=$(_substitute_placeholders "$value")
       # Quote values containing spaces or colons to keep YAML parsers happy.
       case "$value" in
         *' '*|*:*|*\#*) printf '%s: "%s"\n' "$field" "$value" ;;

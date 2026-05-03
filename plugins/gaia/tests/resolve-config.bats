@@ -76,6 +76,94 @@ YAML
   [[ "$output" == *"project_root"* ]]
 }
 
+# ---------------------------------------------------------------------------
+# E29-S9 — placeholder-detection guard (defense-in-depth companion to E29-S8)
+# ---------------------------------------------------------------------------
+# AF-2026-05-01-2 / AF-2026-05-01-1: a literal `{...}` template token that
+# slipped through migration must be rejected at the resolver before it reaches
+# any downstream consumer (mkdir, sed, find, checkpoint.sh, etc.). The guard
+# runs AFTER env overrides and AFTER artifact-dir defaulting so a placeholder
+# from ANY source layer is caught.
+
+@test "resolve-config.sh E29-S9 AC4: literal {project-root} in project_root → exit 2, stderr names field + placeholder" {
+  local bad="$TEST_TMP/ph-root"
+  mkdir -p "$bad/config"
+  cat > "$bad/config/project-config.yaml" <<'YAML'
+project_root: "{project-root}"
+project_path: /tmp/gaia-fx/app
+memory_path: /tmp/gaia-fx/_memory
+checkpoint_path: /tmp/gaia-fx/_memory/checkpoints
+installed_path: /tmp/gaia-fx/_gaia
+framework_version: 1.0.0
+date: 1970-01-01
+YAML
+  CLAUDE_SKILL_DIR="$bad" run "$SCRIPT"
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"project_root"* ]]
+  [[ "$output" == *"{project-root}"* ]]
+}
+
+@test "resolve-config.sh E29-S9 AC5: embedded {project-root} in installed_path → exit 2, stderr names field + placeholder" {
+  local bad="$TEST_TMP/ph-installed"
+  mkdir -p "$bad/config"
+  cat > "$bad/config/project-config.yaml" <<'YAML'
+project_root: /tmp/gaia-fx
+project_path: /tmp/gaia-fx/app
+memory_path: /tmp/gaia-fx/_memory
+checkpoint_path: /tmp/gaia-fx/_memory/checkpoints
+installed_path: "{project-root}/_gaia"
+framework_version: 1.0.0
+date: 1970-01-01
+YAML
+  CLAUDE_SKILL_DIR="$bad" run "$SCRIPT"
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"installed_path"* ]]
+  [[ "$output" == *"{project-root}"* ]]
+}
+
+@test "resolve-config.sh E29-S9 AC6: fully resolved config (no braces in any required field) still exits 0" {
+  # Negative case — guard must not false-positive on a clean config. Mirrors
+  # the happy-path test above; asserts exit 0 and the canonical project_root
+  # key/value pair are present in stdout.
+  mk_skill_dir "$TEST_TMP/clean"
+  CLAUDE_SKILL_DIR="$TEST_TMP/clean" run "$SCRIPT"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"project_root='/tmp/gaia-fx'"* ]]
+  [[ "$output" == *"installed_path='/tmp/gaia-fx/_gaia'"* ]]
+  # Explicitly verify NO `unsubstituted placeholder` text leaked to stderr/stdout.
+  [[ "$output" != *"unsubstituted placeholder"* ]]
+}
+
+@test "resolve-config.sh E29-S9: shell-style \${VAR} references are NOT rejected (carve-out for fixture configs)" {
+  # Defense-in-depth carve-out: the guard targets literal `{...}` template
+  # tokens, NOT shell-style `${VAR}` references. Fixture configs across the
+  # cluster-4..9 e2e suites use `${GAIA_*}` placeholders that are supplied
+  # by env overrides at the top of resolve-config.sh — those values must
+  # flow through without tripping the guard. Pinned here so a future
+  # tightening of the pattern cannot silently break the e2e harnesses.
+  local ok="$TEST_TMP/dollarvar"
+  mkdir -p "$ok/config"
+  cat > "$ok/config/project-config.yaml" <<'YAML'
+project_root: "${GAIA_PROJECT_ROOT}"
+project_path: "${GAIA_PROJECT_PATH}"
+memory_path: "${GAIA_MEMORY_PATH}"
+checkpoint_path: "${GAIA_CHECKPOINT_PATH}"
+installed_path: "${GAIA_INSTALLED_PATH}"
+framework_version: "1.127.2-rc.1"
+date: "2026-04-15"
+YAML
+  GAIA_PROJECT_ROOT=/tmp/x \
+  GAIA_PROJECT_PATH=/tmp/x \
+  GAIA_MEMORY_PATH=/tmp/x/m \
+  GAIA_CHECKPOINT_PATH=/tmp/x/c \
+  CLAUDE_SKILL_DIR="$ok" run "$SCRIPT"
+  # installed_path has no GAIA_INSTALLED_PATH override in resolve-config.sh
+  # today, so the literal `${GAIA_INSTALLED_PATH}` value flows through.
+  # The guard MUST NOT die on it (carve-out for shell-style references).
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"unsubstituted placeholder"* ]]
+}
+
 @test "resolve-config.sh: missing config file → exit 2" {
   mkdir -p "$TEST_TMP/nocfg/config"
   CLAUDE_SKILL_DIR="$TEST_TMP/nocfg" run "$SCRIPT"

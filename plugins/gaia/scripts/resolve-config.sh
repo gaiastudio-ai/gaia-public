@@ -81,6 +81,12 @@ export LC_ALL
 #   installed_path, framework_version, date,
 #   test_artifacts, planning_artifacts, implementation_artifacts,
 #   creative_artifacts
+#   Placeholder-detection guard (E29-S9, AF-2026-05-01-2 / AF-2026-05-01-1):
+#     each of the 11 required fields above is also rejected if its resolved
+#     value contains a literal `{...}` template token (e.g., `{project-root}`).
+#     Shell-style `${VAR}` references are NOT rejected — they are a legitimate
+#     fixture-config convention where env overrides supply the resolved value.
+#     Defense-in-depth resolver-layer companion to E29-S8 (migrator-side fix).
 #
 # Artifact-dir keys (E28-S200 + E46-S9 — unblocks audit harnesses and
 # the /gaia-product-brief pre_start gate):
@@ -692,6 +698,57 @@ esac
 [ -z "$v_planning_artifacts" ]       && die "missing required field: planning_artifacts"
 [ -z "$v_implementation_artifacts" ] && die "missing required field: implementation_artifacts"
 [ -z "$v_creative_artifacts" ]       && die "missing required field: creative_artifacts"
+
+# ---------- E29-S9 placeholder-detection guard ----------
+#
+# AF-2026-05-01-2 / AF-2026-05-01-1 (defense-in-depth companion to E29-S8):
+# reject any required field whose resolved value still contains a literal
+# `{...}`-style template token. The non-empty checks above only catch absent
+# values — a value that BE a literal placeholder
+# (e.g., `project_root: "{project-root}"`) passes the non-empty check and
+# silently flows into mkdir / sed / find / checkpoint.sh consumers, where the
+# symptom shows up far from the cause (a literal `{project-root}/` directory
+# in the wrong cwd, story files written under nonsensical paths — see PR #387
+# commit `767b29e` and PR #404 cleanup).
+#
+# The pattern `*"{"*"}"*` is intentionally generic — any `{...}` token is
+# caught, not just `{project-root}`. The migrator (E29-S8) keeps its detector
+# narrow; the resolver (this guard) keeps it generic because it is the last
+# line of defense before downstream consumers see the value. Runs AFTER env
+# overrides AND AFTER artifact-dir defaulting so a placeholder introduced by
+# ANY source layer (file, env, default) is caught.
+#
+# Shell-style `${VAR}` references are intentionally NOT rejected here — they
+# are a legitimate convention in fixture configs where the field is supplied
+# by an env override that has already resolved by this point. Only literal
+# `{...}` template tokens (with no leading `$`) trigger the guard. The check
+# runs against a copy with `${...}` segments stripped so braces inside a
+# `${...}` reference cannot mask a real placeholder elsewhere in the value.
+for ph_check in \
+  "project_root|$v_project_root" \
+  "project_path|$v_project_path" \
+  "memory_path|$v_memory_path" \
+  "checkpoint_path|$v_checkpoint_path" \
+  "installed_path|$v_installed_path" \
+  "framework_version|$v_framework_version" \
+  "date|$v_date" \
+  "test_artifacts|$v_test_artifacts" \
+  "planning_artifacts|$v_planning_artifacts" \
+  "implementation_artifacts|$v_implementation_artifacts" \
+  "creative_artifacts|$v_creative_artifacts"
+do
+  ph_field="${ph_check%%|*}"
+  ph_value="${ph_check#*|}"
+  # Strip shell-style ${...} references before the pattern match so they
+  # don't trigger the generic `{...}` guard. Bash extended pattern is OK
+  # here — the script's POSIX-discipline header allows [[ ... ]] tests and
+  # bash arrays; parameter substitution with patterns is in the same tier.
+  ph_stripped="${ph_value//\$\{*\}/}"
+  case "$ph_stripped" in
+    *"{"*"}"*) die "unsubstituted placeholder in $ph_field: $ph_value" ;;
+  esac
+done
+unset ph_check ph_field ph_value ph_stripped
 
 # ---------- Path-traversal guard on project_path ----------
 

@@ -134,6 +134,36 @@ YAML
   [[ "$output" != *"unsubstituted placeholder"* ]]
 }
 
+@test "resolve-config.sh E29-S9: shell-style \${VAR} references are NOT rejected (carve-out for fixture configs)" {
+  # Defense-in-depth carve-out: the guard targets literal `{...}` template
+  # tokens, NOT shell-style `${VAR}` references. Fixture configs across the
+  # cluster-4..9 e2e suites use `${GAIA_*}` placeholders that are supplied
+  # by env overrides at the top of resolve-config.sh — those values must
+  # flow through without tripping the guard. Pinned here so a future
+  # tightening of the pattern cannot silently break the e2e harnesses.
+  local ok="$TEST_TMP/dollarvar"
+  mkdir -p "$ok/config"
+  cat > "$ok/config/project-config.yaml" <<'YAML'
+project_root: "${GAIA_PROJECT_ROOT}"
+project_path: "${GAIA_PROJECT_PATH}"
+memory_path: "${GAIA_MEMORY_PATH}"
+checkpoint_path: "${GAIA_CHECKPOINT_PATH}"
+installed_path: "${GAIA_INSTALLED_PATH}"
+framework_version: "1.127.2-rc.1"
+date: "2026-04-15"
+YAML
+  GAIA_PROJECT_ROOT=/tmp/x \
+  GAIA_PROJECT_PATH=/tmp/x \
+  GAIA_MEMORY_PATH=/tmp/x/m \
+  GAIA_CHECKPOINT_PATH=/tmp/x/c \
+  CLAUDE_SKILL_DIR="$ok" run "$SCRIPT"
+  # installed_path has no GAIA_INSTALLED_PATH override in resolve-config.sh
+  # today, so the literal `${GAIA_INSTALLED_PATH}` value flows through.
+  # The guard MUST NOT die on it (carve-out for shell-style references).
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"unsubstituted placeholder"* ]]
+}
+
 @test "resolve-config.sh: missing config file → exit 2" {
   mkdir -p "$TEST_TMP/nocfg/config"
   CLAUDE_SKILL_DIR="$TEST_TMP/nocfg" run "$SCRIPT"

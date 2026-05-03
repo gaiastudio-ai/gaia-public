@@ -84,6 +84,8 @@ export LC_ALL
 #   Placeholder-detection guard (E29-S9, AF-2026-05-01-2 / AF-2026-05-01-1):
 #     each of the 11 required fields above is also rejected if its resolved
 #     value contains a literal `{...}` template token (e.g., `{project-root}`).
+#     Shell-style `${VAR}` references are NOT rejected — they are a legitimate
+#     fixture-config convention where env overrides supply the resolved value.
 #     Defense-in-depth resolver-layer companion to E29-S8 (migrator-side fix).
 #
 # Artifact-dir keys (E28-S200 + E46-S9 — unblocks audit harnesses and
@@ -715,6 +717,13 @@ esac
 # line of defense before downstream consumers see the value. Runs AFTER env
 # overrides AND AFTER artifact-dir defaulting so a placeholder introduced by
 # ANY source layer (file, env, default) is caught.
+#
+# Shell-style `${VAR}` references are intentionally NOT rejected here — they
+# are a legitimate convention in fixture configs where the field is supplied
+# by an env override that has already resolved by this point. Only literal
+# `{...}` template tokens (with no leading `$`) trigger the guard. The check
+# runs against a copy with `${...}` segments stripped so braces inside a
+# `${...}` reference cannot mask a real placeholder elsewhere in the value.
 for ph_check in \
   "project_root|$v_project_root" \
   "project_path|$v_project_path" \
@@ -730,11 +739,16 @@ for ph_check in \
 do
   ph_field="${ph_check%%|*}"
   ph_value="${ph_check#*|}"
-  case "$ph_value" in
+  # Strip shell-style ${...} references before the pattern match so they
+  # don't trigger the generic `{...}` guard. Bash extended pattern is OK
+  # here — the script's POSIX-discipline header allows [[ ... ]] tests and
+  # bash arrays; parameter substitution with patterns is in the same tier.
+  ph_stripped="${ph_value//\$\{*\}/}"
+  case "$ph_stripped" in
     *"{"*"}"*) die "unsubstituted placeholder in $ph_field: $ph_value" ;;
   esac
 done
-unset ph_check ph_field ph_value
+unset ph_check ph_field ph_value ph_stripped
 
 # ---------- Path-traversal guard on project_path ----------
 

@@ -1,0 +1,31 @@
+{
+  "schema_version": "1.0",
+  "story_key": "E99-EC4",
+  "skill": "gaia-security-review",
+  "model": "claude-opus-4-7",
+  "model_temperature": 0,
+  "tool_versions": {
+    "gitleaks": "8.18.0"
+  },
+  "file_hashes": {
+    "tests/fixtures/auth.test.ts": "ec04beef"
+  },
+  "checks": [
+    {
+      "name": "gitleaks",
+      "scope": "file",
+      "status": "passed",
+      "findings": [
+        {
+          "file": "tests/fixtures/auth.test.ts",
+          "line": 8,
+          "severity": "warning",
+          "rule": "generic-api-key",
+          "rule_confidence": "medium",
+          "message": "Synthetic API key sk-test-1234567890abcdef in test fixture path",
+          "blocking": false
+        }
+      ]
+    }
+  ]
+}

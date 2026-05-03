@@ -1,0 +1,11 @@
+{
+  "findings": [
+    {
+      "category": "A03",
+      "severity": "Suggestion",
+      "file": "src/example.ts",
+      "line": 12,
+      "message": "Semgrep finding has rule_confidence=low; per Critical-promotion threshold (confidence-high + severity-high), classification stays Suggestion. LLM-cannot-override invariant preserved — no Critical promotion."
+    }
+  ]
+}

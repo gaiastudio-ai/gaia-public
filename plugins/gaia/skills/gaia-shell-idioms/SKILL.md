@@ -138,6 +138,65 @@ $0 ~ /(^|[^A-Za-z0-9])NPS([^A-Za-z0-9]|$)/ { found = 1 }
 
 When reviewing a script or bats test, flag any `\<` or `\>` inside an awk regex. The fix is mechanical — substitute the character-class form. The regression guard `tests/no-bsd-awk-incompatible-anchors.bats` enforces this across `scripts/`, `tests/`, and `skills/*/scripts/` (E45-S7).
 
+<!-- SECTION: safe-grep-log -->
+## `safe_grep_log` — SIGPIPE-Safe `git log | grep` Replacement
+
+### The Broken Idiom
+
+```bash
+set -euo pipefail
+if git log --oneline main | grep -iqE "\b${STORY_KEY}\b"; then
+  echo "found"
+fi
+```
+
+Looks fine. **Breaks** the moment `grep -q` matches: grep exits 0 and closes the pipe; `git log` then receives SIGPIPE and exits 141; with `pipefail` the pipeline's overall status is 141; `set -e` aborts the caller — even though the user-visible outcome was "match found". Symptom is the same when the grep pattern is regex-heavy and grep terminates after the first hit.
+
+### Why It Fails
+
+Three things have to line up: (1) `set -e` is on, (2) `pipefail` is on, (3) grep early-exits while git is still streaming. The recurring workaround was to capture `git log` into a variable first, then grep the variable — turning the long-lived producer into a short-lived `printf '%s\n' "$var"` that cannot SIGPIPE. The capture pattern was duplicated in `verify-pr-merged.sh` (twice) and was a foreseeable second-occurrence in any new `git log | grep` site.
+
+### The Fix — Source `shell-idioms.sh` and Call `safe_grep_log`
+
+```bash
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../scripts/lib" && pwd)/shell-idioms.sh"
+
+if safe_grep_log -i -q -E "\b${STORY_KEY}\b" --oneline "$TARGET"; then
+  log "merge commit found"
+fi
+```
+
+### Signature
+
+```
+safe_grep_log [grep_flags...] <pattern> [git_log_args...]
+```
+
+- Leading args starting with `-` are forwarded to grep (`-i`, `-q`, `-E`, etc.).
+- The first non-flag arg is the grep pattern.
+- Remaining args are forwarded to `git log` (`--oneline`, a branch name, `--format='%B'`, etc.).
+- Exit 0 = match, exit 1 = no-match (clean), exit 2 = usage error.
+
+### Strict-Mode Caller Pattern
+
+Because `safe_grep_log` returns 1 on no-match (correctly), callers under `set -e` must guard the call — exactly as you would for `grep` itself:
+
+```bash
+# Use `if`:
+if safe_grep_log "$pattern" --oneline "$branch"; then ...; fi
+
+# Or `|| true` when the result is irrelevant:
+safe_grep_log "$pattern" --oneline "$branch" || true
+```
+
+### Canonical Uses in This Codebase
+
+- `plugins/gaia/skills/gaia-dev-story/scripts/verify-pr-merged.sh` — both the primary `--oneline` check and the `--format='%B'` fallback.
+
+### Review Checklist
+
+When reviewing a script, flag any occurrence of `git log ... | grep` (or `git log ... | grep -q`) under `set -euo pipefail`. The fix is mechanical — source `shell-idioms.sh` and replace with `safe_grep_log`. Do not re-introduce the inline capture-then-grep workaround.
+
 <!-- SECTION: review-notes -->
 ## Review Notes
 
@@ -151,3 +210,4 @@ When reviewing a script or bats test, flag any `\<` or `\>` inside an awk regex.
 - E28-S126 review (Finding #4) — first recurrence in `verify-cluster-gates.sh`.
 - E28-S130 QA tests — second recurrence, documented state-machine fix.
 - E28-S130 review summary — third recurrence; triage finding promoted to this story (E28-S168).
+- E20-S19 (sprint-26) Finding #2 — `set -euo pipefail` + `git log | grep` SIGPIPE workaround documented inline; promoted to E20-S20 which extracted `safe_grep_log()` into `scripts/lib/shell-idioms.sh` and migrated both call sites in `verify-pr-merged.sh`.

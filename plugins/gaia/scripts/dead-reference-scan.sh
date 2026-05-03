@@ -106,6 +106,26 @@ SCAN_PATHS=(
 )
 
 # Files that may contain legacy references for historical or contractual reasons.
+#
+# Allowlist categories (added by E29-S6 — keep this list in sync when extending):
+#   1. Documentation surfaces — anything under docs/, CHANGELOG.md, migration-guide*.
+#      Engine/protocol references in prose are historical, not active loads.
+#   2. Plugin reference data — plugins/gaia/knowledge/ ships routing/policy tables that
+#      may embed legacy paths as data values rather than active loads.
+#   3. Parity-guard / regression tests — bats files that ASSERT zero references to a
+#      retired token must contain that token as a literal in the assertion body.
+#   4. Migration / deletion tooling — gaia-cleanup-legacy-engine.sh, gaia-migrate.sh,
+#      and their fixtures intentionally name the v1 paths they detect or delete.
+#   5. Fallback helpers — next-step.sh and missing-file-fallback.sh document the v1
+#      filenames they gracefully fall back from.
+#   6. Skill SKILL.md prose — historical/heuristic/negated mentions in skill bodies
+#      (enumerated explicitly per file in the case-block below).
+#   7. Skill companion scripts (E29-S6) — plugins/gaia/skills/<skill>/scripts/setup.sh
+#      and finalize.sh are V2 native conversions of v1 workflow steps; their header
+#      provenance comments legitimately cite "_gaia/...instructions.xml" and the
+#      retired filenames (workflow.yaml, instructions.xml, checklist.md) as origin
+#      references. Scoped to skill scripts/ subtrees only — top-level
+#      plugins/gaia/scripts/finalize.sh would NOT be allowlisted.
 is_allowlisted() {
   local path="$1"
   # Everything under docs/ is documentation — allowlisted.
@@ -229,6 +249,19 @@ is_allowlisted() {
   [[ "$path" == */plugins/gaia/skills/gaia-validate-framework/SKILL.md ]] && return 0
   # gaia-bridge-toggle prose similarly documents the retired build-configs step.
   [[ "$path" == */plugins/gaia/skills/gaia-bridge-toggle/SKILL.md ]] && return 0
+  # E29-S6 — Skill companion scripts (setup.sh / finalize.sh) are V2 native
+  # conversions of v1 workflow steps. Their header provenance comments cite the
+  # v1 origin path ("_gaia/lifecycle/workflows/<name>/instructions.xml") and may
+  # mention the retired filenames (workflow.yaml, instructions.xml, checklist.md)
+  # as historical references. Scoped to plugins/gaia/skills/<skill>/scripts/ only —
+  # a top-level plugins/gaia/scripts/finalize.sh or scripts/setup.sh would NOT be
+  # exempted by this rule (the path glob requires the /skills/<skill>/scripts/ segment).
+  [[ "$path" == */plugins/gaia/skills/*/scripts/finalize.sh ]] && return 0
+  [[ "$path" == */plugins/gaia/skills/*/scripts/setup.sh ]] && return 0
+  # E29-S6 — the regression bats for the rule above (dead-reference-scan.bats)
+  # asserts both positive (allowed) and negative (still-failing) cases against
+  # the same retired tokens, so the literal v1 filenames appear in test bodies.
+  [[ "$path" == */plugins/gaia/tests/dead-reference-scan.bats ]] && return 0
   # E28-S128 — 41 SKILL.md and skill-companion-script files cite legacy filenames
   # (workflow.yaml, instructions.xml, checklist.md) as parity references per NFR-053.
   # These are historical documentation, not active loads. The commands-guard from

@@ -297,6 +297,7 @@ locate_story_file() {
   local project_path="${PROJECT_PATH:-.}"
   local impl_artifacts="${IMPLEMENTATION_ARTIFACTS:-${project_path}/docs/implementation-artifacts}"
   local pattern="${impl_artifacts}/${key}-*.md"
+  local epic_pattern="${impl_artifacts}/epic-*/stories/${key}-*.md"
 
   # shopt -s nullglob so zero-match produces an empty array rather than the
   # literal pattern string.
@@ -305,7 +306,7 @@ locate_story_file() {
   # leak to the rest of the script.
   shopt -s nullglob
   # shellcheck disable=SC2206
-  matches=( $pattern )
+  matches=( $pattern $epic_pattern )
   shopt -u nullglob
 
   if [ "${#matches[@]}" -eq 0 ]; then
@@ -324,6 +325,41 @@ locate_story_file() {
   if [ "${#canonical[@]}" -eq 0 ]; then
     die "no story file found for key '$key' (checked ${#matches[@]} candidates, none have template: 'story' frontmatter)"
   fi
+
+  # Deduplicate by realpath. Symlinks at the flat layer pointing at the
+  # epic-grouped real file (post-E53-S225 transition shims) produce two
+  # canonical matches that are the same physical file. Prefer non-symlinks.
+  if [ "${#canonical[@]}" -gt 1 ]; then
+    local dedup=()
+    local seen_realpaths=""
+    local rp
+    for m in "${canonical[@]}"; do
+      [ -L "$m" ] && continue
+      if command -v realpath >/dev/null 2>&1; then
+        rp=$(realpath "$m")
+      else
+        rp=$(cd "$(dirname "$m")" && /bin/pwd -P)/$(basename "$m")
+      fi
+      case "$seen_realpaths" in
+        *"|$rp|"*) ;;
+        *) dedup+=( "$m" ); seen_realpaths="${seen_realpaths}|$rp|" ;;
+      esac
+    done
+    for m in "${canonical[@]}"; do
+      [ -L "$m" ] || continue
+      if command -v realpath >/dev/null 2>&1; then
+        rp=$(realpath "$m")
+      else
+        rp=$(cd "$(dirname "$(readlink "$m")")" 2>/dev/null && /bin/pwd -P)/$(basename "$(readlink "$m")")
+      fi
+      case "$seen_realpaths" in
+        *"|$rp|"*) ;;
+        *) dedup+=( "$m" ); seen_realpaths="${seen_realpaths}|$rp|" ;;
+      esac
+    done
+    canonical=( "${dedup[@]}" )
+  fi
+
   if [ "${#canonical[@]}" -gt 1 ]; then
     local listed
     listed=$(printf '  %s\n' "${canonical[@]}")

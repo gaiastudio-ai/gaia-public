@@ -228,6 +228,75 @@ function validate(input) {
 | Nesting depth | > 3 levels | Require flattening |
 | Class methods | > 10 public | Suggest decomposition |
 
+<!-- SECTION: severity-rubric-format -->
+## Severity Rubric Format (FR-DEJ-7)
+
+This section defines the canonical severity rubric format inherited by the six review skills (`gaia-code-review`, `gaia-security-review`, `gaia-qa-tests`, `gaia-test-automate`, `gaia-test-review`, `gaia-performance-review`). Each consumer skill provides per-domain examples that conform to the shape defined here.
+
+> **Canonical cross-link string.** Each consumer SKILL.md places the verbatim cross-link sentence below immediately above its per-skill examples block:
+>
+> `> Severity rubric format defined in shared skill `gaia-code-review-standards`. Per-skill examples below conform to this format.`
+>
+> The cross-link uses the canonical skill name (`gaia-code-review-standards`) and NEVER a relative path — the Skill resolver handles physical location.
+
+### Tier shape (5 tiers)
+
+The rubric has five tiers organized along two axes — severity (Critical / Warning / Suggestion) and category (correctness / readability). The Critical-readability tier is intentionally empty per FR-DEJ-7.
+
+#### Critical-correctness
+
+> Blocking. Produces `REQUEST_CHANGES` if the deterministic resolver did not already block.
+
+Examples:
+- Off-by-one in a loop bound that produces incorrect output for the documented happy path.
+- Null-deref on a code path with no guard, reachable via a documented public API entry point.
+- Resource leak (file handle, DB connection, lock) on the error path with no `finally` / `defer` / `using`.
+
+#### Critical-readability
+
+<!-- WHY: FR-DEJ-7 deliberately mandates that readability never blocks. The maximum severity for any readability-class finding is Warning. A future maintainer adding a concrete example here would violate the architectural decision; bats `code-review-standards-rubric.bats` greps for the verbatim "None" string and fails CI on drift. -->
+
+None — readability never blocks (max severity is Warning).
+
+#### Warning-correctness
+
+> Non-blocking but worth surfacing. Persisted to the report.
+
+Examples:
+- Edge case unhandled but documented as out-of-scope in the story or PR description.
+- Logic that works on the happy path but relies on an undocumented invariant a future maintainer cannot verify.
+
+#### Warning-readability
+
+> Non-blocking but worth surfacing. Persisted to the report.
+
+Examples:
+- Function exceeds the team length / complexity threshold (>30 lines or cyclomatic >10).
+- Misleading variable name that would surprise a future maintainer.
+- Copy-pasted block that should be extracted into a shared helper (DRY violation).
+
+#### Suggestion
+
+> Non-blocking. Style / comment polish; no behavior implications.
+
+Examples:
+- Comment wording could be tightened, or a stale comment refers to renamed code.
+- Naming could match team convention more closely.
+- Opportunity for a parameter-object refactor to reduce a long argument list.
+
+### Rubric-evolution impact-radius
+
+Any change to the rubric tier shape (adding a tier, renaming a tier, changing the Critical-readability invariant) is a SHARED contract change with the following impact-radius:
+
+1. The six review consumer SKILL.md files (`gaia-code-review`, `gaia-security-review`, `gaia-qa-tests`, `gaia-test-automate`, `gaia-test-review`, `gaia-performance-review`) — each must update its per-skill examples to match the new shape.
+2. `evidence-judgment-parity.bats` MUST be re-run to confirm the canonical cross-link is present and the per-skill examples still conform.
+3. Backward-compatibility check against existing review reports — old reports use the prior tier names; document the migration path before merging.
+4. ADR amendment required if the new shape diverges from FR-DEJ-7 (e.g., introducing a Critical-readability tier).
+
+### Scope boundary
+
+This rubric format is the standard for the six current review skills. A future review skill (e.g., a hypothetical `gaia-accessibility-review` with a 4-tier Blocker / Major / Minor / Info shape) requires an explicit ADR amendment and its own rubric section — divergence from this rubric is out of scope for the current six skills.
+
 <!-- SECTION: review-gate-completion -->
 ## Review Gate Completion Requirements
 

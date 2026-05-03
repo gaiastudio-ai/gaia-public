@@ -1,0 +1,64 @@
+{
+  "schema_version": "1.0",
+  "story_key": "E99-EC13",
+  "skill": "gaia-security-review",
+  "model": "claude-opus-4-7",
+  "model_temperature": 0,
+  "tool_versions": {
+    "semgrep": "1.65.0",
+    "gitleaks": "8.18.0",
+    "npm-audit": "10.5.0"
+  },
+  "file_hashes": {
+    "src/api/users.ts": "ec13one",
+    "src/lib/db.ts": "ec13two",
+    "package.json": "ec13pkg"
+  },
+  "checks": [
+    {
+      "name": "semgrep",
+      "scope": "file",
+      "status": "passed",
+      "findings": [
+        {
+          "file": "src/api/users.ts",
+          "_raw_path_from_tool": "/abs/path/to/repo/src/api/users.ts",
+          "line": 42,
+          "severity": "warning",
+          "rule": "javascript.lang.security.audit.tainted-sql-string",
+          "message": "Path normalized from absolute to repo-relative (EC-13)"
+        }
+      ]
+    },
+    {
+      "name": "gitleaks",
+      "scope": "file",
+      "status": "passed",
+      "findings": [
+        {
+          "file": "src/lib/db.ts",
+          "_raw_path_from_tool": "src/lib/db.ts",
+          "line": 18,
+          "severity": "warning",
+          "rule": "generic-api-key",
+          "message": "Path already repo-relative; passed through (EC-13)"
+        }
+      ]
+    },
+    {
+      "name": "npm-audit",
+      "scope": "project",
+      "status": "passed",
+      "findings": [
+        {
+          "file": "package.json:dependencies.lodash",
+          "_raw_path_from_tool": "lodash",
+          "line": null,
+          "severity": "high",
+          "rule": "CVE-2024-EXAMPLE",
+          "message": "Synthetic location field for package-only finding (EC-13)"
+        }
+      ]
+    }
+  ]
+}

@@ -27,6 +27,12 @@ export LC_ALL
 
 SCRIPT_NAME="gaia-dev-story/verify-pr-merged.sh"
 
+# E20-S20: source the shared shell-idioms helper so we can use safe_grep_log
+# instead of re-implementing the capture-then-grep SIGPIPE workaround inline.
+# Resolve relative to this file so the script works from any cwd.
+# shellcheck disable=SC1091
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../scripts/lib" && pwd)/shell-idioms.sh"
+
 log() { printf '%s: %s\n' "$SCRIPT_NAME" "$*" >&2; }
 die() { log "usage: verify-pr-merged.sh <story_key> <target_branch|--no-chain>"; exit 1; }
 
@@ -50,20 +56,18 @@ cd "$WORK_DIR" || { log "cannot cd to $WORK_DIR"; exit 1; }
 # Uses \b<key>\b as primary match. Falls back to "Story: <key>" pattern.
 # Case-insensitive to handle squash-merge rewrites.
 #
-# Note: capture git log output to a variable first, then grep it. Piping
-# directly causes SIGPIPE on git when grep exits early, and pipefail
-# makes the if-condition false even when grep matched.
+# E20-S20: the inline `git log | grep` SIGPIPE workaround used to live here.
+# It is now centralised in safe_grep_log() (sourced above) so this script,
+# and any future callers, no longer have to re-derive the trick.
 PATTERN="\\b${STORY_KEY}\\b"
 
-log_output="$(git log --oneline "$TARGET" 2>/dev/null)" || true
-if printf '%s\n' "$log_output" | grep -iqE "$PATTERN"; then
+if safe_grep_log -i -q -E "$PATTERN" --oneline "$TARGET"; then
   log "merge commit for ${STORY_KEY} found on ${TARGET} — gate passes"
   exit 0
 fi
 
 # Fallback: check for "Story: <key>" in full commit messages
-body_output="$(git log --format='%B' "$TARGET" 2>/dev/null)" || true
-if printf '%s\n' "$body_output" | grep -iqE "Story:[[:space:]]*${STORY_KEY}\\b"; then
+if safe_grep_log -i -q -E "Story:[[:space:]]*${STORY_KEY}\\b" --format='%B' "$TARGET"; then
   log "merge commit for ${STORY_KEY} found via Story: tag on ${TARGET} — gate passes"
   exit 0
 fi

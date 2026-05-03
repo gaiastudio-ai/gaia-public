@@ -1,0 +1,37 @@
+{
+  "schema_version": "1.0",
+  "story_key": "E99-EC8",
+  "skill": "gaia-security-review",
+  "model": "claude-opus-4-7",
+  "model_temperature": 0,
+  "tool_versions": {
+    "semgrep": "1.65.0",
+    "gitleaks": "8.18.0",
+    "pip-audit": "2.7.0"
+  },
+  "stack_resolved": "python-dev",
+  "file_hashes": {
+    "src/handler.py": "ec08abcd"
+  },
+  "checks": [
+    {
+      "name": "semgrep",
+      "scope": "file",
+      "status": "passed",
+      "findings": []
+    },
+    {
+      "name": "gitleaks",
+      "scope": "file",
+      "status": "passed",
+      "findings": []
+    },
+    {
+      "name": "pip-audit",
+      "scope": "project",
+      "status": "passed",
+      "findings": [],
+      "audit_tool_selection_note": "Selected pip-audit per python-dev canonical stack name (EC-8 toolkit table lookup)"
+    }
+  ]
+}

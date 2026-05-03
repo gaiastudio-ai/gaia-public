@@ -98,19 +98,19 @@ Run all four rules. Any rule matching → spawn UX Designer. No rule matching �
 **Rule #3** — Epic has a UX-tagged `tags:` or `classification:` line in `epics-and-stories.md`.
 **Rule #4** — `{planning_artifacts}/ux-design.md` exists AND the story's epic key appears inside. Missing file → skip cleanly (rules 1-3 still evaluate); use `[ -f ]` guard.
 
-**Detection pseudocode** (telemetry-friendly; runs all rules for observability):
+**Deterministic invocation (E54-S5).** Detection is delegated to the `detect-ux-scope.sh` helper script — the SKILL.md no longer re-implements the four-rule pseudocode in prose. The helper applies word-boundary regex semantics on UI_TERMS (so "platform" does not trip `\bform\b`, "interaction" does not trip `\baction\b`) and an explicit exclusion phrase list (`data flow`, `control flow`, `request flow`, `workflow`, `git flow`) that suppresses the bare `flow` UI term in backend stories.
 
 ```
-ux_match = false
-rule_fired = []
-if frontmatter has 'figma:' key:                       ux_match=true; rule_fired += "rule1"
-if description or any AC contains UI_TERMS (case-insensitive): ux_match=true; rule_fired += "rule2"
-if epic in epics-and-stories.md has UX classification: ux_match=true; rule_fired += "rule3"
-if file_exists(ux-design.md) and grep -q "$EPIC_KEY" ux-design.md: ux_match=true; rule_fired += "rule4"
-log "ux_detection: match=${ux_match} rules=${rule_fired[*]}"
+DETECT=$(${CLAUDE_PLUGIN_ROOT}/scripts/detect-ux-scope.sh "${STORY_FILE}")
+UX_MATCH=$(echo "$DETECT" | jq -r '.ux_match')
+RULES_FIRED=$(echo "$DETECT" | jq -rc '.rules_fired')
+EXCLUDED_BY=$(echo "$DETECT" | jq -rc '.excluded_by')
+log "ux_detection: ux_match=${UX_MATCH} rules_fired=${RULES_FIRED} excluded_by=${EXCLUDED_BY}"
 ```
 
-A story matching multiple rules still results in **a single UX Designer spawn** — priority order matters for telemetry only. Always log which rule(s) fired.
+`detect-ux-scope.sh` returns JSON `{ux_match: bool, rules_fired: [...], excluded_by: [...]}`. The `rules_fired` array carries any subset of the four canonical rule IDs `rule1`, `rule2`, `rule3`, `rule4` in priority order. The script exits 0 on success, 1 if the story file is unreadable, 2 if the frontmatter is malformed. Missing `ux-design.md` degrades cleanly — `rule4` is simply omitted from `rules_fired`.
+
+A story matching multiple rules still results in **a single UX Designer spawn** — priority order matters for telemetry only. Always log which rule(s) fired and which exclusion phrases (if any) suppressed candidate matches.
 
 #### Subagent contracts
 

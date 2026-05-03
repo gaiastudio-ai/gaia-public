@@ -1,0 +1,11 @@
+{
+  "findings": [
+    {
+      "category": "A06",
+      "severity": "Warning",
+      "file": "package.json:dependencies.webpack-plugin-foo",
+      "line": null,
+      "message": "CVE downgraded Critical→Warning: dev-only dependency path (webpack plugin), not reachable from production entry points (EC-7 evidence-gated downgrade)."
+    }
+  ]
+}

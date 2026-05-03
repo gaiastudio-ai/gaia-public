@@ -1,0 +1,49 @@
+{
+  "schema_version": "1.0",
+  "story_key": "E99-EC11",
+  "skill": "gaia-security-review",
+  "model": "claude-opus-4-7",
+  "model_temperature": 0,
+  "tool_versions": {
+    "semgrep": "1.65.0",
+    "gitleaks": "8.18.0"
+  },
+  "file_hashes": {
+    "src/config.ts": "ec11dead"
+  },
+  "checks": [
+    {
+      "name": "semgrep",
+      "scope": "file",
+      "status": "passed",
+      "findings": [
+        {
+          "file": "src/config.ts",
+          "line": 12,
+          "severity": "high",
+          "rule": "p/secrets.api-key",
+          "rule_confidence": "high",
+          "finding_type": "hardcoded-secret",
+          "message": "API key detected by Semgrep p/secrets ruleset"
+        }
+      ]
+    },
+    {
+      "name": "gitleaks",
+      "scope": "file",
+      "status": "passed",
+      "findings": [
+        {
+          "file": "src/config.ts",
+          "line": 12,
+          "severity": "high",
+          "rule": "generic-api-key",
+          "rule_confidence": "high",
+          "finding_type": "hardcoded-secret",
+          "message": "API key detected by gitleaks (DUPLICATE of Semgrep finding above; deduplicated by (file, line, finding_type) tuple before Phase 3B)"
+        }
+      ]
+    }
+  ],
+  "dedup_note": "Phase 3A dedup tuple = (file, line, finding_type). After dedup, Phase 3B sees a single finding for src/config.ts:12:hardcoded-secret."
+}

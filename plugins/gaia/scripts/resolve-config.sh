@@ -33,6 +33,17 @@ export LC_ALL
 #                       dev_story.tdd_review.phases
 #                       dev_story.tdd_review.qa_auto_in_yolo
 #                       dev_story.tdd_review.qa_timeout_seconds
+#   - --all:          E60-S5 batch mode. Emits the full flat-key surface
+#                     (artifact paths, sizing_map.{S,M,L,XL},
+#                     dev_story.tdd_review.*, val_integration.*) in a
+#                     single fork, in shell-eval format. Recommended for
+#                     skills that read 3+ keys — replaces N forks with 1.
+#   - --cache:        E60-S5 opt-in session-scoped cache. Combined with
+#                     --all, populates ${TMPDIR}/gaia-config-cache-<sid>.eval
+#                     on first call and re-uses it on subsequent calls
+#                     within the same session. Cache is invalidated when
+#                     the source project-config.yaml or global.yaml mtime
+#                     changes. Equivalent env: GAIA_CONFIG_CACHE=1.
 #   - sizing_map:     positional block-query (E61-S1 / ADR-074 contract C1).
 #                     Emits four canonical key=value lines: S=…, M=…, L=…,
 #                     XL=… for the resolved sizing_map block (project >
@@ -279,6 +290,8 @@ SCHEMA_PATH=""
 FORMAT="shell"
 FIELD=""                    # E57-S1 — single-field lookup mode
 POSITIONAL_QUERY=""         # E61-S1 — positional block-query mode (e.g. `sizing_map`)
+EMIT_ALL=0                  # E60-S5 — --all batch mode
+USE_CACHE=0                 # E60-S5 — opt-in session-scoped cache
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -312,8 +325,19 @@ while [ $# -gt 0 ]; do
       FIELD="$2"; shift 2 ;;
     --field=*)
       FIELD="${1#--field=}"; shift ;;
+    --all)
+      # E60-S5 — batch mode: emit the full flat-key surface in a single
+      # fork. Output mirrors the default `shell` format but is gated by an
+      # explicit flag so the default CLI is byte-stable for legacy callers.
+      EMIT_ALL=1; shift ;;
+    --cache)
+      # E60-S5 — opt-in session-scoped cache. Cache file path:
+      #   ${TMPDIR:-/tmp}/gaia-config-cache-${session_id}.eval
+      # session_id derives from $GAIA_SESSION_ID then $PPID. Cache is
+      # invalidated when the source config files' mtimes change.
+      USE_CACHE=1; shift ;;
     -h|--help)
-      sed -n '1,87p' "$0" >&2; exit 0 ;;
+      sed -n '1,101p' "$0" >&2; exit 0 ;;
     sizing_map)
       # E61-S1 — positional block-query: emit four S/M/L/XL key=value lines
       # for the resolved sizing_map block (project > global precedence per
@@ -337,6 +361,54 @@ case "$FORMAT" in
   shell|json) ;;
   *) die "unsupported --format '$FORMAT' (expected shell|json)" ;;
 esac
+
+# E60-S5 — env override to opt into the cache without passing --cache.
+if [ "${GAIA_CONFIG_CACHE:-}" = "1" ]; then
+  USE_CACHE=1
+fi
+
+# ---------- E60-S5 — cache fast-path ----------
+#
+# Session-scoped cache that holds the last `--all` shell-eval output keyed on
+# the project + global config file mtimes. Read-side fast path: when --all and
+# --cache (or GAIA_CONFIG_CACHE=1) are set AND a valid cache file exists, emit
+# its body directly and exit — skipping every parse/merge step below. Saves
+# ~140ms cold-fork tax per call on a standard host (per ADR-044 / E60-S3).
+#
+# Format: a header line `# mtime=<digest>` followed by the shell-eval body.
+# The digest combines mtimes of every input file the resolver actually read,
+# so touching either project-config.yaml or global.yaml busts the cache.
+#
+# Path traversal mitigation: the session id is sanitized to alphanumerics +
+# hyphens before being interpolated into the cache file path.
+
+stat_mtime() {
+  # Portable mtime read: BSD stat (-f %m) on macOS, GNU stat (-c %Y) elsewhere.
+  local f="$1"
+  [ -f "$f" ] || { printf '%s' ""; return; }
+  stat -f %m "$f" 2>/dev/null || stat -c %Y "$f" 2>/dev/null || printf '%s' ""
+}
+
+cache_session_id() {
+  # Sanitize to a safe filename token (alnum + dash). Falls back to PPID.
+  local raw="${GAIA_SESSION_ID:-$PPID}"
+  printf '%s' "$raw" | tr -c 'A-Za-z0-9-' '_'
+}
+
+cache_file_path() {
+  local tmp="${TMPDIR:-/tmp}"
+  # Strip trailing slash to keep the joined path deterministic.
+  tmp="${tmp%/}"
+  printf '%s/gaia-config-cache-%s.eval' "$tmp" "$(cache_session_id)"
+}
+
+cache_digest() {
+  # Combine mtimes of the discovered input files into a single digest line.
+  local s_mt l_mt
+  s_mt=$(stat_mtime "${SHARED_PATH:-}")
+  l_mt=$(stat_mtime "${LOCAL_PATH:-}")
+  printf 's=%s;l=%s' "$s_mt" "$l_mt"
+}
 
 # ---------- Shared-file discovery (E28-S191 / AC1) ----------
 #
@@ -408,6 +480,24 @@ if [ "$SHARED_EXISTS" -eq 0 ] && [ "$LOCAL_EXISTS" -eq 0 ]; then
     die "config file not found: $LOCAL_PATH"
   else
     die "no config path — set CLAUDE_SKILL_DIR or pass --config <path>"
+  fi
+fi
+
+# ---------- E60-S5 cache read fast-path ----------
+#
+# Only --all + --cache use the cache (single-key callers retain byte-stable
+# legacy behavior). When a fresh cache file matches the source mtimes, dump
+# its body and exit — bypassing parse, merge, env-override, and emit.
+if [ "$EMIT_ALL" -eq 1 ] && [ "$USE_CACHE" -eq 1 ]; then
+  CACHE_FILE=$(cache_file_path)
+  if [ -f "$CACHE_FILE" ]; then
+    expected_digest=$(cache_digest)
+    cached_digest=$(head -n1 "$CACHE_FILE" 2>/dev/null | sed -n 's/^# mtime=//p')
+    if [ -n "$cached_digest" ] && [ "$cached_digest" = "$expected_digest" ]; then
+      # Skip the header line, emit the body. Hot path — minimal work.
+      tail -n +2 "$CACHE_FILE"
+      exit 0
+    fi
   fi
 fi
 
@@ -666,6 +756,61 @@ fi
 emit_pair_shell() {
   printf '%s=%s\n' "$1" "$(shell_escape "$2")"
 }
+
+# E60-S5 — when --all is set, capture the full shell-eval body to a buffer so
+# we can both emit it on stdout and (optionally) write it to the cache file.
+# When --all is NOT set, the legacy emit path runs unchanged below (FORMAT
+# branch) — preserving byte-stability for every existing caller.
+
+emit_all_body() {
+  emit_pair_shell checkpoint_path          "$v_checkpoint_path"
+  emit_pair_shell creative_artifacts       "$v_creative_artifacts"
+  emit_pair_shell date                     "$v_date"
+  emit_pair_shell framework_version        "$v_framework_version"
+  emit_pair_shell implementation_artifacts "$v_implementation_artifacts"
+  emit_pair_shell installed_path           "$v_installed_path"
+  emit_pair_shell memory_path              "$v_memory_path"
+  emit_pair_shell planning_artifacts       "$v_planning_artifacts"
+  emit_pair_shell project_path             "$v_project_path"
+  emit_pair_shell project_root             "$v_project_root"
+  # --all always emits sizing_map.{S,M,L,XL} so downstream batch consumers
+  # have a complete key surface — even when the project layer did not
+  # declare a sizing_map block. The default (non-batch) shell path still
+  # gates these on SIZING_MAP_PROJECT_SET to preserve byte-stability.
+  emit_pair_shell sizing_map.L  "$v_sizing_map_L"
+  emit_pair_shell sizing_map.M  "$v_sizing_map_M"
+  emit_pair_shell sizing_map.S  "$v_sizing_map_S"
+  emit_pair_shell sizing_map.XL "$v_sizing_map_XL"
+  emit_pair_shell test_artifacts           "$v_test_artifacts"
+  if [ -n "$v_val_integration_template_output_review" ]; then
+    emit_pair_shell val_integration.template_output_review \
+      "$v_val_integration_template_output_review"
+  fi
+  # tdd_review.* — emitted under --all so dev-story consumers can read all
+  # four keys from a single fork.
+  emit_pair_shell dev_story.tdd_review.threshold          "$v_dev_story_tdd_review_threshold"
+  emit_pair_shell dev_story.tdd_review.phases             "$v_dev_story_tdd_review_phases"
+  emit_pair_shell dev_story.tdd_review.qa_auto_in_yolo    "$v_dev_story_tdd_review_qa_auto_in_yolo"
+  emit_pair_shell dev_story.tdd_review.qa_timeout_seconds "$v_dev_story_tdd_review_qa_timeout_seconds"
+}
+
+if [ "$EMIT_ALL" -eq 1 ]; then
+  body=$(emit_all_body)
+  printf '%s\n' "$body"
+  if [ "$USE_CACHE" -eq 1 ]; then
+    CACHE_FILE=$(cache_file_path)
+    cache_dir=$(dirname "$CACHE_FILE")
+    if mkdir -p "$cache_dir" 2>/dev/null; then
+      tmp_cache="${CACHE_FILE}.tmp.$$"
+      {
+        printf '# mtime=%s\n' "$(cache_digest)"
+        printf '%s\n' "$body"
+      } > "$tmp_cache" 2>/dev/null && mv "$tmp_cache" "$CACHE_FILE" 2>/dev/null || \
+        rm -f "$tmp_cache" 2>/dev/null
+    fi
+  fi
+  exit 0
+fi
 
 if [ "$FORMAT" = "shell" ]; then
   # Alphabetical order, hard-coded to guarantee determinism. Flattened keys

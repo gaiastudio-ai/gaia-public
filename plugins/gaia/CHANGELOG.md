@@ -3,6 +3,38 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.133.0] — 2026-05-03
+
+### Added
+
+- (E28-S181) add sidecar schema-drift detection to gaia-migrate (#398)
+- (E29-S6) extend dead-reference-scan allowlist for skill setup.sh / finalize.sh (#394)
+- (E20-S20) extract safe_grep_log() shell helper (#393)
+- (E65-S8) absorb severity rubric format into gaia-code-review-standards (#392)
+- (E65-S7) migrate gaia-performance-review to seven-phase Evidence/Judgment template (#391)
+- (E65-S6) migrate gaia-test-review to seven-phase Evidence/Judgment template (#390)
+- (E65-S5) migrate gaia-test-automate to hybrid seven-phase + ADR-051 template (#389)
+- (E65-S4) migrate gaia-qa-tests to seven-phase Evidence/Judgment template (#388)
+- (E65-S3) migrate gaia-security-review to seven-phase Evidence/Judgment template (#387)
+- (E60-S5) resolve-config.sh --all batch mode + session-scoped cache (#384)
+- (E28-S223) require reproduction snippet in triage findings (#383)
+- (E28-S219) wire Fix workspace-guard hole in e45-s8-adr-finalize-che (#382)
+- (E28-S222) wire Refresh cluster-9 C9-FIXTURE-fake.md frozen-date li (#381)
+- (E62-S3) add claude-opus-4-7 to _SCHEMA.md model enum (#379)
+- (E63-S12) slugify.sh --help emits canonical Usage block (fix E63-S1 (#378)
+- (e65-s1) review-skill template foundation with shared scripts, schema, and severity rubric (#377)
+
+### Changed
+
+- (E9-S26) sweep legacy _memory/tier2-results paths and document Step 14 (#397)
+- (E28-S220) document bun test:bats vs bare bats fallback
+
+### Fixed
+
+- (F-S231-DEDUP) dedup story-file resolver matches by realpath (#401)
+- (F-S225-PATH-RESOLVER) support epic-grouped story file layout (#400)
+- (E64-S2) tighten dod-check.sh test resolver and subtask scope (#396)
+
 ## [1.132.0] — 2026-04-29
 
 ### Added

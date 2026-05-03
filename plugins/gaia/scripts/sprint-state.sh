@@ -122,6 +122,7 @@ usage() {
   cat <<'USAGE'
 Usage:
   sprint-state.sh transition                 --story <key> --to <state>
+  sprint-state.sh inject                     --story <key> [--sprint-id <id>]
   sprint-state.sh get                        --story <key>
   sprint-state.sh validate                   --story <key>
   sprint-state.sh reconcile                  [--sprint-id <id>] [--dry-run]
@@ -136,6 +137,15 @@ Subcommands:
                     sprint-status.yaml, and emits one lifecycle event.
                     Transitions to 'done' require all six Review Gate rows
                     to report PASSED (via review-gate.sh status).
+  inject            Append a backlog story to the active sprint's
+                    sprint-status.yaml. Requires the story file's
+                    frontmatter sprint_id to match the yaml sprint_id
+                    (drift guard). Idempotent — re-running on an already-
+                    injected key is a no-op. Bumps total_points and
+                    recomputes capacity_utilization. Emits one
+                    story_injected lifecycle event. Used by
+                    /gaia-correct-course story-injection (E38-S10,
+                    AF-2026-05-01-4, ADR-055 §10.29).
   get               Print the story's current status (from the story file)
                     to stdout and exit 0.
   validate          Compare story file status to sprint-status.yaml. Exit 0
@@ -724,6 +734,364 @@ cmd_transition() {
     # shellcheck disable=SC2064
     trap "rm -f '$SPRINT_STATUS_LOCK'" EXIT INT TERM
     do_transition_locked "$story_key" "$to_state"
+    rm -f "$SPRINT_STATUS_LOCK"
+    trap - EXIT INT TERM
+  fi
+}
+
+# ---------- Subcommand: inject (E38-S10, AF-2026-05-01-4, ADR-055 §10.29) ----------
+#
+# Append a backlog story's metadata to the active sprint's sprint-status.yaml
+# entry list. Closes the F-CC-INJECT placeholder cited in
+# docs/implementation-artifacts/sprint-status.yaml — until this subcommand
+# landed, /gaia-correct-course story-injection had no canonical write path
+# and operators had to hand-edit sprint-status.yaml (CLAUDE.md hard-rule
+# violation).
+#
+# Contract (mirrors cmd_transition's invariants):
+#   * Acquires the same flock used by cmd_transition (no new lock primitive).
+#   * Story file frontmatter is the source of truth — yaml is the cache.
+#   * Validates four required frontmatter fields BEFORE the lock.
+#   * Idempotent: re-running on an already-injected key is a no-op.
+#   * Drift guard: refuses if frontmatter.sprint_id != yaml.sprint_id.
+#   * Bumps total_points and recomputes capacity_utilization.
+#   * Emits exactly one story_injected lifecycle event on success.
+#
+# Exit codes (overlay on the script-wide table):
+#   0 — success OR no-op (idempotent re-run)
+#   1 — usage error, missing required field, sprint-id drift, lock failure,
+#       yaml parse failure, lifecycle event write failure
+
+# Read a single scalar frontmatter field from a story file. Stdout = value
+# (quotes stripped). Exit 1 if the field is missing.
+read_story_frontmatter_field() {
+  local file="$1" field="$2"
+  awk -v target="$field" '
+    BEGIN { in_fm = 0; seen = 0; found = 0 }
+    /^---[[:space:]]*$/ {
+      if (!in_fm && !seen) { in_fm = 1; seen = 1; next }
+      if (in_fm) { exit }
+    }
+    in_fm {
+      line = $0
+      sub(/\r$/, "", line)
+      pat = "^" target ":[[:space:]]*"
+      if (line ~ pat) {
+        v = line
+        sub(pat, "", v)
+        gsub(/^["'\''[:space:]]+|["'\''[:space:]]+$/, "", v)
+        print v
+        found = 1
+        exit
+      }
+    }
+    END { if (!found) exit 1 }
+  ' "$file"
+}
+
+# Read the top-level sprint_id field from sprint-status.yaml. Stdout = value.
+# Exit 1 if absent.
+read_yaml_sprint_id() {
+  local file="$1"
+  awk '
+    BEGIN { found = 0 }
+    /^sprint_id:[[:space:]]*/ {
+      v = $0
+      sub(/^sprint_id:[[:space:]]*/, "", v)
+      gsub(/^["'\''[:space:]]+|["'\''[:space:]]+$/, "", v)
+      print v
+      found = 1
+      exit
+    }
+    END { if (!found) exit 1 }
+  ' "$file"
+}
+
+# Read top-level scalar field <name> from sprint-status.yaml. Stdout = value.
+# Exit 1 if absent.
+read_yaml_scalar_field() {
+  local file="$1" field="$2"
+  awk -v target="$field" '
+    BEGIN { found = 0 }
+    {
+      line = $0
+      sub(/\r$/, "", line)
+      pat = "^" target ":[[:space:]]*"
+      if (line ~ pat) {
+        v = line
+        sub(pat, "", v)
+        gsub(/^["'\''[:space:]]+|["'\''[:space:]]+$/, "", v)
+        print v
+        found = 1
+        exit
+      }
+    }
+    END { if (!found) exit 1 }
+  ' "$file"
+}
+
+# Check whether a story key already appears in sprint-status.yaml's stories[]
+# block. Returns 0 if present, 1 otherwise. No stdout.
+yaml_has_story_key() {
+  local file="$1" target="$2"
+  awk -v target="$target" '
+    BEGIN { found = 0 }
+    /^[[:space:]]*-[[:space:]]*key:[[:space:]]*/ {
+      k = $0
+      sub(/^[[:space:]]*-[[:space:]]*key:[[:space:]]*/, "", k)
+      gsub(/^["'\''[:space:]]+|["'\''[:space:]]+$/, "", k)
+      if (k == target) { found = 1; exit }
+    }
+    END { if (!found) exit 1 }
+  ' "$file"
+}
+
+# Append a story entry to sprint-status.yaml's stories: block. Updates
+# total_points by $points_delta and recomputes capacity_utilization using
+# velocity_capacity (when present). Tempfile + atomic mv. Exit 1 on failure.
+append_story_to_yaml() {
+  local file="$1" key="$2" title="$3" status="$4" points="$5" risk="$6"
+  local today
+  today=$(date -u +%Y-%m-%d)
+
+  if [ ! -s "$file" ]; then
+    die "sprint-status.yaml is missing or empty: $file"
+  fi
+
+  # Read current scalars to compute new totals.
+  local cur_total cur_velocity new_total new_capacity_pct
+  cur_total=$(read_yaml_scalar_field "$file" total_points 2>/dev/null || printf '0')
+  cur_velocity=$(read_yaml_scalar_field "$file" velocity_capacity 2>/dev/null || printf '')
+
+  # Validate numeric inputs — guard non-numeric strings.
+  case "$cur_total" in
+    ''|*[!0-9]*) cur_total=0 ;;
+  esac
+  case "$points" in
+    ''|*[!0-9]*) die "inject: story 'points' must be a non-negative integer, got: '$points'" ;;
+  esac
+  new_total=$((cur_total + points))
+
+  if [ -n "$cur_velocity" ] && printf '%s' "$cur_velocity" | grep -Eq '^[0-9]+$' && [ "$cur_velocity" -gt 0 ]; then
+    # Round half-up: (a*100 + v/2) / v.
+    new_capacity_pct=$(( (new_total * 100 + cur_velocity / 2) / cur_velocity ))
+  else
+    new_capacity_pct=""
+  fi
+
+  local tmp
+  tmp=$(mktemp "${file}.tmp.XXXXXX")
+  # shellcheck disable=SC2064
+  trap "rm -f '$tmp'" RETURN
+
+  awk -v key="$key" -v title="$title" -v status="$status" -v points="$points" \
+      -v risk="$risk" -v today="$today" -v new_total="$new_total" \
+      -v new_capacity_pct="$new_capacity_pct" '
+    function emit_entry() {
+      printf "  - key: \"%s\"\n", key
+      printf "    title: \"%s\"\n", title
+      printf "    status: \"%s\"\n", status
+      printf "    points: %s\n", points
+      printf "    risk_level: \"%s\"\n", risk
+      printf "    assignee: null\n"
+      printf "    blocked_by: null\n"
+      printf "    updated: \"%s\"\n", today
+    }
+    BEGIN { in_stories = 0; appended = 0; saw_stories_key = 0 }
+    {
+      raw = $0
+      line = $0
+      sub(/\r$/, "", line)
+    }
+    # Top-level total_points: rewrite.
+    !in_stories && line ~ /^total_points:[[:space:]]*/ {
+      printf "total_points: %s\n", new_total
+      next
+    }
+    # Top-level capacity_utilization: rewrite (only when we computed one).
+    !in_stories && line ~ /^capacity_utilization:[[:space:]]*/ {
+      if (new_capacity_pct != "") {
+        printf "capacity_utilization: \"%s%%\"\n", new_capacity_pct
+        next
+      }
+      print raw
+      next
+    }
+    # Detect empty stories: [] marker — convert to a populated list.
+    line ~ /^stories:[[:space:]]*\[\][[:space:]]*$/ {
+      print "stories:"
+      emit_entry()
+      appended = 1
+      saw_stories_key = 1
+      next
+    }
+    # Detect entering the stories: block.
+    line ~ /^stories:[[:space:]]*$/ {
+      in_stories = 1
+      saw_stories_key = 1
+      print raw
+      next
+    }
+    # Inside stories — append our entry just before the first top-level
+    # non-indented key that closes the block.
+    in_stories && line ~ /^[^[:space:]-]/ {
+      if (!appended) { emit_entry(); appended = 1 }
+      in_stories = 0
+      print raw
+      next
+    }
+    { print raw }
+    END {
+      # stories: block ran to EOF — append at the bottom.
+      if (saw_stories_key && !appended) { emit_entry(); appended = 1 }
+      # No stories: block at all — emit one with our entry.
+      if (!saw_stories_key) {
+        printf "stories:\n"
+        emit_entry()
+        appended = 1
+      }
+      if (!appended) exit 2
+    }
+  ' "$file" > "$tmp" || {
+    local rc=$?
+    rm -f "$tmp"
+    trap - RETURN
+    die "awk rewrite of '$file' failed (rc=$rc)"
+  }
+
+  if ! mv -f "$tmp" "$file"; then
+    rm -f "$tmp"
+    trap - RETURN
+    die "failed to mv tempfile over '$file'"
+  fi
+  trap - RETURN
+}
+
+# Emit a story_injected lifecycle event. Failure surfaces as exit 1.
+emit_inject_event() {
+  local story_key="$1" total_points="$2"
+  local lifecycle_sh="${SPRINT_STATE_SCRIPT_DIR}/lifecycle-event.sh"
+  if [ ! -x "$lifecycle_sh" ]; then
+    die "lifecycle-event.sh not found or not executable at $lifecycle_sh (required for inject lifecycle event)"
+  fi
+  local data
+  data=$(printf '{"key":"%s","source":"sprint-state.sh inject","total_points":%s}' \
+    "$story_key" "$total_points")
+  if ! "$lifecycle_sh" \
+        --type story_injected \
+        --workflow sprint-state \
+        --story "$story_key" \
+        --data "$data"; then
+    die "lifecycle-event.sh failed for $story_key inject — sprint-status.yaml updated but event log write failed; run sprint-state.sh validate --story $story_key to check for drift"
+  fi
+}
+
+# Inject locked critical section. Mirrors do_transition_locked structure.
+do_inject_locked() {
+  local story_key="$1"
+
+  if [ ! -s "$SPRINT_STATUS_YAML" ]; then
+    die "sprint-status.yaml is missing or empty: $SPRINT_STATUS_YAML"
+  fi
+
+  # Idempotency check (under lock so concurrent injects of the same key
+  # serialize correctly — second one sees the first one's append).
+  if yaml_has_story_key "$SPRINT_STATUS_YAML" "$story_key"; then
+    printf '%s: %s already injected — no-op\n' "$SCRIPT_NAME" "$story_key"
+    return 0
+  fi
+
+  # Re-locate story file under lock.
+  locate_story_file "$story_key"
+
+  # Validate four required frontmatter fields. Collect every missing field
+  # for a single error message (AC4).
+  local missing=""
+  local fm_sprint_id fm_status fm_points fm_risk fm_title
+  fm_sprint_id=$(read_story_frontmatter_field "$STORY_FILE" sprint_id 2>/dev/null || true)
+  fm_status=$(read_story_frontmatter_field "$STORY_FILE" status 2>/dev/null || true)
+  fm_points=$(read_story_frontmatter_field "$STORY_FILE" points 2>/dev/null || true)
+  fm_risk=$(read_story_frontmatter_field "$STORY_FILE" risk 2>/dev/null || true)
+  fm_title=$(read_story_frontmatter_field "$STORY_FILE" title 2>/dev/null || true)
+
+  [ -n "$fm_sprint_id" ] || missing="${missing} sprint_id"
+  [ -n "$fm_status" ]    || missing="${missing} status"
+  [ -n "$fm_points" ]    || missing="${missing} points"
+  [ -n "$fm_risk" ]      || missing="${missing} risk"
+
+  if [ -n "$missing" ]; then
+    die "inject: story file '$STORY_FILE' is missing required frontmatter field(s):${missing}"
+  fi
+
+  # Defense-in-depth: status from frontmatter must be canonical.
+  assert_canonical_state "$fm_status" "inject story status"
+
+  # Drift guard (AC3): frontmatter sprint_id MUST match yaml sprint_id.
+  local yaml_sprint_id
+  yaml_sprint_id=$(read_yaml_sprint_id "$SPRINT_STATUS_YAML") \
+    || die "inject: sprint-status.yaml at $SPRINT_STATUS_YAML missing top-level sprint_id"
+
+  if [ "$fm_sprint_id" != "$yaml_sprint_id" ]; then
+    die "inject: sprint-id mismatch — story file frontmatter sprint_id='$fm_sprint_id' but sprint-status.yaml sprint_id='$yaml_sprint_id'; refusing to write"
+  fi
+
+  # Title is optional for the validation step but required for a useful yaml
+  # entry — fall back to the story key when frontmatter omits it.
+  if [ -z "$fm_title" ]; then
+    fm_title="$story_key"
+  fi
+
+  # Append to yaml (also rewrites total_points and capacity_utilization).
+  append_story_to_yaml "$SPRINT_STATUS_YAML" "$story_key" "$fm_title" "$fm_status" "$fm_points" "$fm_risk"
+
+  # Re-read total_points for the lifecycle event payload.
+  local new_total
+  new_total=$(read_yaml_scalar_field "$SPRINT_STATUS_YAML" total_points 2>/dev/null || printf '0')
+
+  emit_inject_event "$story_key" "$new_total"
+
+  printf '%s: %s injected into sprint %s — total_points=%s\n' \
+    "$SCRIPT_NAME" "$story_key" "$yaml_sprint_id" "$new_total"
+}
+
+cmd_inject() {
+  local story_key="$1" sprint_id_override="${2:-}"
+  # sprint_id_override is accepted for forward-compat (multi-sprint yaml,
+  # mirror of cmd_reconcile's --sprint-id posture). Today the drift guard
+  # uses the yaml's own sprint_id; an explicit override is silently ignored
+  # unless it disagrees with the yaml — in which case we surface that as a
+  # clear error rather than write to a non-active sprint.
+  if [ -n "$sprint_id_override" ]; then
+    local yaml_sid
+    yaml_sid=$(read_yaml_sprint_id "$SPRINT_STATUS_YAML" 2>/dev/null || true)
+    if [ -n "$yaml_sid" ] && [ "$yaml_sid" != "$sprint_id_override" ]; then
+      die "inject: --sprint-id '$sprint_id_override' does not match active sprint-status.yaml sprint_id '$yaml_sid'"
+    fi
+  fi
+
+  local flock_bin
+  flock_bin=$(command -v flock || true)
+
+  if [ -n "$flock_bin" ]; then
+    (
+      exec 9>"$SPRINT_STATUS_LOCK"
+      if ! "$flock_bin" -x -w 5 9; then
+        die "flock timeout acquiring $SPRINT_STATUS_LOCK"
+      fi
+      do_inject_locked "$story_key"
+    )
+  else
+    local tries=0
+    while ! ( set -C; : > "$SPRINT_STATUS_LOCK" ) 2>/dev/null; do
+      tries=$((tries + 1))
+      if [ "$tries" -ge 50 ]; then
+        die "lock timeout acquiring $SPRINT_STATUS_LOCK"
+      fi
+      sleep 0.1 2>/dev/null || sleep 1
+    done
+    # shellcheck disable=SC2064
+    trap "rm -f '$SPRINT_STATUS_LOCK'" EXIT INT TERM
+    do_inject_locked "$story_key"
     rm -f "$SPRINT_STATUS_LOCK"
     trap - EXIT INT TERM
   fi
@@ -1605,7 +1973,7 @@ main() {
       usage
       exit 0
       ;;
-    transition|get|validate|reconcile|lint-dependencies|record-escalation-override)
+    transition|inject|get|validate|reconcile|lint-dependencies|record-escalation-override)
       ;;
     *)
       printf '%s: error: unknown subcommand: %s\n' "$SCRIPT_NAME" "$subcmd" >&2
@@ -1683,6 +2051,9 @@ main() {
       [ -n "$story_key" ] || die "transition requires --story <key>"
       [ -n "$to_state" ] || die "transition requires --to <state>"
       cmd_transition "$story_key" "$to_state" ;;
+    inject)
+      [ -n "$story_key" ] || die "inject requires --story <key>"
+      cmd_inject "$story_key" "${reconcile_sprint_id:-}" ;;
     reconcile)
       # reconcile_sprint_id currently scopes to the active sprint implicitly
       # since the yaml holds one sprint at a time (ADR-055 §10.29.1 default).

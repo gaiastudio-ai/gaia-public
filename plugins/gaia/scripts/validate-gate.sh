@@ -29,9 +29,9 @@
 #   traceability_exists    — ${TEST_ARTIFACTS}/traceability-matrix.md
 #   ci_setup_exists        — ${TEST_ARTIFACTS}/ci-setup.md
 #   atdd_exists            — ${TEST_ARTIFACTS}/atdd-<story>.md (requires --story)
-#   readiness_report_exists — ${PLANNING_ARTIFACTS}/readiness-report.md
-#   epics_and_stories_exists — ${PLANNING_ARTIFACTS}/epics-and-stories.md
-#   prd_exists              — ${PLANNING_ARTIFACTS}/prd.md
+#   readiness_report_exists — ${PLANNING_ARTIFACTS}/readiness-report.md (or readiness-report/index.md sharded layout per ADR-070 / ADR-072)
+#   epics_and_stories_exists — ${PLANNING_ARTIFACTS}/epics-and-stories.md (or epics-and-stories/index.md sharded layout per ADR-070 / ADR-072)
+#   prd_exists              — ${PLANNING_ARTIFACTS}/prd.md (or prd/index.md sharded layout per ADR-070 / ADR-072)
 #
 # Error format (stable for log parsers / tailing sync agent):
 #   validate-gate: <gate_type> failed — expected: <abs_path>
@@ -50,6 +50,12 @@
 #     foundation-script latency budget (~50ms wall clock).
 #   - resolve-config.sh is a soft dependency — this script degrades via
 #     ${VAR:-default} fallbacks so the two scripts can land in any order.
+#   - Dual-layout invariant (E53-S233): any gate whose pattern resolves to
+#     `{dir}/{name}.md` ALSO accepts `{dir}/{name}/index.md`. The flat
+#     layout is checked first; the sharded layout is the additive fallback.
+#     Mirror of F-S225-PATH-RESOLVER (#400) and F-S231-DEDUP (#401) — same
+#     systemic class, gate-validation layer. Implemented generically via
+#     shell parameter expansion (${P%.md}/index.md), NOT per-gate `case`.
 
 set -euo pipefail
 LC_ALL=C
@@ -98,9 +104,9 @@ Supported gate types:
   traceability_exists     ${TEST_ARTIFACTS}/traceability-matrix.md
   ci_setup_exists         ${TEST_ARTIFACTS}/ci-setup.md
   atdd_exists             ${TEST_ARTIFACTS}/atdd-<story>.md  (requires --story)
-  readiness_report_exists ${PLANNING_ARTIFACTS}/readiness-report.md
-  epics_and_stories_exists ${PLANNING_ARTIFACTS}/epics-and-stories.md
-  prd_exists              ${PLANNING_ARTIFACTS}/prd.md
+  readiness_report_exists ${PLANNING_ARTIFACTS}/readiness-report.md OR ${PLANNING_ARTIFACTS}/readiness-report/index.md
+  epics_and_stories_exists ${PLANNING_ARTIFACTS}/epics-and-stories.md OR ${PLANNING_ARTIFACTS}/epics-and-stories/index.md
+  prd_exists              ${PLANNING_ARTIFACTS}/prd.md OR ${PLANNING_ARTIFACTS}/prd/index.md
 
 Exit codes:
   0  gate(s) passed, or --list / --help completed
@@ -139,7 +145,7 @@ gate_path() {
 }
 
 list_gates() {
-  local g pattern rc
+  local g pattern rc alt
   for g in $SUPPORTED_GATES; do
     if [ "$g" = "file_exists" ]; then
       printf '%s\t%s\n' "$g" "(uses --file <path> args)"
@@ -150,26 +156,78 @@ list_gates() {
     rc=$?
     set -e
     if [ $rc -eq 0 ]; then
-      printf '%s\t%s\n' "$g" "$pattern"
+      # Dual-layout invariant (E53-S233): any gate whose pattern resolves to
+      # `{dir}/{name}.md` ALSO accepts `{dir}/{name}/index.md`. Render both
+      # paths in --list output. The atdd_exists pattern uses a `{story}`
+      # template (not a fixed path) — keep it single-layout.
+      case "$pattern" in
+        *'{story}'*)
+          printf '%s\t%s\n' "$g" "$pattern"
+          ;;
+        *.md)
+          alt="${pattern%.md}/index.md"
+          printf '%s\t%s OR %s\n' "$g" "$pattern" "$alt"
+          ;;
+        *)
+          printf '%s\t%s\n' "$g" "$pattern"
+          ;;
+      esac
     fi
   done
 }
 
 # Check that a file exists and is non-empty. Returns 0 on pass, 1 on fail.
 # Args: gate_name file_path
+#
+# Dual-layout invariant (E53-S233): if `filepath` ends in `.md` and the flat
+# path does not exist, the resolver also accepts the sharded sibling
+# `${filepath%.md}/index.md` (per ADR-070 / ADR-072). Mirror of
+# F-S225-PATH-RESOLVER (#400) and F-S231-DEDUP (#401) — same systemic class,
+# gate-validation layer.
+#
+# Resolution order:
+#   1. Flat path `{dir}/{name}.md` (existence + non-empty)
+#   2. Sharded path `{dir}/{name}/index.md` (existence + non-empty)
+#
+# Failure modes:
+#   - Neither layout exists → report the FLAT path (preserves the stable
+#     log-parser contract: "validate-gate: <gate> failed — expected: <abs_path>").
+#   - The resolved file (flat OR index.md) is 0 bytes → report the actual
+#     resolved path so log readers can locate the empty artifact.
+#
+# The fallback is implemented generically via shell parameter expansion
+# (`${filepath%.md}/index.md`) — NOT via a per-gate `case` arm. Any future
+# `<artifact>_exists` gate whose pattern matches `{dir}/{name}.md` inherits
+# dual-layout acceptance with no further code change.
 check_file_nonempty() {
-  local gate="$1" filepath="$2" abs
-  if [ ! -f "$filepath" ]; then
-    abs=$(abs_path "$filepath")
-    warn "$gate failed — expected: $abs"
-    return 1
+  local gate="$1" filepath="$2" abs alt
+  # Step 1: try the flat path first.
+  if [ -f "$filepath" ]; then
+    if [ ! -s "$filepath" ]; then
+      abs=$(abs_path "$filepath")
+      warn "$gate failed — file is empty (0 bytes): $abs"
+      return 1
+    fi
+    return 0
   fi
-  if [ ! -s "$filepath" ]; then
-    abs=$(abs_path "$filepath")
-    warn "$gate failed — file is empty (0 bytes): $abs"
-    return 1
-  fi
-  return 0
+  # Step 2: derive sharded fallback only when the target ends in .md.
+  case "$filepath" in
+    *.md)
+      alt="${filepath%.md}/index.md"
+      if [ -f "$alt" ]; then
+        if [ ! -s "$alt" ]; then
+          abs=$(abs_path "$alt")
+          warn "$gate failed — file is empty (0 bytes): $abs"
+          return 1
+        fi
+        return 0
+      fi
+      ;;
+  esac
+  # Neither layout exists — report the flat path (log-parser contract).
+  abs=$(abs_path "$filepath")
+  warn "$gate failed — expected: $abs"
+  return 1
 }
 
 # Evaluate a single gate. Returns 0 on pass, 1 on fail.

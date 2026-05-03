@@ -1,0 +1,32 @@
+# Fixture — v1 global.yaml with literal {project-root} placeholders (E29-S8).
+#
+# Reproduces the v1->v2 migration bug where the literal token
+# {project-root} survived intact into the v2 config because the v1 XML engine
+# substituted at runtime but the v2 native engine does not.
+#
+# After `gaia-migrate.sh apply --project-root <abs>` runs, the produced
+# config/project-config.yaml MUST contain zero occurrences of `{project-root}`
+# and every preserved required field MUST be an absolute path under the
+# supplied project-root.
+
+framework_name: "GAIA"
+framework_version: "1.127.2-rc.1"
+user_name: "tester"
+communication_language: "English"
+document_output_language: "English"
+user_skill_level: "intermediate"
+project_name: "test-project"
+project_root: "{project-root}"
+project_path: "{project-root}/gaia-public"
+output_folder: "{project-root}/docs"
+planning_artifacts: "{project-root}/docs/planning-artifacts"
+implementation_artifacts: "{project-root}/docs/implementation-artifacts"
+test_artifacts: "{project-root}/docs/test-artifacts"
+creative_artifacts: "{project-root}/docs/creative-artifacts"
+memory_path: "{project-root}/_memory"
+checkpoint_path: "{project-root}/_memory/checkpoints"
+installed_path: "{project-root}/_gaia"
+config_path: "{project-root}/_gaia/_config"
+date: "2026-05-01"
+val_integration:
+  template_output_review: true

@@ -77,7 +77,14 @@ For stories **removed** from the sprint (moved back to backlog):
 PROJECT_PATH="${CLAUDE_PROJECT_ROOT}" "${CLAUDE_PLUGIN_ROOT}/scripts/sprint-state.sh" transition --story {story_key} --to backlog
 ```
 
-For stories **injected** into the sprint that **already have a story file**:
+For stories **injected** into the sprint that **already have a story file** (the story file's `frontmatter.sprint_id` MUST match the active sprint):
+```bash
+PROJECT_PATH="${CLAUDE_PROJECT_ROOT}" "${CLAUDE_PLUGIN_ROOT}/scripts/sprint-state.sh" inject --story {story_key} [--sprint-id {sprint_id}]
+```
+
+The `inject` subcommand (E38-S10, AF-2026-05-01-4, ADR-055 §10.29) appends the story's metadata to `sprint-status.yaml`'s `stories:` block, bumps `total_points`, recomputes `capacity_utilization`, and emits a `story_injected` lifecycle event. It is idempotent — re-running on an already-injected key is a no-op. `--sprint-id` is optional and defaults to the active sprint (the yaml's `sprint_id`).
+
+For an **in-sprint status change** of a story already present in `sprint-status.yaml` (e.g., escalating from `ready-for-dev` to `in-progress` mid-sprint), use `transition` instead — `inject` is for adding new entries, not for re-stating existing ones:
 ```bash
 PROJECT_PATH="${CLAUDE_PROJECT_ROOT}" "${CLAUDE_PLUGIN_ROOT}/scripts/sprint-state.sh" transition --story {story_key} --to {target_status}
 ```

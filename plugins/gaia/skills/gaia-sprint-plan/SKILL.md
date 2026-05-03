@@ -153,10 +153,10 @@ The override is **idempotent** on the dedup key `(sprint_id, sorted-unique(overr
   ```
 - Write `sprint-status.yaml` to `docs/implementation-artifacts/sprint-status.yaml` EXCLUSIVELY via `sprint-state.sh`:
   ```bash
-  ${CLAUDE_PLUGIN_ROOT}/scripts/sprint-state.sh transition \
-    --story "{story_key}" --to "ready-for-dev"
+  ${CLAUDE_PLUGIN_ROOT}/scripts/sprint-state.sh inject \
+    --story "{story_key}" [--sprint-id "{sprint_id}"]
   ```
-  Invoke once per selected story to register it in the sprint. If `sprint-state.sh` exits non-zero, abort cleanly and surface the error to the user. Do NOT fall back to direct YAML writes.
+  Invoke once per selected story to register it in the sprint. The `inject` subcommand (E38-S10, ADR-055 §10.29) appends the story's metadata mirrored from the story file's frontmatter — the four required fields (`sprint_id`, `status`, `points`, `risk`) MUST be present in the story file before the call. `inject` is idempotent — re-running on an already-registered key is a no-op. Use `transition` only for in-sprint status changes after the entry exists. If `sprint-state.sh` exits non-zero, abort cleanly and surface the error to the user. Do NOT fall back to direct YAML writes.
 
 ### Step 6b -- Dependency Inversion Lint (E38-S3, ADR-055 §10.29.2)
 

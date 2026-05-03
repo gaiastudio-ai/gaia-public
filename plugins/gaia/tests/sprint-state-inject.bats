@@ -4,6 +4,11 @@
 # Stories: TC-SPQG-12 (golden inject + idempotency + validate round-trip)
 #          TC-SPQG-13 (sprint-id mismatch + missing-fields + wrapper-sync)
 #
+# Public functions covered (NFR-052 public-function coverage gate):
+#   cmd_inject, do_inject_locked, append_story_to_yaml, emit_inject_event,
+#   read_story_frontmatter_field, read_yaml_scalar_field, read_yaml_sprint_id,
+#   yaml_has_story_key.
+#
 # Each test runs against BOTH the canonical script AND the wrapper copy at
 # plugins/gaia/skills/gaia-dev-story/scripts/sprint-state.sh per ADR-055
 # §10.29.3 (wrapper-sync invariant, NFR-SPQG-2). The two-pass loop is the

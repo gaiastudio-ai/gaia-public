@@ -76,6 +76,64 @@ YAML
   [[ "$output" == *"project_root"* ]]
 }
 
+# ---------------------------------------------------------------------------
+# E29-S9 — placeholder-detection guard (defense-in-depth companion to E29-S8)
+# ---------------------------------------------------------------------------
+# AF-2026-05-01-2 / AF-2026-05-01-1: a literal `{...}` template token that
+# slipped through migration must be rejected at the resolver before it reaches
+# any downstream consumer (mkdir, sed, find, checkpoint.sh, etc.). The guard
+# runs AFTER env overrides and AFTER artifact-dir defaulting so a placeholder
+# from ANY source layer is caught.
+
+@test "resolve-config.sh E29-S9 AC4: literal {project-root} in project_root → exit 2, stderr names field + placeholder" {
+  local bad="$TEST_TMP/ph-root"
+  mkdir -p "$bad/config"
+  cat > "$bad/config/project-config.yaml" <<'YAML'
+project_root: "{project-root}"
+project_path: /tmp/gaia-fx/app
+memory_path: /tmp/gaia-fx/_memory
+checkpoint_path: /tmp/gaia-fx/_memory/checkpoints
+installed_path: /tmp/gaia-fx/_gaia
+framework_version: 1.0.0
+date: 1970-01-01
+YAML
+  CLAUDE_SKILL_DIR="$bad" run "$SCRIPT"
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"project_root"* ]]
+  [[ "$output" == *"{project-root}"* ]]
+}
+
+@test "resolve-config.sh E29-S9 AC5: embedded {project-root} in installed_path → exit 2, stderr names field + placeholder" {
+  local bad="$TEST_TMP/ph-installed"
+  mkdir -p "$bad/config"
+  cat > "$bad/config/project-config.yaml" <<'YAML'
+project_root: /tmp/gaia-fx
+project_path: /tmp/gaia-fx/app
+memory_path: /tmp/gaia-fx/_memory
+checkpoint_path: /tmp/gaia-fx/_memory/checkpoints
+installed_path: "{project-root}/_gaia"
+framework_version: 1.0.0
+date: 1970-01-01
+YAML
+  CLAUDE_SKILL_DIR="$bad" run "$SCRIPT"
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"installed_path"* ]]
+  [[ "$output" == *"{project-root}"* ]]
+}
+
+@test "resolve-config.sh E29-S9 AC6: fully resolved config (no braces in any required field) still exits 0" {
+  # Negative case — guard must not false-positive on a clean config. Mirrors
+  # the happy-path test above; asserts exit 0 and the canonical project_root
+  # key/value pair are present in stdout.
+  mk_skill_dir "$TEST_TMP/clean"
+  CLAUDE_SKILL_DIR="$TEST_TMP/clean" run "$SCRIPT"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"project_root='/tmp/gaia-fx'"* ]]
+  [[ "$output" == *"installed_path='/tmp/gaia-fx/_gaia'"* ]]
+  # Explicitly verify NO `unsubstituted placeholder` text leaked to stderr/stdout.
+  [[ "$output" != *"unsubstituted placeholder"* ]]
+}
+
 @test "resolve-config.sh: missing config file → exit 2" {
   mkdir -p "$TEST_TMP/nocfg/config"
   CLAUDE_SKILL_DIR="$TEST_TMP/nocfg" run "$SCRIPT"

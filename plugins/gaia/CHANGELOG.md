@@ -3,6 +3,22 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.134.0] — 2026-05-03
+
+### Added
+
+- (E53-S233) teach validate-gate.sh to accept sharded planning-artifact layouts (#408)
+- (E38-S10) add inject subcommand to sprint-state.sh (#405)
+
+### Fixed
+
+- (E29-S8) substitute {project-root} placeholder in v1->v2 migrator (#406)
+- (E29-S9) add placeholder-detection guard to resolve-config.sh (#407) — defense-in-depth companion to E29-S8; auto-classifier missed this entry because the squash commit's title didn't conform to Conventional Commits prefix; manually added.
+
+### Maintenance
+
+- (chore) remove misfiled story artifacts and {project-root} shim (#404) — sprint-36 cleanup of two production incidents from the {project-root} placeholder bug; companion to the four fixes above.
+
 ## [1.133.0] — 2026-05-03
 
 ### Added

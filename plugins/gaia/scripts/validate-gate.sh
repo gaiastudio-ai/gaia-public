@@ -188,19 +188,27 @@ list_gates() {
 # Resolution order:
 #   1. Flat path `{dir}/{name}.md` (existence + non-empty)
 #   2. Sharded path `{dir}/{name}/index.md` (existence + non-empty)
+#   3. Gate-specific legacy directory-name aliases (e.g. for
+#      `epics-and-stories.md` also accept the shortened sharded form
+#      `epics/index.md` — used by brownfield projects whose shard root was
+#      named `epics/` before ADR-070 fixed the canonical name to
+#      `epics-and-stories/`).
 #
 # Failure modes:
-#   - Neither layout exists → report the FLAT path (preserves the stable
+#   - No layout exists → report the FLAT path (preserves the stable
 #     log-parser contract: "validate-gate: <gate> failed — expected: <abs_path>").
 #   - The resolved file (flat OR index.md) is 0 bytes → report the actual
 #     resolved path so log readers can locate the empty artifact.
 #
-# The fallback is implemented generically via shell parameter expansion
-# (`${filepath%.md}/index.md`) — NOT via a per-gate `case` arm. Any future
-# `<artifact>_exists` gate whose pattern matches `{dir}/{name}.md` inherits
-# dual-layout acceptance with no further code change.
+# The primary fallback is implemented generically via shell parameter
+# expansion (`${filepath%.md}/index.md`) — NOT via a per-gate `case` arm.
+# Any future `<artifact>_exists` gate whose pattern matches `{dir}/{name}.md`
+# inherits dual-layout acceptance with no further code change. Step 3
+# handles a small, documented set of legacy directory-name aliases so
+# brownfield projects with pre-ADR-070 shard roots keep working without
+# requiring a destructive directory rename.
 check_file_nonempty() {
-  local gate="$1" filepath="$2" abs alt
+  local gate="$1" filepath="$2" abs alt dir
   # Step 1: try the flat path first.
   if [ -f "$filepath" ]; then
     if [ ! -s "$filepath" ]; then
@@ -224,7 +232,25 @@ check_file_nonempty() {
       fi
       ;;
   esac
-  # Neither layout exists — report the flat path (log-parser contract).
+  # Step 3: gate-specific legacy directory-name aliases. Brownfield projects
+  # migrated before ADR-070 fixed the canonical sharded directory name may
+  # ship `epics/index.md` instead of `epics-and-stories/index.md`. Accept
+  # that legacy form so the gate does not falsely halt the cascade.
+  case "$filepath" in
+    */epics-and-stories.md)
+      dir="${filepath%/*}"
+      alt="$dir/epics/index.md"
+      if [ -f "$alt" ]; then
+        if [ ! -s "$alt" ]; then
+          abs=$(abs_path "$alt")
+          warn "$gate failed — file is empty (0 bytes): $abs"
+          return 1
+        fi
+        return 0
+      fi
+      ;;
+  esac
+  # No layout exists — report the flat path (log-parser contract).
   abs=$(abs_path "$filepath")
   warn "$gate failed — expected: $abs"
   return 1

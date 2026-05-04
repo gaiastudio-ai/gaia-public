@@ -300,3 +300,43 @@ teardown() { common_teardown; }
 
 # --- E53-S233 end ---
 
+# --- Brownfield legacy directory-name alias for epics_and_stories_exists ---
+# When a project's shard root predates ADR-070 it may live at `epics/index.md`
+# instead of the canonical `epics-and-stories/index.md`. The resolver's Step 3
+# accepts that legacy form so add-feature and other gate-guarded skills do
+# not falsely halt on brownfield projects.
+
+@test "validate-gate.sh: epics_and_stories_exists accepts legacy epics/index.md (brownfield alias)" {
+  export PLANNING_ARTIFACTS="$TEST_TMP/legacy-epics-shard/docs/planning-artifacts"
+  mkdir -p "$PLANNING_ARTIFACTS/epics"
+  printf '# Epics shard index\n' > "$PLANNING_ARTIFACTS/epics/index.md"
+  # No flat epics-and-stories.md AND no canonical epics-and-stories/index.md.
+  [ ! -f "$PLANNING_ARTIFACTS/epics-and-stories.md" ]
+  [ ! -f "$PLANNING_ARTIFACTS/epics-and-stories/index.md" ]
+  run "$SCRIPT" epics_and_stories_exists
+  [ "$status" -eq 0 ]
+}
+
+@test "validate-gate.sh: epics_and_stories_exists fails when legacy epics/index.md is empty (0 bytes)" {
+  export PLANNING_ARTIFACTS="$TEST_TMP/legacy-epics-shard-empty/docs/planning-artifacts"
+  mkdir -p "$PLANNING_ARTIFACTS/epics"
+  : > "$PLANNING_ARTIFACTS/epics/index.md"
+  run "$SCRIPT" epics_and_stories_exists
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"file is empty (0 bytes)"* ]]
+  local abs
+  abs="$(cd "$PLANNING_ARTIFACTS" && pwd)"
+  [[ "$output" == *"$abs/epics/index.md"* ]]
+}
+
+@test "validate-gate.sh: epics_and_stories_exists prefers flat over legacy epics/index.md" {
+  export PLANNING_ARTIFACTS="$TEST_TMP/both-flat-and-legacy/docs/planning-artifacts"
+  mkdir -p "$PLANNING_ARTIFACTS/epics"
+  printf '# Flat epics\n' > "$PLANNING_ARTIFACTS/epics-and-stories.md"
+  printf '# Legacy shard index\n' > "$PLANNING_ARTIFACTS/epics/index.md"
+  run "$SCRIPT" epics_and_stories_exists
+  [ "$status" -eq 0 ]
+}
+
+# --- end brownfield alias tests ---
+
